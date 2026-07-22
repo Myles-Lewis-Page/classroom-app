@@ -1,0 +1,106 @@
+@import "tailwindcss";
+
+/* ============================================================
+   Classroom App - Pastel Theme
+   All color decisions live here. Components use these semantic
+   classes (.btn-primary, .card, .panel, etc.) instead of raw
+   Tailwind color utilities scattered across files.
+   ============================================================ */
+
+:root {
+  --background: #fffaf5;    /* warm cream page background */
+  --foreground: #334155;    /* slate-700, soft body text */
+
+  --color-primary: #bae6fd;       /* sky-200 */
+  --color-primary-hover: #7dd3fc; /* sky-300 */
+  --color-danger: #fecdd3;        /* rose-200 */
+  --color-danger-hover: #fda4af;  /* rose-300 */
+  --color-success: #a7f3d0;       /* emerald-200 */
+  --color-success-hover: #6ee7b7; /* emerald-300 */
+  --color-panel: #f5f3ff66;       /* violet-50/40 */
+  --color-nav-bg: #f5f3ffb3;      /* violet-50/70 */
+  --color-nav-border: #ddd6fe;    /* violet-200 */
+  --color-safety-border: #fda4af; /* rose-300 */
+  --color-safety-bg: #fff1f2;     /* rose-50 */
+  --color-text-button: #1e293b;   /* slate-800 */
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+/* Pastel theme stays consistent regardless of system dark-mode setting */
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+@layer components {
+  /* Buttons */
+  .btn-primary {
+    background: var(--color-primary);
+    color: var(--color-text-button);
+    @apply px-3 py-1 rounded text-sm;
+  }
+  .btn-primary:hover {
+    background: var(--color-primary-hover);
+  }
+
+  .btn-danger {
+    background: var(--color-danger);
+    color: var(--color-text-button);
+    @apply px-3 py-1 rounded text-sm;
+  }
+  .btn-danger:hover {
+    background: var(--color-danger-hover);
+  }
+
+  .btn-success {
+    background: var(--color-success);
+    color: var(--color-text-button);
+    @apply px-3 py-1 rounded text-sm;
+  }
+  .btn-success:hover {
+    background: var(--color-success-hover);
+  }
+
+  .btn-outline {
+    @apply border rounded px-3 py-2 text-sm;
+  }
+  .btn-outline:hover {
+    background: var(--color-panel);
+  }
+
+  /* Containers */
+  .card {
+    @apply border rounded p-4 bg-white;
+  }
+
+  .panel {
+    background: var(--color-panel);
+    @apply border rounded p-3;
+  }
+
+  .safety-banner {
+    background: var(--color-safety-bg);
+    border-color: var(--color-safety-border);
+    @apply border-2 rounded p-4;
+  }
+
+  .tag-chip {
+    background: var(--color-panel);
+    @apply inline-block text-xs rounded px-2 py-0.5 mr-1;
+  }
+
+  /* Nav */
+  .app-nav {
+    background: var(--color-nav-bg);
+    border-color: var(--color-nav-border);
+    @apply sticky top-0 z-10 backdrop-blur-sm border-b;
+  }
+}
