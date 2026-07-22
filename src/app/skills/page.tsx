@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 
 type Student = { id: string; firstName: string; lastName: string };
 type SkillSubject = { id: string; name: string };
@@ -14,7 +15,10 @@ const STATUS_COLOR: Record<string, string> = {
   mastered: "#a7f3d0",
 };
 
-export default function SkillsPage() {
+function SkillsPageInner() {
+  const searchParams = useSearchParams();
+  const subjectFromUrl = searchParams.get("subject");
+
   const [subjects, setSubjects] = useState<SkillSubject[]>([]);
   const [selectedSubjectId, setSelectedSubjectId] = useState<string>("");
   const [students, setStudents] = useState<Student[]>([]);
@@ -37,7 +41,11 @@ export default function SkillsPage() {
       .then((r) => r.json())
       .then((subs: SkillSubject[]) => {
         setSubjects(subs);
-        if (subs.length > 0) setSelectedSubjectId((prev) => prev || subs[0].id);
+        setSelectedSubjectId((prev) => {
+          if (prev) return prev;
+          if (subjectFromUrl && subs.some((s) => s.id === subjectFromUrl)) return subjectFromUrl;
+          return subs[0]?.id ?? "";
+        });
       });
   }
 
@@ -120,7 +128,7 @@ export default function SkillsPage() {
 
           <div className="panel mb-4 flex gap-2 flex-wrap items-center">
             <input
-              placeholder="Category (optional, e.g. multiplication)"
+              placeholder="Group name (e.g. multiplication) - skills with the same group share a table"
               value={newSkillCategory}
               onChange={(e) => setNewSkillCategory(e.target.value)}
               className="border rounded px-2 py-1 text-sm"
@@ -139,57 +147,107 @@ export default function SkillsPage() {
           {skills.length === 0 ? (
             <p className="text-slate-500">No skills yet for this subject - add one above.</p>
           ) : (
-            <table className="border-collapse text-sm">
-              <thead>
-                <tr>
-                  <th className="border p-2 bg-white sticky left-0">Student</th>
-                  {skills.map((skill) => (
-                    <th key={skill.id} className="border p-2 bg-white whitespace-nowrap">
-                      {skill.category && (
-                        <>
-                          {skill.category}
-                          <br />
-                        </>
-                      )}
-                      {skill.skillName}
-                      <br />
-                      <button
-                        onClick={() => removeSkill(skill.id, skill.skillName)}
-                        className="text-rose-600 text-xs mt-1 hover:underline"
-                        title="Remove this skill"
-                      >
-                        Remove
-                      </button>
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {students.map((student) => (
-                  <tr key={student.id}>
-                    <td className="border p-2 font-medium sticky left-0 bg-white whitespace-nowrap">
-                      {student.lastName}, {student.firstName}
-                    </td>
-                    {skills.map((skill) => {
-                      const status = statuses[`${student.id}::${skill.id}`] ?? "not_started";
-                      return (
-                        <td key={skill.id} className="border p-1 text-center">
-                          <button
-                            onClick={() => cycle(student.id, skill.id)}
-                            className="w-6 h-6 rounded-full inline-block"
-                            style={{ backgroundColor: STATUS_COLOR[status] }}
-                            title={status}
-                          />
-                        </td>
-                      );
-                    })}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            (() => {
+              // Group skills by category so each category (the "subject box"
+              // set when adding a skill) gets its own titled table, instead
+              // of one huge table with the category repeated in every header.
+              const groups = new Map<string, Skill[]>();
+              skills.forEach((skill) => {
+                const key = skill.category?.trim() || "General";
+                if (!groups.has(key)) groups.set(key, []);
+                groups.get(key)!.push(skill);
+              });
+
+              return Array.from(groups.entries()).map(([groupName, groupSkills]) => (
+                <div key={groupName} className="mb-8">
+                  <h2 className="font-bold text-lg mb-2 capitalize">{groupName}</h2>
+                  <table className="border-collapse text-sm">
+                    <thead>
+                      <tr>
+                        <th className="border p-2 bg-white sticky left-0">Student</th>
+                        {groupSkills.map((skill) => (
+                          <th key={skill.id} className="border p-2 bg-white whitespace-nowrap">
+                            {skill.skillName}
+                            <br />
+                            <button
+                              onClick={() => removeSkill(skill.id, skill.skillName)}
+                              className="text-rose-600 text-xs mt-1 hover:underline"
+                              title="Remove this skill"
+                            >
+                              Remove
+                            </button>
+                          </th>
+                        ))}
+                        <th className="border p-2 bg-white whitespace-nowrap">Mastered (out of 5)</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {students.map((student) => (
+                        <tr key={student.id}>
+                          <td className="border p-2 font-medium sticky left-0 bg-white whitespace-nowrap">
+                            {student.lastName}, {student.firstName}
+                          </td>
+                          {groupSkills.map((skill) => {
+                            const status = statuses[`${student.id}::${skill.id}`] ?? "not_started";
+                            return (
+                              <td key={skill.id} className="border p-1 text-center">
+                                <button
+                                  onClick={() => cycle(student.id, skill.id)}
+                                  className="w-6 h-6 rounded-full inline-block"
+                                  style={{ backgroundColor: STATUS_COLOR[status] }}
+                                  title={status}
+                                />
+                              </td>
+                            );
+                          })}
+                          {(() => {
+                            const masteredCount = groupSkills.filter(
+                              (skill) => statuses[`${student.id}::${skill.id}`] === "mastered"
+                            ).length;
+                            // Normalize to a 0-5 scale regardless of how many
+                            // skills are in this group, so groups of very
+                            // different sizes are still easy to compare.
+                            const score =
+                              groupSkills.length > 0
+                                ? Math.round((masteredCount / groupSkills.length) * 5)
+                                : 0;
+                            return (
+                              <td className="border p-2">
+                                <div className="flex items-center gap-1">
+                                  {Array.from({ length: 5 }).map((_, i) => (
+                                    <span
+                                      key={i}
+                                      className="w-4 h-4 rounded-sm inline-block"
+                                      style={{
+                                        backgroundColor: i < score ? "#a7f3d0" : "#ede9fe",
+                                      }}
+                                    />
+                                  ))}
+                                  <span className="text-xs text-slate-500 ml-1 whitespace-nowrap">
+                                    {score}/5
+                                  </span>
+                                </div>
+                              </td>
+                            );
+                          })()}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ));
+            })()
           )}
         </>
       )}
     </div>
+  );
+}
+
+export default function SkillsPage() {
+  return (
+    <Suspense fallback={<div className="p-6">Loading...</div>}>
+      <SkillsPageInner />
+    </Suspense>
   );
 }

@@ -2,6 +2,7 @@
 
 import { useEffect, useState, use } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import AddRelationship from "@/components/AddRelationship";
 import AddNote from "@/components/AddNote";
 import EditBasicInfo from "@/components/EditBasicInfo";
@@ -59,7 +60,11 @@ type StudentDetail = {
   }[];
   skillStatuses: {
     id: string;
-    skill: { category: string | null; skillName: string; skillSubject: { name: string } };
+    skill: {
+      category: string | null;
+      skillName: string;
+      skillSubject: { id: string; name: string };
+    };
   }[];
 };
 
@@ -260,7 +265,12 @@ export default function StudentProfilePage({ params }: { params: Promise<{ id: s
         <ul className="list-disc list-inside text-sm">
           {student.skillStatuses.map((s) => (
             <li key={s.id}>
-              <span className="font-medium">{s.skill.skillSubject.name}</span>
+              <Link
+                href={`/skills?subject=${s.skill.skillSubject.id}`}
+                className="font-medium text-sky-600 hover:underline"
+              >
+                {s.skill.skillSubject.name}
+              </Link>
               {s.skill.category ? ` — ${s.skill.category}` : ""}: {s.skill.skillName}
             </li>
           ))}

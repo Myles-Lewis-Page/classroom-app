@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useMemo, useRef } from "react";
 import Link from "next/link";
+import PieChart from "@/components/PieChart";
 
 type Tag = { tag: { id: string; name: string; color: string | null } };
 type Student = {
@@ -23,6 +24,14 @@ export default function RosterPage() {
   const [loading, setLoading] = useState(true);
   const [classroomId, setClassroomId] = useState("");
   const [importing, setImporting] = useState(false);
+  const [attendanceStats, setAttendanceStats] = useState<{
+    month: { present: number; absent: number };
+    ytd: { present: number; absent: number };
+  } | null>(null);
+
+  useEffect(() => {
+    fetch("/api/attendance/stats").then((r) => r.json()).then(setAttendanceStats);
+  }, []);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -220,6 +229,27 @@ export default function RosterPage() {
               Mark all present
             </button>
           </div>
+
+          {attendanceStats && (
+            <div className="panel mb-4">
+              <h3 className="font-semibold text-sm mb-3">This Month</h3>
+              <PieChart
+                size={110}
+                slices={[
+                  { label: "Present", value: attendanceStats.month.present, color: "#a7f3d0" },
+                  { label: "Absent", value: attendanceStats.month.absent, color: "#fecaca" },
+                ]}
+              />
+              <h3 className="font-semibold text-sm mb-3 mt-4">Year to Date</h3>
+              <PieChart
+                size={110}
+                slices={[
+                  { label: "Present", value: attendanceStats.ytd.present, color: "#a7f3d0" },
+                  { label: "Absent", value: attendanceStats.ytd.absent, color: "#fecaca" },
+                ]}
+              />
+            </div>
+          )}
 
           <ul className="space-y-1">
             {filtered.map((s) => {

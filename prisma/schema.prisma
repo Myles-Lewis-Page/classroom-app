@@ -112,6 +112,7 @@ model Student {
   observations        Observation[]
   praiseNotes         PraiseNote[]
   seatingAssignment   SeatingAssignment?
+  parentContactLogs   ParentContactLog[]
 
   relationshipsFrom Relationship[] @relation("StudentFrom")
   relationshipsTo   Relationship[] @relation("StudentTo")
@@ -351,6 +352,20 @@ model StudentSkillStatus {
   updatedAt DateTime @updatedAt
 
   @@unique([studentId, skillId])
+}
+
+// ---------- PARENT CONTACT LOG ----------
+// Tracks every time the teacher contacts a parent: why (behavior concern,
+// skill update, positive note, or something else), a comment, and the date.
+
+model ParentContactLog {
+  id        String   @id @default(cuid())
+  studentId String
+  student   Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  date      DateTime @default(now())
+  reason    String   // "behavior" / "skill" / "positive" / "other"
+  comment   String?
+  createdAt DateTime @default(now())
 }
 
 // ---------- NOTES: Observations (quick-notes) & Praise ----------
