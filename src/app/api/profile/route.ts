@@ -79,26 +79,39 @@ export async function POST(req: NextRequest) {
         data: { teacherId, name: classroomName, schoolYear },
       });
 
-  // Sync subjects: add any newly selected ones (skip ones that already
-  // exist), leave existing skills/statuses on any that were unselected
-  // untouched (never silently delete a subject's data just because a
-  // checkbox got unchecked - that has to be a deliberate delete action).
-  if (subjects.length > 0) {
-    const existingSubjects = await prisma.skillSubject.findMany({
-      where: { classroomId: classroom.id },
-    });
-    const existingNames = new Set(existingSubjects.map((s) => s.name));
-    const toCreate = subjects.filter((name) => !existingNames.has(name));
+  // Sync subjects: mark selected ones active (creating any brand-new ones),
+  // and mark anything NOT selected as inactive. We never delete the
+  // SkillSubject row itself - that would cascade-delete its skills and
+  // students' progress just because a checkbox got unchecked. isActive just
+  // controls whether it shows up as "selected" here and in the Skills tab.
+  const existingSubjects = await prisma.skillSubject.findMany({
+    where: { classroomId: classroom.id },
+  });
+  const existingByName = new Map(existingSubjects.map((s) => [s.name, s]));
+  const selectedNames = new Set(subjects);
 
-    if (toCreate.length > 0) {
-      await prisma.skillSubject.createMany({
-        data: toCreate.map((name, i) => ({
-          classroomId: classroom.id,
-          name,
-          order: existingSubjects.length + i,
-        })),
-      });
-    }
+  const toCreate = subjects.filter((name) => !existingByName.has(name));
+  if (toCreate.length > 0) {
+    await prisma.skillSubject.createMany({
+      data: toCreate.map((name, i) => ({
+        classroomId: classroom.id,
+        name,
+        order: existingSubjects.length + i,
+        isActive: true,
+      })),
+    });
+  }
+
+  // Re-activate any existing subject that's selected but was previously off
+  const toReactivate = existingSubjects.filter((s) => selectedNames.has(s.name) && !s.isActive);
+  for (const s of toReactivate) {
+    await prisma.skillSubject.update({ where: { id: s.id }, data: { isActive: true } });
+  }
+
+  // Deactivate any existing subject that's no longer selected
+  const toDeactivate = existingSubjects.filter((s) => !selectedNames.has(s.name) && s.isActive);
+  for (const s of toDeactivate) {
+    await prisma.skillSubject.update({ where: { id: s.id }, data: { isActive: false } });
   }
 
   const skillSubjects = await prisma.skillSubject.findMany({

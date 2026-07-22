@@ -7,7 +7,7 @@ const GENERIC_SUBJECTS = ["Math", "Reading", "Writing", "Science", "Social Studi
 
 type Teacher = { name: string; email: string };
 type Classroom = { name: string; schoolYear: string };
-type SkillSubject = { id: string; name: string };
+type SkillSubject = { id: string; name: string; isActive: boolean };
 
 export default function ProfilePage() {
   const [firstName, setFirstName] = useState("");
@@ -54,7 +54,7 @@ export default function ProfilePage() {
           setNewEmail(teacher?.email ?? "");
           setCurrentClassroom(classroom);
           setExistingSubjects(skillSubjects ?? []);
-          setSelectedSubjects((skillSubjects ?? []).map((s) => s.name));
+          setSelectedSubjects((skillSubjects ?? []).filter((s) => s.isActive).map((s) => s.name));
         }
       );
   }, []);
@@ -241,8 +241,8 @@ export default function ProfilePage() {
           </div>
           {existingSubjects.length > 0 && (
             <p className="text-xs text-slate-400 mt-2">
-              Note: unchecking a subject here won't delete its skills/history - it'll just stop
-              showing as selected. Removing a subject entirely can be done from the Skills tab.
+              Note: unchecking a subject and saving hides it from the Skills tab, but keeps its
+              skills/history safe - re-check it any time to bring it back with everything intact.
             </p>
           )}
         </div>

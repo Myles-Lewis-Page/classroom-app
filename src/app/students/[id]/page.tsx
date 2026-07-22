@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, use } from "react";
+import { useRouter } from "next/navigation";
 import AddRelationship from "@/components/AddRelationship";
 import AddNote from "@/components/AddNote";
 import EditBasicInfo from "@/components/EditBasicInfo";
@@ -64,8 +65,10 @@ type StudentDetail = {
 
 export default function StudentProfilePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
+  const router = useRouter();
   const [student, setStudent] = useState<StudentDetail | null>(null);
   const [editMode, setEditMode] = useState(false);
+  const [removing, setRemoving] = useState(false);
 
   useEffect(() => {
     refresh();
@@ -75,6 +78,22 @@ export default function StudentProfilePage({ params }: { params: Promise<{ id: s
     fetch(`/api/students/${id}`)
       .then((r) => r.json())
       .then(setStudent);
+  }
+
+  async function removeStudent() {
+    if (!student) return;
+    const confirmed = confirm(
+      `Remove ${student.firstName} ${student.lastName} from the class? Their records (behavior, attendance, homework, etc.) are kept, but they'll no longer appear in the roster, seating chart, or reports. This can be undone later if needed.`
+    );
+    if (!confirmed) return;
+
+    setRemoving(true);
+    await fetch(`/api/students/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ isActive: false }),
+    });
+    router.push("/roster");
   }
 
   if (!student) return <div className="p-6">Loading...</div>;
@@ -109,6 +128,15 @@ export default function StudentProfilePage({ params }: { params: Promise<{ id: s
             {editMode ? "Done Editing" : "Edit"}
           </button>
         </div>
+        {editMode && (
+          <button
+            onClick={removeStudent}
+            disabled={removing}
+            className="text-rose-600 text-sm mt-2 hover:underline disabled:opacity-50"
+          >
+            {removing ? "Removing..." : "Remove from class"}
+          </button>
+        )}
         <div className="mt-1">
           {student.tags.map((t) => (
             <span key={t.tag.id} className="tag-chip">

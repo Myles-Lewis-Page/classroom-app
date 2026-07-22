@@ -31,11 +31,29 @@ model Classroom {
   isArchived Boolean   @default(false)
   createdAt  DateTime  @default(now())
 
+  // Seating chart grid dimensions - editable from the Seating Chart page.
+  seatingRows Int @default(5)
+  seatingCols Int @default(6)
+
   students       Student[]
   subjects       Subject[]
   events         Event[]
   assignments    Assignment[]
   skillSubjects  SkillSubject[]
+  extraSeats     ExtraSeat[]
+}
+
+// One-off extra desks beyond the normal rows x cols grid, for rooms where
+// rows aren't perfectly square (e.g. one extra desk squeezed into a row).
+model ExtraSeat {
+  id          String    @id @default(cuid())
+  classroomId String
+  classroom   Classroom @relation(fields: [classroomId], references: [id], onDelete: Cascade)
+  row         Int
+  col         Int
+  createdAt   DateTime  @default(now())
+
+  @@unique([classroomId, row, col])
 }
 
 model Student {
@@ -275,6 +293,7 @@ model SkillSubject {
   classroom   Classroom @relation(fields: [classroomId], references: [id], onDelete: Cascade)
   name        String
   order       Int       @default(0)
+  isActive    Boolean   @default(true) // toggled from Profile's subject picker
   createdAt   DateTime  @default(now())
 
   skills Skill[]

@@ -69,5 +69,11 @@ export async function PATCH(
     data: body,
   });
 
+  // If the student was just removed from the class, free up their seat too
+  // rather than leaving a "ghost" assignment behind.
+  if (body.isActive === false) {
+    await prisma.seatingAssignment.deleteMany({ where: { studentId: id } });
+  }
+
   return NextResponse.json(student);
 }

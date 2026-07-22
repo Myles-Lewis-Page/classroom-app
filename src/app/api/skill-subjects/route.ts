@@ -11,7 +11,7 @@ export async function GET() {
   if (!classroomId) return NextResponse.json([]);
 
   const subjects = await prisma.skillSubject.findMany({
-    where: { classroomId },
+    where: { classroomId, isActive: true },
     orderBy: { order: "asc" },
   });
   return NextResponse.json(subjects);
@@ -36,8 +36,8 @@ export async function POST(req: NextRequest) {
 
   const subject = await prisma.skillSubject.upsert({
     where: { classroomId_name: { classroomId, name } },
-    update: {},
-    create: { classroomId, name, order: count },
+    update: { isActive: true },
+    create: { classroomId, name, order: count, isActive: true },
   });
 
   return NextResponse.json(subject, { status: 201 });
