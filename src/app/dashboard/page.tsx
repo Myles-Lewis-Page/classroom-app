@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import PieChart from "@/components/PieChart";
+import ParentContactRotationWidget from "@/components/ParentContactRotationWidget";
 
 type DashboardData = {
   absentToday: { student: { firstName: string; lastName: string } }[];
@@ -13,13 +15,38 @@ type DashboardData = {
   }[];
   missingEvents: { student: { firstName: string; lastName: string }; event: { name: string } }[];
 };
+type AttendanceStats = {
+  month: { present: number; absent: number };
+  ytd: { present: number; absent: number };
+};
 
 export default function DashboardPage() {
   const [data, setData] = useState<DashboardData | null>(null);
+  const [attendanceStats, setAttendanceStats] = useState<AttendanceStats | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    fetch("/api/dashboard").then((r) => r.json()).then(setData);
+    fetch("/api/dashboard")
+      .then((r) => {
+        if (!r.ok) throw new Error(`Server returned ${r.status}`);
+        return r.json();
+      })
+      .then(setData)
+      .catch((err) => setError(err.message || "Failed to load dashboard"));
+
+    fetch("/api/attendance/stats").then((r) => r.json()).then(setAttendanceStats);
   }, []);
+
+  if (error) {
+    return (
+      <div className="p-6 max-w-4xl mx-auto">
+        <p className="text-rose-600">
+          ⚠️ Couldn't load the dashboard ({error}). This usually means a database migration
+          hasn't run yet — check Railway's deploy logs, or try reloading in a moment.
+        </p>
+      </div>
+    );
+  }
 
   if (!data) return <div className="p-6">Loading...</div>;
 
@@ -31,6 +58,33 @@ export default function DashboardPage() {
         <div className="bg-pink-50 border border-pink-300 rounded p-4">
           <h2 className="font-bold">🎂 Birthday{data.birthdaysToday.length > 1 ? "s" : ""} Today!</h2>
           <p>{data.birthdaysToday.map((s) => `${s.firstName} ${s.lastName}`).join(", ")}</p>
+        </div>
+      )}
+
+      <ParentContactRotationWidget compact />
+
+      {attendanceStats && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="card">
+            <h3 className="font-semibold text-sm mb-2">Attendance — This Month</h3>
+            <PieChart
+              size={100}
+              slices={[
+                { label: "Present", value: attendanceStats.month.present, color: "#a7f3d0" },
+                { label: "Absent", value: attendanceStats.month.absent, color: "#fecaca" },
+              ]}
+            />
+          </div>
+          <div className="card">
+            <h3 className="font-semibold text-sm mb-2">Attendance — Year to Date</h3>
+            <PieChart
+              size={100}
+              slices={[
+                { label: "Present", value: attendanceStats.ytd.present, color: "#a7f3d0" },
+                { label: "Absent", value: attendanceStats.ytd.absent, color: "#fecaca" },
+              ]}
+            />
+          </div>
         </div>
       )}
 
@@ -117,6 +171,9 @@ export default function DashboardPage() {
         </Link>
         <Link href="/reports" className="btn-outline">
           Weekly Report
+        </Link>
+        <Link href="/parent-log" className="btn-outline">
+          Parent Log
         </Link>
         <Link href="/sub-mode" className="btn-outline">
           Sub Mode

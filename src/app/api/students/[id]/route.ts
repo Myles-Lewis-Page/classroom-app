@@ -36,8 +36,9 @@ export async function GET(
         include: { assignment: true },
       },
       behaviorEntries: { orderBy: { date: "desc" }, take: 30, include: { subject: true } },
+      parentContactLogs: { orderBy: { date: "desc" }, take: 20 },
       skillStatuses: {
-        where: { status: "mastered" },
+        where: { status: "5" },
         include: { skill: { include: { skillSubject: true } } },
       },
     },

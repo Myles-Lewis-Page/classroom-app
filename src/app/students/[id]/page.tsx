@@ -58,6 +58,13 @@ type StudentDetail = {
     comment: string | null;
     subject: { name: string };
   }[];
+  parentContactLogs: {
+    id: string;
+    date: string;
+    reason: string;
+    method: string;
+    comment: string | null;
+  }[];
   skillStatuses: {
     id: string;
     skill: {
@@ -295,6 +302,26 @@ export default function StudentProfilePage({ params }: { params: Promise<{ id: s
             </li>
           ))}
         </ul>
+      </section>
+
+      {/* Parent Contact Log - shown on profile only, intentionally left out
+          of the Weekly Report */}
+      <section className="card">
+        <h2 className="font-bold mb-2">Parent Contact Log</h2>
+        {student.parentContactLogs.length === 0 && (
+          <p className="text-gray-500 text-sm">No contacts logged yet.</p>
+        )}
+        <ul className="text-sm space-y-1">
+          {student.parentContactLogs.map((log) => (
+            <li key={log.id}>
+              {new Date(log.date).toLocaleDateString()} — {log.reason} via {log.method}
+              {log.comment && `: ${log.comment}`}
+            </li>
+          ))}
+        </ul>
+        <a href="/parent-log" className="text-sky-600 text-sm hover:underline">
+          Go to Parent Log →
+        </a>
       </section>
 
       {/* Attendance */}

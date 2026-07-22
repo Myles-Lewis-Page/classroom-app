@@ -348,7 +348,7 @@ model StudentSkillStatus {
   student   Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
   skillId   String
   skill     Skill    @relation(fields: [skillId], references: [id], onDelete: Cascade)
-  status    String   @default("not_started") // not_started / practicing / mastered
+  status    String   @default("0") // 0-5 rating scale: 0 = not started, 5 = fully mastered
   updatedAt DateTime @updatedAt
 
   @@unique([studentId, skillId])
@@ -364,6 +364,7 @@ model ParentContactLog {
   student   Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
   date      DateTime @default(now())
   reason    String   // "behavior" / "skill" / "positive" / "other"
+  method    String   @default("phone") // "email" / "phone" / "in_person" / "other"
   comment   String?
   createdAt DateTime @default(now())
 }

@@ -25,7 +25,7 @@ export async function GET(req: NextRequest) {
   return NextResponse.json(logs);
 }
 
-// POST { studentId, date, reason, comment }
+// POST { studentId, date, reason, method, comment }
 export async function POST(req: NextRequest) {
   const session = await auth();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -41,6 +41,7 @@ export async function POST(req: NextRequest) {
       studentId: body.studentId,
       date: body.date ? new Date(body.date) : new Date(),
       reason: body.reason,
+      method: body.method || "phone",
       comment: body.comment || null,
     },
   });

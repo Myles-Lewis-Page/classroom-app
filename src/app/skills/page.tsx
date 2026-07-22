@@ -2,18 +2,13 @@
 
 import { useEffect, useState, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
+import PieChart from "@/components/PieChart";
+import { ratingScaleColor, parseRating } from "@/lib/skillRating";
 
 type Student = { id: string; firstName: string; lastName: string };
 type SkillSubject = { id: string; name: string };
 type Skill = { id: string; category: string | null; skillName: string; order: number };
 type Status = { studentId: string; skillId: string; status: string };
-
-const STATUS_CYCLE = ["not_started", "practicing", "mastered"] as const;
-const STATUS_COLOR: Record<string, string> = {
-  not_started: "#e0e7ff",
-  practicing: "#fde68a",
-  mastered: "#a7f3d0",
-};
 
 function SkillsPageInner() {
   const searchParams = useSearchParams();
@@ -64,13 +59,13 @@ function SkillsPageInner() {
 
   async function cycle(studentId: string, skillId: string) {
     const key = `${studentId}::${skillId}`;
-    const current = statuses[key] ?? "not_started";
-    const next = STATUS_CYCLE[(STATUS_CYCLE.indexOf(current as (typeof STATUS_CYCLE)[number]) + 1) % 3];
-    setStatuses((prev) => ({ ...prev, [key]: next }));
+    const current = parseRating(statuses[key]);
+    const next = (current + 1) % 6; // 0,1,2,3,4,5,0...
+    setStatuses((prev) => ({ ...prev, [key]: String(next) }));
     await fetch("/api/skills/status", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ studentId, skillId, status: next }),
+      body: JSON.stringify({ studentId, skillId, status: String(next) }),
     });
   }
 
@@ -97,6 +92,37 @@ function SkillsPageInner() {
     await fetch(`/api/skills?skillId=${skillId}`, { method: "DELETE" });
     loadSkills(selectedSubjectId);
   }
+
+  // Group skills by category so each category (the "group" set when adding
+  // a skill) gets its own titled table.
+  const groups = new Map<string, Skill[]>();
+  skills.forEach((skill) => {
+    const key = skill.category?.trim() || "General";
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key)!.push(skill);
+  });
+
+  // Class-wide bucket counts (Mastered / Progressing / Not started) across a
+  // given set of skills, for the pie charts.
+  function bucketCounts(skillSet: Skill[]) {
+    let mastered = 0;
+    let progressing = 0;
+    let notStarted = 0;
+    students.forEach((student) => {
+      skillSet.forEach((skill) => {
+        const rating = parseRating(statuses[`${student.id}::${skill.id}`]);
+        if (rating === 5) mastered++;
+        else if (rating === 0) notStarted++;
+        else progressing++;
+      });
+    });
+    return { mastered, progressing, notStarted };
+  }
+
+  const overallBuckets = bucketCounts(skills);
+  const totalPairs = students.length * skills.length;
+  const percentMastered =
+    totalPairs > 0 ? Math.round((overallBuckets.mastered / totalPairs) * 100) : 0;
 
   return (
     <div className="p-6 max-w-6xl mx-auto overflow-x-auto">
@@ -147,71 +173,90 @@ function SkillsPageInner() {
           {skills.length === 0 ? (
             <p className="text-slate-500">No skills yet for this subject - add one above.</p>
           ) : (
-            (() => {
-              // Group skills by category so each category (the "subject box"
-              // set when adding a skill) gets its own titled table, instead
-              // of one huge table with the category repeated in every header.
-              const groups = new Map<string, Skill[]>();
-              skills.forEach((skill) => {
-                const key = skill.category?.trim() || "General";
-                if (!groups.has(key)) groups.set(key, []);
-                groups.get(key)!.push(skill);
-              });
+            <>
+              {/* Overall subject summary */}
+              <div className="panel mb-6">
+                <h2 className="font-bold text-lg mb-1">
+                  Overall — {subjects.find((s) => s.id === selectedSubjectId)?.name}
+                </h2>
+                <p className="text-sm text-slate-600 mb-3">
+                  {percentMastered}% of all skill checks are fully mastered across the class
+                </p>
+                <PieChart
+                  slices={[
+                    { label: "Mastered (5/5)", value: overallBuckets.mastered, color: "#a7f3d0" },
+                    { label: "Progressing (1-4)", value: overallBuckets.progressing, color: "#fde68a" },
+                    { label: "Not started", value: overallBuckets.notStarted, color: "#ede9fe" },
+                  ]}
+                />
+              </div>
 
-              return Array.from(groups.entries()).map(([groupName, groupSkills]) => (
-                <div key={groupName} className="mb-8">
-                  <h2 className="font-bold text-lg mb-2 capitalize">{groupName}</h2>
-                  <table className="border-collapse text-sm">
-                    <thead>
-                      <tr>
-                        <th className="border p-2 bg-white sticky left-0">Student</th>
-                        {groupSkills.map((skill) => (
-                          <th key={skill.id} className="border p-2 bg-white whitespace-nowrap">
-                            {skill.skillName}
-                            <br />
-                            <button
-                              onClick={() => removeSkill(skill.id, skill.skillName)}
-                              className="text-rose-600 text-xs mt-1 hover:underline"
-                              title="Remove this skill"
-                            >
-                              Remove
-                            </button>
-                          </th>
-                        ))}
-                        <th className="border p-2 bg-white whitespace-nowrap">Mastered (out of 5)</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {students.map((student) => (
-                        <tr key={student.id}>
-                          <td className="border p-2 font-medium sticky left-0 bg-white whitespace-nowrap">
-                            {student.lastName}, {student.firstName}
-                          </td>
-                          {groupSkills.map((skill) => {
-                            const status = statuses[`${student.id}::${skill.id}`] ?? "not_started";
-                            return (
-                              <td key={skill.id} className="border p-1 text-center">
-                                <button
-                                  onClick={() => cycle(student.id, skill.id)}
-                                  className="w-6 h-6 rounded-full inline-block"
-                                  style={{ backgroundColor: STATUS_COLOR[status] }}
-                                  title={status}
-                                />
+              {Array.from(groups.entries()).map(([groupName, groupSkills]) => {
+                const groupBuckets = bucketCounts(groupSkills);
+                return (
+                  <div key={groupName} className="mb-10">
+                    <h2 className="font-bold text-lg mb-2 capitalize">{groupName}</h2>
+
+                    <div className="panel mb-3 inline-block">
+                      <PieChart
+                        size={100}
+                        slices={[
+                          { label: "Mastered", value: groupBuckets.mastered, color: "#a7f3d0" },
+                          { label: "Progressing", value: groupBuckets.progressing, color: "#fde68a" },
+                          { label: "Not started", value: groupBuckets.notStarted, color: "#ede9fe" },
+                        ]}
+                      />
+                    </div>
+
+                    <table className="border-collapse text-sm block overflow-x-auto">
+                      <thead>
+                        <tr>
+                          <th className="border p-2 bg-white sticky left-0">Student</th>
+                          {groupSkills.map((skill) => (
+                            <th key={skill.id} className="border p-2 bg-white whitespace-nowrap">
+                              {skill.skillName}
+                              <br />
+                              <button
+                                onClick={() => removeSkill(skill.id, skill.skillName)}
+                                className="text-rose-600 text-xs mt-1 hover:underline"
+                                title="Remove this skill"
+                              >
+                                Remove
+                              </button>
+                            </th>
+                          ))}
+                          <th className="border p-2 bg-white whitespace-nowrap">Avg (out of 5)</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {students.map((student) => {
+                          const ratings = groupSkills.map((skill) =>
+                            parseRating(statuses[`${student.id}::${skill.id}`])
+                          );
+                          const avg =
+                            ratings.length > 0
+                              ? Math.round(ratings.reduce((a, b) => a + b, 0) / ratings.length)
+                              : 0;
+                          return (
+                            <tr key={student.id}>
+                              <td className="border p-2 font-medium sticky left-0 bg-white whitespace-nowrap">
+                                {student.lastName}, {student.firstName}
                               </td>
-                            );
-                          })}
-                          {(() => {
-                            const masteredCount = groupSkills.filter(
-                              (skill) => statuses[`${student.id}::${skill.id}`] === "mastered"
-                            ).length;
-                            // Normalize to a 0-5 scale regardless of how many
-                            // skills are in this group, so groups of very
-                            // different sizes are still easy to compare.
-                            const score =
-                              groupSkills.length > 0
-                                ? Math.round((masteredCount / groupSkills.length) * 5)
-                                : 0;
-                            return (
+                              {groupSkills.map((skill) => {
+                                const rating = parseRating(statuses[`${student.id}::${skill.id}`]);
+                                return (
+                                  <td key={skill.id} className="border p-1 text-center">
+                                    <button
+                                      onClick={() => cycle(student.id, skill.id)}
+                                      className="w-7 h-7 rounded-full inline-flex items-center justify-center text-xs font-semibold text-slate-700"
+                                      style={{ backgroundColor: ratingScaleColor(rating) }}
+                                      title={`${rating}/5`}
+                                    >
+                                      {rating}
+                                    </button>
+                                  </td>
+                                );
+                              })}
                               <td className="border p-2">
                                 <div className="flex items-center gap-1">
                                   {Array.from({ length: 5 }).map((_, i) => (
@@ -219,24 +264,24 @@ function SkillsPageInner() {
                                       key={i}
                                       className="w-4 h-4 rounded-sm inline-block"
                                       style={{
-                                        backgroundColor: i < score ? "#a7f3d0" : "#ede9fe",
+                                        backgroundColor: i < avg ? "#a7f3d0" : "#ede9fe",
                                       }}
                                     />
                                   ))}
                                   <span className="text-xs text-slate-500 ml-1 whitespace-nowrap">
-                                    {score}/5
+                                    {avg}/5
                                   </span>
                                 </div>
                               </td>
-                            );
-                          })()}
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              ));
-            })()
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                );
+              })}
+            </>
           )}
         </>
       )}
