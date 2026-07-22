@@ -18,4 +18,10 @@ if (process.env.SEED_ON_BOOT === "true") {
   console.log("Seed complete.");
 }
 
+if (process.env.RESET_PASSWORD_EMAIL) {
+  console.log("RESET_PASSWORD_EMAIL is set — running password reset...");
+  run("npm run reset-password");
+  console.log("Password reset step finished.");
+}
+
 run("npm run start");
