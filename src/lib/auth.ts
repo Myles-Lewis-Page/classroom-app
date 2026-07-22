@@ -12,6 +12,11 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
   trustHost: true,
   pages: {
     signIn: "/login",
+    // If NextAuth ever force-redirects on an error (it can, even with
+    // signIn({ redirect: false }) on the client, for certain error types),
+    // send it back to /login instead of its default error page - which
+    // isn't set up as an actual route in this app and 404s.
+    error: "/login",
   },
   providers: [
     Credentials({
@@ -21,20 +26,28 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         password: { label: "Password", type: "password" },
       },
       async authorize(credentials) {
-        if (!credentials?.email || !credentials?.password) return null;
+        try {
+          if (!credentials?.email || !credentials?.password) return null;
 
-        const teacher = await prisma.teacher.findUnique({
-          where: { email: credentials.email as string },
-        });
-        if (!teacher) return null;
+          const teacher = await prisma.teacher.findUnique({
+            where: { email: credentials.email as string },
+          });
+          if (!teacher) return null;
 
-        const valid = await bcrypt.compare(
-          credentials.password as string,
-          teacher.passwordHash
-        );
-        if (!valid) return null;
+          const valid = await bcrypt.compare(
+            credentials.password as string,
+            teacher.passwordHash
+          );
+          if (!valid) return null;
 
-        return { id: teacher.id, name: teacher.name, email: teacher.email };
+          return { id: teacher.id, name: teacher.name, email: teacher.email };
+        } catch (err) {
+          // Never let authorize() throw - an unhandled error here causes
+          // NextAuth to force-redirect to the (broken) default error page
+          // instead of just showing "invalid credentials" on the login form.
+          console.error("Login authorize() error:", err);
+          return null;
+        }
       },
     }),
   ],
