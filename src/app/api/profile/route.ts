@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
+import { getCurrentClassroomId } from "@/lib/classroomScope";
 
 export async function GET() {
   const session = await auth();
@@ -9,25 +10,33 @@ export async function GET() {
   const teacherId = (session.user as { id?: string })?.id;
 
   const teacher = await prisma.teacher.findUnique({ where: { id: teacherId } });
-  const classroom = await prisma.classroom.findFirst({
-    where: { teacherId, isArchived: false },
-    orderBy: { createdAt: "desc" },
-  });
+  const classroomId = await getCurrentClassroomId();
+  const classroom = classroomId
+    ? await prisma.classroom.findUnique({ where: { id: classroomId } })
+    : null;
   const skillSubjects = classroom
     ? await prisma.skillSubject.findMany({
         where: { classroomId: classroom.id },
         orderBy: { order: "asc" },
       })
     : [];
+  // All of this teacher's classrooms (active + archived), for the
+  // multi-classroom switcher on the Profile page.
+  const allClassrooms = teacherId
+    ? await prisma.classroom.findMany({
+        where: { teacherId },
+        orderBy: { createdAt: "desc" },
+      })
+    : [];
 
-  return NextResponse.json({ teacher, classroom, skillSubjects });
+  return NextResponse.json({ teacher, classroom, skillSubjects, allClassrooms });
 }
 
-// POST { firstName, lastName, grade, subjects: string[] }
-// Updates the teacher's name, creates (or renames) their classroom using the
-// format first-initial + last name + "-" + grade (e.g. "MPage-4th"), and
-// syncs the classroom's list of taught subjects (generic + custom) to match
-// exactly what was submitted.
+// POST { firstName, lastName, grade, subjects: string[], schoolName? }
+// Updates the teacher's name, creates (or renames) their ACTIVE classroom
+// using the format first-initial + last name + "-" + grade (e.g.
+// "MPage-4th"), and syncs the classroom's list of taught subjects (generic +
+// custom) to match exactly what was submitted.
 export async function POST(req: NextRequest) {
   const session = await auth();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -39,6 +48,7 @@ export async function POST(req: NextRequest) {
   const firstName = (body.firstName ?? "").trim();
   const lastName = (body.lastName ?? "").trim();
   const grade = (body.grade ?? "").trim();
+  const schoolName = (body.schoolName ?? "").trim();
   const subjects: string[] = Array.isArray(body.subjects)
     ? body.subjects.map((s: string) => s.trim()).filter(Boolean)
     : [];
@@ -57,14 +67,10 @@ export async function POST(req: NextRequest) {
     data: { name: `${firstName} ${lastName}` },
   });
 
-  const existing = await prisma.classroom.findFirst({
-    where: { teacherId, isArchived: false },
-    orderBy: { createdAt: "desc" },
-  });
+  const existingId = await getCurrentClassroomId();
+  const existing = existingId ? await prisma.classroom.findUnique({ where: { id: existingId } }) : null;
 
   const now = new Date();
-  // School year runs roughly July-June; if it's July or later, the school
-  // year is "this year - next year", otherwise "last year - this year".
   const schoolYear =
     now.getMonth() >= 6
       ? `${now.getFullYear()}-${now.getFullYear() + 1}`
@@ -73,17 +79,22 @@ export async function POST(req: NextRequest) {
   const classroom = existing
     ? await prisma.classroom.update({
         where: { id: existing.id },
-        data: { name: classroomName },
+        data: { name: classroomName, schoolName: schoolName || null },
       })
     : await prisma.classroom.create({
-        data: { teacherId, name: classroomName, schoolYear },
+        data: { teacherId, name: classroomName, schoolYear, schoolName: schoolName || null },
       });
+
+  // If this teacher had no active classroom set yet, make this one active.
+  await prisma.teacher.updateMany({
+    where: { id: teacherId, activeClassroomId: null },
+    data: { activeClassroomId: classroom.id },
+  });
 
   // Sync subjects: mark selected ones active (creating any brand-new ones),
   // and mark anything NOT selected as inactive. We never delete the
   // SkillSubject row itself - that would cascade-delete its skills and
-  // students' progress just because a checkbox got unchecked. isActive just
-  // controls whether it shows up as "selected" here and in the Skills tab.
+  // students' progress just because a checkbox got unchecked.
   const existingSubjects = await prisma.skillSubject.findMany({
     where: { classroomId: classroom.id },
   });
@@ -102,13 +113,11 @@ export async function POST(req: NextRequest) {
     });
   }
 
-  // Re-activate any existing subject that's selected but was previously off
   const toReactivate = existingSubjects.filter((s) => selectedNames.has(s.name) && !s.isActive);
   for (const s of toReactivate) {
     await prisma.skillSubject.update({ where: { id: s.id }, data: { isActive: true } });
   }
 
-  // Deactivate any existing subject that's no longer selected
   const toDeactivate = existingSubjects.filter((s) => !selectedNames.has(s.name) && s.isActive);
   for (const s of toDeactivate) {
     await prisma.skillSubject.update({ where: { id: s.id }, data: { isActive: false } });

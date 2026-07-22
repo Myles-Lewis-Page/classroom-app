@@ -58,6 +58,9 @@ function LoginForm() {
           Log in
         </button>
       </form>
+      <a href="/forgot-password" className="block text-sm text-sky-600 hover:underline mt-4">
+        Forgot password?
+      </a>
     </div>
   );
 }

@@ -14,12 +14,18 @@ datasource db {
 // ---------- CORE: Teacher / Classroom / Student ----------
 
 model Teacher {
-  id           String      @id @default(cuid())
-  name         String
-  email        String      @unique
-  passwordHash String
-  createdAt    DateTime    @default(now())
-  classrooms   Classroom[]
+  id                String      @id @default(cuid())
+  name              String
+  email             String      @unique
+  passwordHash      String
+  createdAt         DateTime    @default(now())
+  classrooms        Classroom[]
+  // Which classroom is "active" right now - lets a teacher have more than
+  // one (e.g. two sections, or last year's archived one kept around) and
+  // pick which one the rest of the app operates on.
+  activeClassroomId String?
+  activeClassroom   Classroom?  @relation("ActiveClassroom", fields: [activeClassroomId], references: [id], onDelete: SetNull)
+  resetTokens       PasswordResetToken[]
 }
 
 model Classroom {
@@ -27,6 +33,7 @@ model Classroom {
   teacherId  String
   teacher    Teacher   @relation(fields: [teacherId], references: [id], onDelete: Cascade)
   name       String
+  schoolName String?
   schoolYear String
   isArchived Boolean   @default(false)
   createdAt  DateTime  @default(now())
@@ -42,6 +49,23 @@ model Classroom {
   assignments    Assignment[]
   skillSubjects  SkillSubject[]
   seatSlots      SeatSlot[]
+  activeForTeachers Teacher[] @relation("ActiveClassroom")
+}
+
+// Self-serve password reset. Since no outbound email service is configured
+// yet, the reset link is logged server-side (visible in Railway's deploy
+// logs) rather than emailed - still self-serve for the account owner who has
+// dashboard access, without needing a code change each time. Swap this for
+// a real email send later by wiring an email provider into the forgot
+// -password route.
+model PasswordResetToken {
+  id        String   @id @default(cuid())
+  teacherId String
+  teacher   Teacher  @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  token     String   @unique
+  expiresAt DateTime
+  used      Boolean  @default(false)
+  createdAt DateTime @default(now())
 }
 
 // A single desk position in the room layout. The full set of SeatSlots for a

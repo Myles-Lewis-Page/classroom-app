@@ -6,17 +6,20 @@ const GRADE_OPTIONS = ["1st", "2nd", "3rd", "4th", "5th"];
 const GENERIC_SUBJECTS = ["Math", "Reading", "Writing", "Science", "Social Studies", "Spelling"];
 
 type Teacher = { name: string; email: string };
-type Classroom = { name: string; schoolYear: string };
+type Classroom = { id: string; name: string; schoolName: string | null; schoolYear: string; isArchived: boolean };
 type SkillSubject = { id: string; name: string; isActive: boolean };
 
 export default function ProfilePage() {
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [grade, setGrade] = useState("3rd");
+  const [schoolName, setSchoolName] = useState("");
   const [currentClassroom, setCurrentClassroom] = useState<Classroom | null>(null);
+  const [allClassrooms, setAllClassrooms] = useState<Classroom[]>([]);
   const [teacherEmail, setTeacherEmail] = useState("");
   const [saving, setSaving] = useState(false);
   const [savedName, setSavedName] = useState<string | null>(null);
+  const [archiving, setArchiving] = useState(false);
 
   // Subjects taught (generic + custom)
   const [selectedSubjects, setSelectedSubjects] = useState<string[]>([]);
@@ -33,6 +36,10 @@ export default function ProfilePage() {
   const [accountSuccess, setAccountSuccess] = useState<string | null>(null);
 
   useEffect(() => {
+    loadProfile();
+  }, []);
+
+  function loadProfile() {
     fetch("/api/profile")
       .then((r) => r.json())
       .then(
@@ -40,10 +47,12 @@ export default function ProfilePage() {
           teacher,
           classroom,
           skillSubjects,
+          allClassrooms,
         }: {
           teacher: Teacher;
           classroom: Classroom | null;
           skillSubjects: SkillSubject[];
+          allClassrooms: Classroom[];
         }) => {
           if (teacher?.name) {
             const parts = teacher.name.split(" ");
@@ -53,11 +62,36 @@ export default function ProfilePage() {
           setTeacherEmail(teacher?.email ?? "");
           setNewEmail(teacher?.email ?? "");
           setCurrentClassroom(classroom);
+          setSchoolName(classroom?.schoolName ?? "");
+          setAllClassrooms(allClassrooms ?? []);
           setExistingSubjects(skillSubjects ?? []);
           setSelectedSubjects((skillSubjects ?? []).filter((s) => s.isActive).map((s) => s.name));
         }
       );
-  }, []);
+  }
+
+  async function switchClassroom(classroomId: string) {
+    await fetch("/api/profile/switch-classroom", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ classroomId }),
+    });
+    loadProfile();
+  }
+
+  async function archiveAndStartNew() {
+    if (!currentClassroom) return;
+    const confirmed = confirm(
+      `Archive "${currentClassroom.name}"? All its data (students, behavior, grades, etc.) stays saved and viewable by switching back to it later. You'll be prompted to set up a brand new classroom right after.`
+    );
+    if (!confirmed) return;
+
+    setArchiving(true);
+    await fetch("/api/profile/archive-classroom", { method: "POST" });
+    setArchiving(false);
+    setSavedName(null);
+    loadProfile();
+  }
 
   function toggleSubject(name: string) {
     setSelectedSubjects((prev) =>
@@ -79,7 +113,7 @@ export default function ProfilePage() {
     const res = await fetch("/api/profile", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ firstName, lastName, grade, subjects: selectedSubjects }),
+      body: JSON.stringify({ firstName, lastName, grade, subjects: selectedSubjects, schoolName }),
     });
     const data = await res.json();
     setSaving(false);
@@ -87,6 +121,7 @@ export default function ProfilePage() {
       setCurrentClassroom(data.classroom);
       setSavedName(data.classroom.name);
       setExistingSubjects(data.skillSubjects ?? []);
+      loadProfile();
     }
   }
 
@@ -146,7 +181,50 @@ export default function ProfilePage() {
         <div className="panel mb-4">
           <p className="text-sm text-slate-500">Current classroom</p>
           <p className="font-bold text-lg">{currentClassroom.name}</p>
+          {currentClassroom.schoolName && (
+            <p className="text-sm text-slate-600">{currentClassroom.schoolName}</p>
+          )}
           <p className="text-xs text-slate-500">{currentClassroom.schoolYear}</p>
+        </div>
+      )}
+
+      {allClassrooms.length > 1 && (
+        <div className="panel mb-4">
+          <p className="text-sm text-slate-500 mb-2">
+            You have {allClassrooms.length} classrooms - switch which one is active:
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {allClassrooms.map((c) => (
+              <button
+                key={c.id}
+                onClick={() => switchClassroom(c.id)}
+                disabled={c.id === currentClassroom?.id}
+                className={`text-sm px-3 py-1 rounded border ${
+                  c.id === currentClassroom?.id ? "btn-primary" : "bg-white"
+                } ${c.isArchived ? "opacity-60" : ""}`}
+              >
+                {c.name}
+                {c.isArchived ? " (archived)" : ""}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {currentClassroom && (
+        <div className="panel mb-4">
+          <p className="text-sm font-semibold mb-1">End of year?</p>
+          <p className="text-xs text-slate-500 mb-2">
+            Archive "{currentClassroom.name}" and set up a fresh classroom for the new year. All
+            of this classroom's data stays saved - switch back to it any time from the list above.
+          </p>
+          <button
+            onClick={archiveAndStartNew}
+            disabled={archiving}
+            className="btn-outline text-sm text-rose-600"
+          >
+            {archiving ? "Archiving..." : "Archive & Start New Year"}
+          </button>
         </div>
       )}
 
@@ -181,6 +259,16 @@ export default function ProfilePage() {
               </option>
             ))}
           </select>
+        </div>
+
+        <div>
+          <label className="block text-xs text-slate-500 mb-1">School name (optional)</label>
+          <input
+            placeholder="e.g. Lincoln Elementary"
+            value={schoolName}
+            onChange={(e) => setSchoolName(e.target.value)}
+            className="border rounded px-2 py-1 w-full"
+          />
         </div>
 
         {firstName && lastName && grade && (
