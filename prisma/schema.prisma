@@ -1,0 +1,345 @@
+// Classroom Roster App - Full Schema
+// Designed multi-tenant-ready (Teacher -> Classroom -> Student) even though
+// it's single-user today, so adding more teachers later doesn't require a rebuild.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------- CORE: Teacher / Classroom / Student ----------
+
+model Teacher {
+  id           String      @id @default(cuid())
+  name         String
+  email        String      @unique
+  passwordHash String
+  createdAt    DateTime    @default(now())
+  classrooms   Classroom[]
+}
+
+model Classroom {
+  id         String    @id @default(cuid())
+  teacherId  String
+  teacher    Teacher   @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  name       String
+  schoolYear String
+  isArchived Boolean   @default(false)
+  createdAt  DateTime  @default(now())
+
+  students       Student[]
+  subjects       Subject[]
+  events         Event[]
+  assignments    Assignment[]
+  mathSkills     MathSkill[]
+  literacySkills LiteracySkill[]
+}
+
+model Student {
+  id                 String    @id @default(cuid())
+  classroomId        String
+  classroom          Classroom @relation(fields: [classroomId], references: [id], onDelete: Cascade)
+  firstName          String
+  lastName           String
+  grade              String
+  section            String?
+  dob                DateTime?
+  understandingLevel Int?
+  photoConsent       Boolean   @default(true)
+  isActive           Boolean   @default(true)
+  createdAt          DateTime  @default(now())
+
+  tags                StudentTag[]
+  allergies           Allergy[]
+  dietaryRestrictions DietaryRestriction[]
+  ieps                IEP[]
+  parents             Parent[]
+  behaviorEntries     BehaviorEntry[]
+  attendanceEntries   AttendanceEntry[]
+  homeworkEntries     HomeworkEntry[]
+  eventStatuses       EventStatus[]
+  mathStatuses        StudentMathStatus[]
+  literacyStatuses    StudentLiteracyStatus[]
+  observations        Observation[]
+  praiseNotes         PraiseNote[]
+  seatingAssignment   SeatingAssignment?
+
+  relationshipsFrom Relationship[] @relation("StudentFrom")
+  relationshipsTo   Relationship[] @relation("StudentTo")
+}
+
+// ---------- TAGS ----------
+
+model Tag {
+  id       String       @id @default(cuid())
+  name     String       @unique
+  color    String?
+  students StudentTag[]
+}
+
+model StudentTag {
+  id        String  @id @default(cuid())
+  studentId String
+  student   Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  tagId     String
+  tag       Tag     @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@unique([studentId, tagId])
+}
+
+// ---------- SAFETY: Allergies / Dietary / IEP ----------
+
+model Allergy {
+  id        String   @id @default(cuid())
+  studentId String
+  student   Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  allergen  String
+  severity  String
+  reaction  String?
+  notes     String?
+  createdAt DateTime @default(now())
+}
+
+model DietaryRestriction {
+  id          String  @id @default(cuid())
+  studentId   String
+  student     Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  restriction String
+  notes       String?
+}
+
+model IEP {
+  id             String    @id @default(cuid())
+  studentId      String
+  student        Student   @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  type           String
+  accommodations String
+  serviceMinutes String?
+  goals          String?
+  caseManager    String?
+  reviewDate     DateTime?
+  subSafeSummary String?
+  createdAt      DateTime  @default(now())
+}
+
+// ---------- PARENTS ----------
+
+model Parent {
+  id                 String  @id @default(cuid())
+  studentId          String
+  student            Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  name               String
+  relationship       String
+  phone              String?
+  email              String?
+  preferredContact   String?
+  isEmergencyContact Boolean @default(false)
+  notes              String?
+}
+
+// ---------- SOCIAL DYNAMICS ----------
+
+model Relationship {
+  id               String   @id @default(cuid())
+  studentId        String
+  student          Student  @relation("StudentFrom", fields: [studentId], references: [id], onDelete: Cascade)
+  relatedStudentId String
+  relatedStudent   Student  @relation("StudentTo", fields: [relatedStudentId], references: [id], onDelete: Cascade)
+  type             String
+  notes            String?
+  createdAt        DateTime @default(now())
+
+  @@unique([studentId, relatedStudentId, type])
+}
+
+// ---------- SUBJECTS (custom, teacher-defined) ----------
+
+model Subject {
+  id          String    @id @default(cuid())
+  classroomId String
+  classroom   Classroom @relation(fields: [classroomId], references: [id], onDelete: Cascade)
+  name        String
+  icon        String?
+  order       Int
+
+  behaviorEntries BehaviorEntry[]
+}
+
+// ---------- BEHAVIOR LOG ----------
+
+model BehaviorEntry {
+  id            String   @id @default(cuid())
+  studentId     String
+  student       Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  subjectId     String
+  subject       Subject  @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  date          DateTime
+  calmBody      Boolean  @default(false)
+  listeningEars Boolean  @default(false)
+  kindWords     Boolean  @default(false)
+  stayInArea    Boolean  @default(false)
+  finishedWork  Boolean  @default(false)
+  none          Boolean  @default(false)
+  rating        String?
+  comment       String?
+  createdAt     DateTime @default(now())
+
+  @@unique([studentId, subjectId, date])
+}
+
+// ---------- ATTENDANCE ----------
+
+model AttendanceEntry {
+  id        String   @id @default(cuid())
+  studentId String
+  student   Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  date      DateTime
+  status    String
+  notes     String?
+
+  @@unique([studentId, date])
+}
+
+// ---------- HOMEWORK (assignment-based) ----------
+// A teacher creates one Assignment, which auto-creates a "missing" entry for
+// every student. Clicking into the assignment shows the roster and lets the
+// teacher tag each student's status - upserting (never duplicating) per
+// (assignment, student) pair.
+
+model Assignment {
+  id          String   @id @default(cuid())
+  classroomId String
+  classroom   Classroom @relation(fields: [classroomId], references: [id], onDelete: Cascade)
+  name        String
+  date        DateTime
+  createdAt   DateTime @default(now())
+
+  entries HomeworkEntry[]
+}
+
+model HomeworkEntry {
+  id           String     @id @default(cuid())
+  studentId    String
+  student      Student    @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  assignmentId String
+  assignment   Assignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  status       String     @default("missing") // "complete" / "incomplete" / "needs_help" / "missing"
+  note         String?
+  updatedAt    DateTime   @updatedAt
+
+  @@unique([assignmentId, studentId])
+}
+
+// ---------- EVENTS (field trips, etc.) ----------
+
+model Event {
+  id              String    @id @default(cuid())
+  classroomId     String
+  classroom       Classroom @relation(fields: [classroomId], references: [id], onDelete: Cascade)
+  name            String
+  date            DateTime
+  dueDate         DateTime?
+  requiresPayment Boolean   @default(false)
+  description     String?
+  createdAt       DateTime  @default(now())
+
+  statuses EventStatus[]
+}
+
+model EventStatus {
+  id            String   @id @default(cuid())
+  eventId       String
+  event         Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  studentId     String
+  student       Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  slipStatus    String   @default("missing")
+  paymentStatus String?
+  updatedAt     DateTime @updatedAt
+
+  @@unique([eventId, studentId])
+}
+
+// ---------- MATH SKILLS ----------
+
+model MathSkill {
+  id          String    @id @default(cuid())
+  classroomId String
+  classroom   Classroom @relation(fields: [classroomId], references: [id], onDelete: Cascade)
+  category    String
+  skillName   String
+  order       Int
+
+  statuses StudentMathStatus[]
+}
+
+model StudentMathStatus {
+  id          String    @id @default(cuid())
+  studentId   String
+  student     Student   @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  mathSkillId String
+  mathSkill   MathSkill @relation(fields: [mathSkillId], references: [id], onDelete: Cascade)
+  status      String    @default("not_started")
+  updatedAt   DateTime  @updatedAt
+
+  @@unique([studentId, mathSkillId])
+}
+
+// ---------- READING & WRITING (LITERACY) SKILLS ----------
+
+model LiteracySkill {
+  id          String    @id @default(cuid())
+  classroomId String
+  classroom   Classroom @relation(fields: [classroomId], references: [id], onDelete: Cascade)
+  category    String
+  skillName   String
+  order       Int
+
+  statuses StudentLiteracyStatus[]
+}
+
+model StudentLiteracyStatus {
+  id              String        @id @default(cuid())
+  studentId       String
+  student         Student       @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  literacySkillId String
+  literacySkill   LiteracySkill @relation(fields: [literacySkillId], references: [id], onDelete: Cascade)
+  status          String        @default("not_started")
+  updatedAt       DateTime      @updatedAt
+
+  @@unique([studentId, literacySkillId])
+}
+
+// ---------- NOTES: Observations (quick-notes) & Praise ----------
+
+model Observation {
+  id        String   @id @default(cuid())
+  studentId String
+  student   Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  date      DateTime @default(now())
+  note      String
+  createdAt DateTime @default(now())
+}
+
+model PraiseNote {
+  id        String   @id @default(cuid())
+  studentId String
+  student   Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  date      DateTime @default(now())
+  note      String
+  createdAt DateTime @default(now())
+}
+
+// ---------- SEATING CHART ----------
+
+model SeatingAssignment {
+  id        String   @id @default(cuid())
+  studentId String   @unique
+  student   Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  posX      Int
+  posY      Int
+  updatedAt DateTime @updatedAt
+}
