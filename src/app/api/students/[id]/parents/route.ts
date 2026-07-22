@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
+import { getCurrentClassroomId, studentBelongsToClassroom } from "@/lib/classroomScope";
 
 // POST { name, relationship, phone, email, preferredContact, isEmergencyContact, notes }
 export async function POST(
@@ -11,6 +12,11 @@ export async function POST(
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { id } = await params;
+  const classroomId = await getCurrentClassroomId();
+  if (!classroomId || !(await studentBelongsToClassroom(id, classroomId))) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+
   const body = await req.json();
 
   const parent = await prisma.parent.create({
@@ -36,6 +42,12 @@ export async function DELETE(
 ) {
   const session = await auth();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const { id } = await params;
+  const classroomId = await getCurrentClassroomId();
+  if (!classroomId || !(await studentBelongsToClassroom(id, classroomId))) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
 
   const parentId = req.nextUrl.searchParams.get("parentId");
   if (!parentId) return NextResponse.json({ error: "parentId required" }, { status: 400 });

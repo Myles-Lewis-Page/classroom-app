@@ -1,25 +1,32 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
+import { getCurrentClassroomId } from "@/lib/classroomScope";
 
 // POST full student payload:
 // {
-//   classroomId, firstName, lastName, grade, section, dob, understandingLevel,
+//   firstName, lastName, grade, section, dob, understandingLevel,
 //   tagIds: string[],
 //   allergies: [{ allergen, severity, reaction, notes }],
 //   dietaryRestrictions: [{ restriction, notes }],
 //   ieps: [{ type, accommodations, serviceMinutes, goals, caseManager, reviewDate, subSafeSummary }],
 //   parents: [{ name, relationship, phone, email, preferredContact, isEmergencyContact, notes }]
 // }
+// (classroomId is derived from the session, never trusted from the client)
 export async function POST(req: NextRequest) {
   const session = await auth();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const classroomId = await getCurrentClassroomId();
+  if (!classroomId) {
+    return NextResponse.json({ error: "No classroom set up yet" }, { status: 400 });
+  }
 
   const body = await req.json();
 
   const student = await prisma.student.create({
     data: {
-      classroomId: body.classroomId,
+      classroomId,
       firstName: body.firstName,
       lastName: body.lastName,
       grade: body.grade,

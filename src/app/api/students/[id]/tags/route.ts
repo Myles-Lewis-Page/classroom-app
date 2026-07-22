@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
+import { getCurrentClassroomId, studentBelongsToClassroom } from "@/lib/classroomScope";
 
 // POST { tagId } - add tag to student
 export async function POST(
@@ -11,6 +12,11 @@ export async function POST(
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { id } = await params;
+  const classroomId = await getCurrentClassroomId();
+  if (!classroomId || !(await studentBelongsToClassroom(id, classroomId))) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+
   const body = await req.json();
 
   const studentTag = await prisma.studentTag.upsert({
@@ -31,6 +37,11 @@ export async function DELETE(
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { id } = await params;
+  const classroomId = await getCurrentClassroomId();
+  if (!classroomId || !(await studentBelongsToClassroom(id, classroomId))) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+
   const tagId = req.nextUrl.searchParams.get("tagId");
   if (!tagId) return NextResponse.json({ error: "tagId required" }, { status: 400 });
 

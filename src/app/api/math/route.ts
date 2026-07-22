@@ -3,26 +3,25 @@ import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
 import { getCurrentClassroomId, studentBelongsToClassroom } from "@/lib/classroomScope";
 
-// GET /api/attendance?date=2026-07-21
-export async function GET(req: NextRequest) {
+export async function GET() {
   const session = await auth();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const classroomId = await getCurrentClassroomId();
-  if (!classroomId) return NextResponse.json([]);
+  if (!classroomId) return NextResponse.json({ skills: [], statuses: [] });
 
-  const dateParam = req.nextUrl.searchParams.get("date");
-  const date = dateParam ? new Date(dateParam) : new Date();
-  date.setHours(0, 0, 0, 0);
-
-  const entries = await prisma.attendanceEntry.findMany({
-    where: { date, student: { classroomId } },
+  const skills = await prisma.mathSkill.findMany({
+    where: { classroomId },
+    orderBy: { order: "asc" },
+  });
+  const statuses = await prisma.studentMathStatus.findMany({
+    where: { student: { classroomId } },
   });
 
-  return NextResponse.json(entries);
+  return NextResponse.json({ skills, statuses });
 }
 
-// POST { studentId, date, status } - upsert one student's attendance for a day
+// POST { studentId, mathSkillId, status }
 export async function POST(req: NextRequest) {
   const session = await auth();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -33,20 +32,17 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
-  const date = new Date(body.date);
-  date.setHours(0, 0, 0, 0);
-
-  const entry = await prisma.attendanceEntry.upsert({
+  const status = await prisma.studentMathStatus.upsert({
     where: {
-      studentId_date: { studentId: body.studentId, date },
+      studentId_mathSkillId: { studentId: body.studentId, mathSkillId: body.mathSkillId },
     },
     update: { status: body.status },
     create: {
       studentId: body.studentId,
-      date,
+      mathSkillId: body.mathSkillId,
       status: body.status,
     },
   });
 
-  return NextResponse.json(entry);
+  return NextResponse.json(status);
 }

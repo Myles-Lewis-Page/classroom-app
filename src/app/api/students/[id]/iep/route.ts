@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
+import { getCurrentClassroomId, studentBelongsToClassroom } from "@/lib/classroomScope";
 
 // POST { type, accommodations, serviceMinutes, goals, caseManager, reviewDate, subSafeSummary }
 export async function POST(
@@ -11,6 +12,11 @@ export async function POST(
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { id } = await params;
+  const classroomId = await getCurrentClassroomId();
+  if (!classroomId || !(await studentBelongsToClassroom(id, classroomId))) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+
   const body = await req.json();
 
   const iep = await prisma.iEP.create({
@@ -36,6 +42,12 @@ export async function DELETE(
 ) {
   const session = await auth();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const { id } = await params;
+  const classroomId = await getCurrentClassroomId();
+  if (!classroomId || !(await studentBelongsToClassroom(id, classroomId))) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
 
   const iepId = req.nextUrl.searchParams.get("iepId");
   if (!iepId) return NextResponse.json({ error: "iepId required" }, { status: 400 });

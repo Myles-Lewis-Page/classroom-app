@@ -10,20 +10,16 @@ export async function GET() {
   const classroomId = await getCurrentClassroomId();
   if (!classroomId) return NextResponse.json([]);
 
-  const assignments = await prisma.assignment.findMany({
+  const events = await prisma.event.findMany({
     where: { classroomId },
-    include: {
-      entries: true,
-    },
-    orderBy: { date: "desc" },
+    include: { statuses: { include: { student: true } } },
+    orderBy: { date: "asc" },
   });
-
-  return NextResponse.json(assignments);
+  return NextResponse.json(events);
 }
 
-// POST { name, date } - classroomId derived from session.
-// Creates the assignment and auto-creates a "missing" entry for every active
-// student IN THIS CLASSROOM ONLY, matching the same pattern as Event Tracker.
+// POST { name, date, dueDate, requiresPayment, description }
+// classroomId is derived from the session, never trusted from the client.
 export async function POST(req: NextRequest) {
   const session = await auth();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -35,22 +31,28 @@ export async function POST(req: NextRequest) {
 
   const body = await req.json();
 
-  const assignment = await prisma.assignment.create({
+  const event = await prisma.event.create({
     data: {
       classroomId,
       name: body.name,
       date: new Date(body.date),
+      dueDate: body.dueDate ? new Date(body.dueDate) : null,
+      requiresPayment: !!body.requiresPayment,
+      description: body.description ?? null,
     },
   });
 
+  // Auto-create a "missing" status row for every active student IN THIS
+  // CLASSROOM ONLY - not every student in the whole database.
   const students = await prisma.student.findMany({ where: { isActive: true, classroomId } });
-  await prisma.homeworkEntry.createMany({
+  await prisma.eventStatus.createMany({
     data: students.map((s) => ({
-      assignmentId: assignment.id,
+      eventId: event.id,
       studentId: s.id,
-      status: "missing",
+      slipStatus: "missing",
+      paymentStatus: body.requiresPayment ? "unpaid" : null,
     })),
   });
 
-  return NextResponse.json(assignment, { status: 201 });
+  return NextResponse.json(event, { status: 201 });
 }

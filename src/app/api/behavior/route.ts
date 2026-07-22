@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
+import { calculateRating } from "@/lib/behaviorRating";
 import { getCurrentClassroomId, studentBelongsToClassroom } from "@/lib/classroomScope";
 
-// GET /api/attendance?date=2026-07-21
+// GET /api/behavior?date=2026-07-21
 export async function GET(req: NextRequest) {
   const session = await auth();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -15,14 +16,15 @@ export async function GET(req: NextRequest) {
   const date = dateParam ? new Date(dateParam) : new Date();
   date.setHours(0, 0, 0, 0);
 
-  const entries = await prisma.attendanceEntry.findMany({
+  const entries = await prisma.behaviorEntry.findMany({
     where: { date, student: { classroomId } },
+    include: { subject: true },
   });
 
   return NextResponse.json(entries);
 }
 
-// POST { studentId, date, status } - upsert one student's attendance for a day
+// POST { studentId, subjectId, date, calmBody, listeningEars, kindWords, stayInArea, finishedWork, none, comment }
 export async function POST(req: NextRequest) {
   const session = await auth();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -36,15 +38,32 @@ export async function POST(req: NextRequest) {
   const date = new Date(body.date);
   date.setHours(0, 0, 0, 0);
 
-  const entry = await prisma.attendanceEntry.upsert({
+  const flags = {
+    calmBody: !!body.calmBody,
+    listeningEars: !!body.listeningEars,
+    kindWords: !!body.kindWords,
+    stayInArea: !!body.stayInArea,
+    finishedWork: !!body.finishedWork,
+  };
+  const rating = body.none ? null : calculateRating(flags);
+
+  const entry = await prisma.behaviorEntry.upsert({
     where: {
-      studentId_date: { studentId: body.studentId, date },
+      studentId_subjectId_date: {
+        studentId: body.studentId,
+        subjectId: body.subjectId,
+        date,
+      },
     },
-    update: { status: body.status },
+    update: { ...flags, none: !!body.none, rating, comment: body.comment ?? null },
     create: {
       studentId: body.studentId,
+      subjectId: body.subjectId,
       date,
-      status: body.status,
+      ...flags,
+      none: !!body.none,
+      rating,
+      comment: body.comment ?? null,
     },
   });
 

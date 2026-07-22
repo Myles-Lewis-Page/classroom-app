@@ -10,20 +10,14 @@ export async function GET() {
   const classroomId = await getCurrentClassroomId();
   if (!classroomId) return NextResponse.json([]);
 
-  const assignments = await prisma.assignment.findMany({
+  const subjects = await prisma.subject.findMany({
     where: { classroomId },
-    include: {
-      entries: true,
-    },
-    orderBy: { date: "desc" },
+    orderBy: { order: "asc" },
   });
-
-  return NextResponse.json(assignments);
+  return NextResponse.json(subjects);
 }
 
-// POST { name, date } - classroomId derived from session.
-// Creates the assignment and auto-creates a "missing" entry for every active
-// student IN THIS CLASSROOM ONLY, matching the same pattern as Event Tracker.
+// POST { name, icon, order } - classroomId derived from session
 export async function POST(req: NextRequest) {
   const session = await auth();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -34,23 +28,13 @@ export async function POST(req: NextRequest) {
   }
 
   const body = await req.json();
-
-  const assignment = await prisma.assignment.create({
+  const subject = await prisma.subject.create({
     data: {
       classroomId,
       name: body.name,
-      date: new Date(body.date),
+      icon: body.icon ?? null,
+      order: body.order ?? 0,
     },
   });
-
-  const students = await prisma.student.findMany({ where: { isActive: true, classroomId } });
-  await prisma.homeworkEntry.createMany({
-    data: students.map((s) => ({
-      assignmentId: assignment.id,
-      studentId: s.id,
-      status: "missing",
-    })),
-  });
-
-  return NextResponse.json(assignment, { status: 201 });
+  return NextResponse.json(subject, { status: 201 });
 }

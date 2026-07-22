@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
+import { getCurrentClassroomId, studentBelongsToClassroom } from "@/lib/classroomScope";
 
 // POST { studentId, status, note } - upserts by (assignmentId, studentId),
 // so re-tagging a student always updates their existing entry instead of
@@ -14,6 +15,17 @@ export async function POST(
 
   const { id } = await params;
   const body = await req.json();
+
+  const classroomId = await getCurrentClassroomId();
+  const assignment = await prisma.assignment.findUnique({ where: { id } });
+  if (
+    !classroomId ||
+    !assignment ||
+    assignment.classroomId !== classroomId ||
+    !(await studentBelongsToClassroom(body.studentId, classroomId))
+  ) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
 
   const entry = await prisma.homeworkEntry.upsert({
     where: {
