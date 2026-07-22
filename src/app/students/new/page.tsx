@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 
 type Tag = { id: string; name: string };
 
@@ -90,6 +91,16 @@ export default function AddStudentPage() {
   return (
     <div className="p-6 max-w-2xl mx-auto">
       <h1 className="text-2xl font-bold mb-4">Add Student</h1>
+
+      {!classroomId && (
+        <p className="text-rose-600 text-sm mb-4">
+          ⚠️ You don't have a classroom set up yet.{" "}
+          <Link href="/profile" className="underline font-medium">
+            Set up your profile
+          </Link>{" "}
+          before adding students.
+        </p>
+      )}
       <form onSubmit={handleSubmit} className="space-y-6">
         <section className="card">
           <h2 className="font-semibold mb-3">Basic Info</h2>
@@ -271,8 +282,8 @@ export default function AddStudentPage() {
 
         <button
           type="submit"
-          disabled={saving}
-          className="btn-primary px-4 py-2 w-full"
+          disabled={saving || !classroomId}
+          className="btn-primary px-4 py-2 w-full disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {saving ? "Saving..." : "Add Student"}
         </button>

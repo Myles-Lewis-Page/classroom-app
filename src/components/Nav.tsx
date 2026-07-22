@@ -28,17 +28,21 @@ export default async function Nav() {
             {l.label}
           </Link>
         ))}
-        <form
-          action={async () => {
-            "use server";
-            await signOut({ redirectTo: "/login" });
-          }}
-          className="ml-auto"
-        >
-          <button type="submit" className="text-slate-500 hover:text-rose-500 whitespace-nowrap">
-            Log out
-          </button>
-        </form>
+        <div className="ml-auto flex items-center gap-4">
+          <Link href="/profile" className="whitespace-nowrap text-slate-600 hover:text-sky-600">
+            Profile
+          </Link>
+          <form
+            action={async () => {
+              "use server";
+              await signOut({ redirectTo: "/login" });
+            }}
+          >
+            <button type="submit" className="text-slate-500 hover:text-rose-500 whitespace-nowrap">
+              Log out
+            </button>
+          </form>
+        </div>
       </div>
     </nav>
   );

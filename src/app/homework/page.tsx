@@ -69,8 +69,11 @@ export default function AssignmentsPage() {
         <h2 className="font-semibold mb-2">New Assignment</h2>
         {classroomError && (
           <p className="text-rose-600 text-sm mb-2">
-            ⚠️ Couldn't find a classroom for your account. Creating assignments is disabled until
-            this is resolved.
+            ⚠️ You don't have a classroom set up yet.{" "}
+            <Link href="/profile" className="underline font-medium">
+              Set up your profile
+            </Link>{" "}
+            to create one before adding assignments.
           </p>
         )}
         <div className="flex gap-2 flex-wrap items-end">

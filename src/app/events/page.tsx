@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 
 type EventStatus = {
   id: string;
@@ -86,8 +87,11 @@ export default function EventsPage() {
         <h2 className="font-semibold mb-2">New Event</h2>
         {classroomError && (
           <p className="text-rose-600 text-sm mb-2">
-            ⚠️ Couldn't find a classroom for your account. Event creation is disabled until this is
-            resolved — check that the database was seeded, or contact support.
+            ⚠️ You don't have a classroom set up yet.{" "}
+            <Link href="/profile" className="underline font-medium">
+              Set up your profile
+            </Link>{" "}
+            to create one before adding events.
           </p>
         )}
         <div className="flex gap-2 flex-wrap items-end">
