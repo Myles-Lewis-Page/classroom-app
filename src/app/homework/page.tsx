@@ -16,11 +16,24 @@ export default function AssignmentsPage() {
   const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [classroomId, setClassroomId] = useState("");
   const [classroomError, setClassroomError] = useState(false);
+  const [classroomLoading, setClassroomLoading] = useState(true);
+  const [authIssue, setAuthIssue] = useState(false);
 
   useEffect(() => {
     load();
+    loadClassroom();
+  }, []);
+
+  function loadClassroom() {
+    setClassroomLoading(true);
+    setClassroomError(false);
+    setAuthIssue(false);
     fetch("/api/classroom")
       .then((r) => {
+        if (r.status === 401) {
+          setAuthIssue(true);
+          throw new Error("unauthorized");
+        }
         if (!r.ok) throw new Error();
         return r.json();
       })
@@ -31,8 +44,9 @@ export default function AssignmentsPage() {
         }
         setClassroomId(c.id);
       })
-      .catch(() => setClassroomError(true));
-  }, []);
+      .catch(() => setClassroomError(true))
+      .finally(() => setClassroomLoading(false));
+  }
 
   function load() {
     fetch("/api/assignments").then((r) => r.json()).then(setAssignments);
@@ -67,13 +81,30 @@ export default function AssignmentsPage() {
 
       <div className="panel mb-6">
         <h2 className="font-semibold mb-2">New Assignment</h2>
-        {classroomError && (
+        {classroomError && !classroomLoading && authIssue && (
+          <p className="text-rose-600 text-sm mb-2">
+            ⚠️ Your session may have expired.{" "}
+            <a href="/login" className="underline font-medium">
+              Log in again
+            </a>
+            , or{" "}
+            <button onClick={loadClassroom} className="underline font-medium">
+              try reloading
+            </button>
+            .
+          </p>
+        )}
+        {classroomError && !classroomLoading && !authIssue && (
           <p className="text-rose-600 text-sm mb-2">
             ⚠️ You don't have a classroom set up yet.{" "}
             <Link href="/profile" className="underline font-medium">
               Set up your profile
             </Link>{" "}
-            to create one before adding assignments.
+            to create one, or{" "}
+            <button onClick={loadClassroom} className="underline font-medium">
+              try reloading
+            </button>{" "}
+            if you know one already exists.
           </p>
         )}
         <div className="flex gap-2 flex-wrap items-end">

@@ -25,11 +25,24 @@ export default function EventsPage() {
   const [requiresPayment, setRequiresPayment] = useState(false);
   const [classroomId, setClassroomId] = useState<string>("");
   const [classroomError, setClassroomError] = useState(false);
+  const [classroomLoading, setClassroomLoading] = useState(true);
+  const [authIssue, setAuthIssue] = useState(false);
 
   useEffect(() => {
     load();
+    loadClassroom();
+  }, []);
+
+  function loadClassroom() {
+    setClassroomLoading(true);
+    setClassroomError(false);
+    setAuthIssue(false);
     fetch("/api/classroom")
       .then((r) => {
+        if (r.status === 401) {
+          setAuthIssue(true);
+          throw new Error("unauthorized");
+        }
         if (!r.ok) throw new Error("Failed to load classroom");
         return r.json();
       })
@@ -40,8 +53,9 @@ export default function EventsPage() {
         }
         setClassroomId(c.id);
       })
-      .catch(() => setClassroomError(true));
-  }, []);
+      .catch(() => setClassroomError(true))
+      .finally(() => setClassroomLoading(false));
+  }
 
   function load() {
     fetch("/api/events").then((r) => r.json()).then(setEvents);
@@ -85,13 +99,30 @@ export default function EventsPage() {
 
       <div className="border rounded p-4 mb-6">
         <h2 className="font-semibold mb-2">New Event</h2>
-        {classroomError && (
+        {classroomError && !classroomLoading && authIssue && (
+          <p className="text-rose-600 text-sm mb-2">
+            ⚠️ Your session may have expired.{" "}
+            <a href="/login" className="underline font-medium">
+              Log in again
+            </a>
+            , or{" "}
+            <button onClick={loadClassroom} className="underline font-medium">
+              try reloading
+            </button>
+            .
+          </p>
+        )}
+        {classroomError && !classroomLoading && !authIssue && (
           <p className="text-rose-600 text-sm mb-2">
             ⚠️ You don't have a classroom set up yet.{" "}
             <Link href="/profile" className="underline font-medium">
               Set up your profile
             </Link>{" "}
-            to create one before adding events.
+            to create one, or{" "}
+            <button onClick={loadClassroom} className="underline font-medium">
+              try reloading
+            </button>{" "}
+            if you know one already exists.
           </p>
         )}
         <div className="flex gap-2 flex-wrap items-end">
