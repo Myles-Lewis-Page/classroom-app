@@ -9,8 +9,7 @@ const links = [
   { href: "/groups", label: "Group Builder" },
   { href: "/seating", label: "Seating Chart" },
   { href: "/events", label: "Events" },
-  { href: "/math", label: "Math" },
-  { href: "/literacy", label: "Reading & Writing" },
+  { href: "/skills", label: "Skills" },
   { href: "/reports", label: "Weekly Report" },
   { href: "/sub-mode", label: "Sub Mode" },
 ];

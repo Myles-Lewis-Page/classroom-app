@@ -56,8 +56,10 @@ type StudentDetail = {
     comment: string | null;
     subject: { name: string };
   }[];
-  mathStatuses: { id: string; mathSkill: { category: string; skillName: string } }[];
-  literacyStatuses: { id: string; literacySkill: { category: string; skillName: string } }[];
+  skillStatuses: {
+    id: string;
+    skill: { category: string | null; skillName: string; skillSubject: { name: string } };
+  }[];
 };
 
 export default function StudentProfilePage({ params }: { params: Promise<{ id: string }> }) {
@@ -223,27 +225,15 @@ export default function StudentProfilePage({ params }: { params: Promise<{ id: s
         <AddRelationship studentId={student.id} onAdded={refresh} />
       </section>
 
-      {/* Math - mastered only */}
+      {/* Skills - mastered only, grouped by subject */}
       <section className="card">
-        <h2 className="font-bold mb-2">Math — Mastered Skills</h2>
-        {student.mathStatuses.length === 0 && <p className="text-gray-500 text-sm">None yet</p>}
+        <h2 className="font-bold mb-2">Skills — Mastered</h2>
+        {student.skillStatuses.length === 0 && <p className="text-gray-500 text-sm">None yet</p>}
         <ul className="list-disc list-inside text-sm">
-          {student.mathStatuses.map((m) => (
-            <li key={m.id}>
-              {m.mathSkill.category}: {m.mathSkill.skillName}
-            </li>
-          ))}
-        </ul>
-      </section>
-
-      {/* Reading & Writing - mastered only */}
-      <section className="card">
-        <h2 className="font-bold mb-2">Reading & Writing — Mastered Skills</h2>
-        {student.literacyStatuses.length === 0 && <p className="text-gray-500 text-sm">None yet</p>}
-        <ul className="list-disc list-inside text-sm">
-          {student.literacyStatuses.map((l) => (
-            <li key={l.id}>
-              {l.literacySkill.category}: {l.literacySkill.skillName}
+          {student.skillStatuses.map((s) => (
+            <li key={s.id}>
+              <span className="font-medium">{s.skill.skillSubject.name}</span>
+              {s.skill.category ? ` — ${s.skill.category}` : ""}: {s.skill.skillName}
             </li>
           ))}
         </ul>

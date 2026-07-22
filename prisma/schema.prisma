@@ -35,8 +35,7 @@ model Classroom {
   subjects       Subject[]
   events         Event[]
   assignments    Assignment[]
-  mathSkills     MathSkill[]
-  literacySkills LiteracySkill[]
+  skillSubjects  SkillSubject[]
 }
 
 model Student {
@@ -62,8 +61,7 @@ model Student {
   attendanceEntries   AttendanceEntry[]
   homeworkEntries     HomeworkEntry[]
   eventStatuses       EventStatus[]
-  mathStatuses        StudentMathStatus[]
-  literacyStatuses    StudentLiteracyStatus[]
+  skillStatuses       StudentSkillStatus[]
   observations        Observation[]
   praiseNotes         PraiseNote[]
   seatingAssignment   SeatingAssignment?
@@ -263,54 +261,48 @@ model EventStatus {
   @@unique([eventId, studentId])
 }
 
-// ---------- MATH SKILLS ----------
+// ---------- UNIFIED SKILLS SYSTEM ----------
+// A classroom picks which subjects it teaches (SkillSubject - e.g. Math,
+// Reading, Writing, Science; generic defaults + teacher can add custom ones
+// from the Profile page). Each subject has its own list of Skills (optionally
+// grouped by category, e.g. Math -> "multiplication"/"7s"), and each student
+// gets a mastery status per skill. One shared table/tab in the UI, filtered
+// by whichever subject is selected at the top.
 
-model MathSkill {
+model SkillSubject {
   id          String    @id @default(cuid())
   classroomId String
   classroom   Classroom @relation(fields: [classroomId], references: [id], onDelete: Cascade)
-  category    String
-  skillName   String
-  order       Int
+  name        String
+  order       Int       @default(0)
+  createdAt   DateTime  @default(now())
 
-  statuses StudentMathStatus[]
+  skills Skill[]
+
+  @@unique([classroomId, name])
 }
 
-model StudentMathStatus {
-  id          String    @id @default(cuid())
-  studentId   String
-  student     Student   @relation(fields: [studentId], references: [id], onDelete: Cascade)
-  mathSkillId String
-  mathSkill   MathSkill @relation(fields: [mathSkillId], references: [id], onDelete: Cascade)
-  status      String    @default("not_started")
-  updatedAt   DateTime  @updatedAt
+model Skill {
+  id             String       @id @default(cuid())
+  skillSubjectId String
+  skillSubject   SkillSubject @relation(fields: [skillSubjectId], references: [id], onDelete: Cascade)
+  category       String? // optional sub-grouping within the subject, e.g. "multiplication"
+  skillName      String
+  order          Int          @default(0)
 
-  @@unique([studentId, mathSkillId])
+  statuses StudentSkillStatus[]
 }
 
-// ---------- READING & WRITING (LITERACY) SKILLS ----------
+model StudentSkillStatus {
+  id        String   @id @default(cuid())
+  studentId String
+  student   Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  skillId   String
+  skill     Skill    @relation(fields: [skillId], references: [id], onDelete: Cascade)
+  status    String   @default("not_started") // not_started / practicing / mastered
+  updatedAt DateTime @updatedAt
 
-model LiteracySkill {
-  id          String    @id @default(cuid())
-  classroomId String
-  classroom   Classroom @relation(fields: [classroomId], references: [id], onDelete: Cascade)
-  category    String
-  skillName   String
-  order       Int
-
-  statuses StudentLiteracyStatus[]
-}
-
-model StudentLiteracyStatus {
-  id              String        @id @default(cuid())
-  studentId       String
-  student         Student       @relation(fields: [studentId], references: [id], onDelete: Cascade)
-  literacySkillId String
-  literacySkill   LiteracySkill @relation(fields: [literacySkillId], references: [id], onDelete: Cascade)
-  status          String        @default("not_started")
-  updatedAt       DateTime      @updatedAt
-
-  @@unique([studentId, literacySkillId])
+  @@unique([studentId, skillId])
 }
 
 // ---------- NOTES: Observations (quick-notes) & Praise ----------

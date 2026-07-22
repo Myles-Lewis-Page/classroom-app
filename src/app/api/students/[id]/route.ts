@@ -36,13 +36,9 @@ export async function GET(
         include: { assignment: true },
       },
       behaviorEntries: { orderBy: { date: "desc" }, take: 30, include: { subject: true } },
-      mathStatuses: {
+      skillStatuses: {
         where: { status: "mastered" },
-        include: { mathSkill: true },
-      },
-      literacyStatuses: {
-        where: { status: "mastered" },
-        include: { literacySkill: true },
+        include: { skill: { include: { skillSubject: true } } },
       },
     },
   });

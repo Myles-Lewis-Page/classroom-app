@@ -44,12 +44,17 @@ async function main() {
     });
   }
 
-  // Math skills: multiplication tables 0-12, addition/subtraction types, division facts
+  // Default "Math" subject with standard skills: multiplication tables 0-12,
+  // addition/subtraction types, division facts.
+  const mathSubject = await prisma.skillSubject.create({
+    data: { classroomId: classroom.id, name: "Math", order: 0 },
+  });
+
   let order = 0;
   for (let i = 0; i <= 12; i++) {
-    await prisma.mathSkill.create({
+    await prisma.skill.create({
       data: {
-        classroomId: classroom.id,
+        skillSubjectId: mathSubject.id,
         category: "multiplication",
         skillName: `${i}s`,
         order: order++,
@@ -58,25 +63,39 @@ async function main() {
   }
   const addSubTypes = ["single + single", "double + single", "double + double"];
   for (const t of addSubTypes) {
-    await prisma.mathSkill.create({
-      data: { classroomId: classroom.id, category: "addition", skillName: t, order: order++ },
+    await prisma.skill.create({
+      data: { skillSubjectId: mathSubject.id, category: "addition", skillName: t, order: order++ },
     });
   }
   for (const t of addSubTypes.map((t) => t.replace("+", "-"))) {
-    await prisma.mathSkill.create({
-      data: { classroomId: classroom.id, category: "subtraction", skillName: t, order: order++ },
+    await prisma.skill.create({
+      data: {
+        skillSubjectId: mathSubject.id,
+        category: "subtraction",
+        skillName: t,
+        order: order++,
+      },
     });
   }
   for (let i = 0; i <= 12; i++) {
-    await prisma.mathSkill.create({
+    await prisma.skill.create({
       data: {
-        classroomId: classroom.id,
+        skillSubjectId: mathSubject.id,
         category: "division",
         skillName: `divide by ${i}`,
         order: order++,
       },
     });
   }
+
+  // Reading and Writing subjects start empty - teacher fills in skills as
+  // they decide what to track, same pattern as before.
+  await prisma.skillSubject.create({
+    data: { classroomId: classroom.id, name: "Reading", order: 1 },
+  });
+  await prisma.skillSubject.create({
+    data: { classroomId: classroom.id, name: "Writing", order: 2 },
+  });
 
   // Default tags
   const defaultTags = ["IEP", "504", "ELL", "Needs Reading Support"];

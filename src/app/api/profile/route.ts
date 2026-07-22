@@ -13,13 +13,21 @@ export async function GET() {
     where: { teacherId, isArchived: false },
     orderBy: { createdAt: "desc" },
   });
+  const skillSubjects = classroom
+    ? await prisma.skillSubject.findMany({
+        where: { classroomId: classroom.id },
+        orderBy: { order: "asc" },
+      })
+    : [];
 
-  return NextResponse.json({ teacher, classroom });
+  return NextResponse.json({ teacher, classroom, skillSubjects });
 }
 
-// POST { firstName, lastName, grade }
-// Updates the teacher's name and creates (or renames) their classroom using
-// the format: first-initial + last name + "-" + grade, e.g. "MPage-4th".
+// POST { firstName, lastName, grade, subjects: string[] }
+// Updates the teacher's name, creates (or renames) their classroom using the
+// format first-initial + last name + "-" + grade (e.g. "MPage-4th"), and
+// syncs the classroom's list of taught subjects (generic + custom) to match
+// exactly what was submitted.
 export async function POST(req: NextRequest) {
   const session = await auth();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -31,6 +39,9 @@ export async function POST(req: NextRequest) {
   const firstName = (body.firstName ?? "").trim();
   const lastName = (body.lastName ?? "").trim();
   const grade = (body.grade ?? "").trim();
+  const subjects: string[] = Array.isArray(body.subjects)
+    ? body.subjects.map((s: string) => s.trim()).filter(Boolean)
+    : [];
 
   if (!firstName || !lastName || !grade) {
     return NextResponse.json(
@@ -68,5 +79,32 @@ export async function POST(req: NextRequest) {
         data: { teacherId, name: classroomName, schoolYear },
       });
 
-  return NextResponse.json({ classroom });
+  // Sync subjects: add any newly selected ones (skip ones that already
+  // exist), leave existing skills/statuses on any that were unselected
+  // untouched (never silently delete a subject's data just because a
+  // checkbox got unchecked - that has to be a deliberate delete action).
+  if (subjects.length > 0) {
+    const existingSubjects = await prisma.skillSubject.findMany({
+      where: { classroomId: classroom.id },
+    });
+    const existingNames = new Set(existingSubjects.map((s) => s.name));
+    const toCreate = subjects.filter((name) => !existingNames.has(name));
+
+    if (toCreate.length > 0) {
+      await prisma.skillSubject.createMany({
+        data: toCreate.map((name, i) => ({
+          classroomId: classroom.id,
+          name,
+          order: existingSubjects.length + i,
+        })),
+      });
+    }
+  }
+
+  const skillSubjects = await prisma.skillSubject.findMany({
+    where: { classroomId: classroom.id },
+    orderBy: { order: "asc" },
+  });
+
+  return NextResponse.json({ classroom, skillSubjects });
 }
