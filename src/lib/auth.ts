@@ -30,7 +30,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           if (!credentials?.email || !credentials?.password) return null;
 
           const teacher = await prisma.teacher.findUnique({
-            where: { email: credentials.email as string },
+            where: { email: (credentials.email as string).trim() },
           });
           if (!teacher) return null;
 

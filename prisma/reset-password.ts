@@ -10,8 +10,8 @@ const prisma = new PrismaClient();
 //   RESET_PASSWORD_TO    - the new password to set (required)
 
 async function main() {
-  const email = process.env.RESET_PASSWORD_EMAIL;
-  const newPassword = process.env.RESET_PASSWORD_TO;
+  const email = process.env.RESET_PASSWORD_EMAIL?.trim();
+  const newPassword = process.env.RESET_PASSWORD_TO?.trim();
 
   if (!email || !newPassword) {
     console.error(
