@@ -9,20 +9,10 @@ export async function GET() {
 
   const classroomId = await getCurrentClassroomId();
   if (!classroomId) {
-    return NextResponse.json({
-      students: [],
-      relationships: [],
-      seatingRows: 5,
-      seatingCols: 6,
-      extraSeats: [],
-    });
+    return NextResponse.json({ students: [], relationships: [] });
   }
 
-  const [classroom, students, relationships, extraSeats] = await Promise.all([
-    prisma.classroom.findUnique({
-      where: { id: classroomId },
-      select: { seatingRows: true, seatingCols: true },
-    }),
+  const [students, relationships] = await Promise.all([
     prisma.student.findMany({
       where: { isActive: true, classroomId },
       include: { seatingAssignment: true },
@@ -30,16 +20,9 @@ export async function GET() {
     prisma.relationship.findMany({
       where: { type: "conflict", student: { classroomId } },
     }),
-    prisma.extraSeat.findMany({ where: { classroomId } }),
   ]);
 
-  return NextResponse.json({
-    students,
-    relationships,
-    seatingRows: classroom?.seatingRows ?? 5,
-    seatingCols: classroom?.seatingCols ?? 6,
-    extraSeats,
-  });
+  return NextResponse.json({ students, relationships });
 }
 
 // POST { studentId, posX, posY, swapWithStudentId? }

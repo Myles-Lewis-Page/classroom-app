@@ -31,21 +31,26 @@ model Classroom {
   isArchived Boolean   @default(false)
   createdAt  DateTime  @default(now())
 
-  // Seating chart grid dimensions - editable from the Seating Chart page.
-  seatingRows Int @default(5)
-  seatingCols Int @default(6)
+  // Canvas bounds for the Seating Layout editor (how big a grid the teacher
+  // can place seats within) - not the seat count itself, that's SeatSlot.
+  seatingRows Int @default(8)
+  seatingCols Int @default(10)
 
   students       Student[]
   subjects       Subject[]
   events         Event[]
   assignments    Assignment[]
   skillSubjects  SkillSubject[]
-  extraSeats     ExtraSeat[]
+  seatSlots      SeatSlot[]
 }
 
-// One-off extra desks beyond the normal rows x cols grid, for rooms where
-// rows aren't perfectly square (e.g. one extra desk squeezed into a row).
-model ExtraSeat {
+// A single desk position in the room layout. The full set of SeatSlots for a
+// classroom IS the layout - designed once via the Layout editor (rows,
+// groups/pods, or fully custom placement), with gaps between slots acting as
+// walkways automatically (no special "walkway" flag needed - a walkway is
+// just wherever no seat exists). The main Seating Chart page only assigns
+// students into whichever slots already exist here.
+model SeatSlot {
   id          String    @id @default(cuid())
   classroomId String
   classroom   Classroom @relation(fields: [classroomId], references: [id], onDelete: Cascade)
