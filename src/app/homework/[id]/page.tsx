@@ -64,7 +64,7 @@ export default function AssignmentDetailPage({ params }: { params: Promise<{ id:
   if (!assignment) return <div className="p-6">Loading...</div>;
 
   return (
-    <div className="p-6 max-w-3xl mx-auto">
+    <div className="p-4 sm:p-6 max-w-3xl mx-auto">
       <Link href="/homework" className="text-sky-600 text-sm hover:underline">
         ← Back to Assignments
       </Link>

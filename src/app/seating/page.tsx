@@ -105,7 +105,7 @@ export default function SeatingChartPage() {
   const maxCol = seats.reduce((m, s) => Math.max(m, s.col), 0);
 
   return (
-    <div className="p-6 max-w-4xl mx-auto">
+    <div className="p-4 sm:p-6 max-w-4xl mx-auto">
       <div className="flex justify-between items-start mb-4">
         <h1 className="text-2xl font-bold">Seating Chart</h1>
         <Link href="/seating/layout" className="btn-outline text-sm">

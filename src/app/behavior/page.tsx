@@ -171,7 +171,7 @@ export default function BehaviorLogPage() {
   });
 
   return (
-    <div className="p-6 max-w-4xl mx-auto">
+    <div className="p-4 sm:p-6 max-w-4xl mx-auto">
       <h1 className="text-2xl font-bold mb-4">Behavior Log</h1>
 
       <div className="flex gap-3 mb-3">

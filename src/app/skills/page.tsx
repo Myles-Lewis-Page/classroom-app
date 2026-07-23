@@ -125,7 +125,7 @@ function SkillsPageInner() {
     totalPairs > 0 ? Math.round((overallBuckets.mastered / totalPairs) * 100) : 0;
 
   return (
-    <div className="p-6 max-w-6xl mx-auto overflow-x-auto">
+    <div className="p-4 sm:p-6 max-w-6xl mx-auto overflow-x-auto">
       <h1 className="text-2xl font-bold mb-4">Skills</h1>
 
       {subjects.length === 0 ? (

@@ -121,7 +121,7 @@ export default function SeatingLayoutPage() {
   }
 
   return (
-    <div className="p-6 max-w-5xl mx-auto">
+    <div className="p-4 sm:p-6 max-w-5xl mx-auto">
       <Link href="/seating" className="text-sky-600 text-sm hover:underline">
         ← Back to Seating Chart
       </Link>

@@ -39,7 +39,7 @@ export default function DashboardPage() {
 
   if (error) {
     return (
-      <div className="p-6 max-w-4xl mx-auto">
+      <div className="p-4 sm:p-6 max-w-4xl mx-auto">
         <p className="text-rose-600">
           ⚠️ Couldn't load the dashboard ({error}). This usually means a database migration
           hasn't run yet — check Railway's deploy logs, or try reloading in a moment.
@@ -51,7 +51,7 @@ export default function DashboardPage() {
   if (!data) return <div className="p-6">Loading...</div>;
 
   return (
-    <div className="p-6 max-w-4xl mx-auto space-y-4">
+    <div className="p-4 sm:p-6 max-w-4xl mx-auto space-y-4">
       <h1 className="text-2xl font-bold mb-4">Dashboard</h1>
 
       {data.birthdaysToday.length > 0 && (
@@ -157,27 +157,6 @@ export default function DashboardPage() {
             Go to Events →
           </Link>
         </div>
-      </div>
-
-      <div className="flex gap-4 flex-wrap pt-2">
-        <Link href="/roster" className="btn-outline">
-          Roster & Attendance
-        </Link>
-        <Link href="/behavior" className="btn-outline">
-          Behavior Log
-        </Link>
-        <Link href="/groups" className="btn-outline">
-          Group Builder
-        </Link>
-        <Link href="/reports" className="btn-outline">
-          Weekly Report
-        </Link>
-        <Link href="/parent-log" className="btn-outline">
-          Parent Log
-        </Link>
-        <Link href="/sub-mode" className="btn-outline">
-          Sub Mode
-        </Link>
       </div>
     </div>
   );

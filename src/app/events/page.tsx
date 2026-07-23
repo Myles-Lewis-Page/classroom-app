@@ -94,7 +94,7 @@ export default function EventsPage() {
   }
 
   return (
-    <div className="p-6 max-w-3xl mx-auto">
+    <div className="p-4 sm:p-6 max-w-3xl mx-auto">
       <h1 className="text-2xl font-bold mb-4">Event Tracker</h1>
 
       <div className="border rounded p-4 mb-6">

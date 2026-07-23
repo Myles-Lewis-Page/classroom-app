@@ -28,7 +28,7 @@ export default function SubModePage() {
   }, []);
 
   return (
-    <div className="p-6 max-w-4xl mx-auto print:p-0">
+    <div className="p-4 sm:p-6 max-w-4xl mx-auto print:p-0">
       <div className="flex justify-between items-center mb-4 print:hidden">
         <h1 className="text-2xl font-bold">Sub Day Packet</h1>
         <button onClick={() => window.print()} className="btn-primary px-4 py-2">

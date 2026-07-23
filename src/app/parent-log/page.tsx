@@ -83,7 +83,7 @@ export default function ParentLogPage() {
   }
 
   return (
-    <div className="p-6 max-w-5xl mx-auto">
+    <div className="p-4 sm:p-6 max-w-5xl mx-auto">
       <h1 className="text-2xl font-bold mb-4">Parent Contact Log</h1>
 
       <div className="mb-6">

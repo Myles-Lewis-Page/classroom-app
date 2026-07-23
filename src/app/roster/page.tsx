@@ -108,7 +108,7 @@ export default function RosterPage() {
   const total = students.length || 1;
 
   return (
-    <div className="p-6 max-w-6xl mx-auto">
+    <div className="p-4 sm:p-6 max-w-6xl mx-auto">
       <h1 className="text-2xl font-bold mb-4">Roster & Attendance</h1>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

@@ -84,7 +84,7 @@ export default function WeeklyReportPage() {
   }
 
   return (
-    <div className="p-6 max-w-4xl mx-auto">
+    <div className="p-4 sm:p-6 max-w-4xl mx-auto">
       <h1 className="text-2xl font-bold mb-4">Weekly Report Export</h1>
 
       <div className="flex gap-3 items-end mb-6">

@@ -36,10 +36,21 @@ export default function AddStudentPage() {
   const [parentEmail, setParentEmail] = useState("");
   const [isEmergencyContact, setIsEmergencyContact] = useState(true);
 
+  const [classroomLoading, setClassroomLoading] = useState(true);
+
   useEffect(() => {
-    fetch("/api/classroom").then((r) => r.json()).then((c) => setClassroomId(c?.id ?? ""));
+    loadClassroom();
     fetch("/api/tags").then((r) => r.json()).then(setTags);
   }, []);
+
+  function loadClassroom() {
+    setClassroomLoading(true);
+    fetch("/api/classroom")
+      .then((r) => r.json())
+      .then((c) => setClassroomId(c?.id ?? ""))
+      .catch(() => setClassroomId(""))
+      .finally(() => setClassroomLoading(false));
+  }
 
   function toggleTag(id: string) {
     setSelectedTagIds((prev) => (prev.includes(id) ? prev.filter((t) => t !== id) : [...prev, id]));
@@ -89,16 +100,20 @@ export default function AddStudentPage() {
   }
 
   return (
-    <div className="p-6 max-w-2xl mx-auto">
+    <div className="p-4 sm:p-6 max-w-2xl mx-auto">
       <h1 className="text-2xl font-bold mb-4">Add Student</h1>
 
-      {!classroomId && (
+      {!classroomId && !classroomLoading && (
         <p className="text-rose-600 text-sm mb-4">
           ⚠️ You don't have a classroom set up yet.{" "}
           <Link href="/profile" className="underline font-medium">
             Set up your profile
           </Link>{" "}
-          before adding students.
+          before adding students, or{" "}
+          <button onClick={loadClassroom} className="underline font-medium">
+            try reloading
+          </button>{" "}
+          if you know one already exists.
         </p>
       )}
       <form onSubmit={handleSubmit} className="space-y-6">
