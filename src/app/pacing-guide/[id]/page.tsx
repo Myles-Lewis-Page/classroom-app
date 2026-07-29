@@ -672,6 +672,35 @@ function DayRow({
     materialsNeeded: day.materialsNeeded ?? "",
   });
 
+  // DayRow instances are reused across reloads (keyed by the stable day.id),
+  // so useState's initial value alone only captures whatever the day looked
+  // like the very first time this row mounted. Without this, adding a Topic
+  // (which fills topic/learningTarget/standards/supports on the server) or
+  // any other change made elsewhere never shows up in these inputs until a
+  // full page refresh forces a remount. Re-sync whenever the server's own
+  // values for this day actually change.
+  useEffect(() => {
+    setFields({
+      topic: day.topic ?? "",
+      learningTarget: day.learningTarget ?? "",
+      standards: day.standards ?? "",
+      supports: day.supports ?? "",
+      warmUp: day.warmUp ?? "",
+      lessonActivities: day.lessonActivities ?? "",
+      materialsNeeded: day.materialsNeeded ?? "",
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    day.id,
+    day.topic,
+    day.learningTarget,
+    day.standards,
+    day.supports,
+    day.warmUp,
+    day.lessonActivities,
+    day.materialsNeeded,
+  ]);
+
   function update(field: keyof typeof fields, value: string) {
     setFields((prev) => ({ ...prev, [field]: value }));
   }
