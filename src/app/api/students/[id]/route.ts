@@ -33,7 +33,7 @@ export async function GET(
       homeworkEntries: {
         orderBy: { assignment: { assignedDate: "desc" } },
         take: 30,
-        include: { assignment: true },
+        include: { assignment: { include: { gradeCategory: true } } },
       },
       behaviorEntries: { orderBy: { date: "desc" }, take: 30, include: { subject: true } },
       parentContactLogs: { orderBy: { date: "desc" }, take: 20 },

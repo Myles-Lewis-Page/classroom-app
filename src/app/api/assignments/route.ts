@@ -18,6 +18,7 @@ export async function GET(req: NextRequest) {
     include: {
       entries: true,
       skillSubject: true,
+      gradeCategory: true,
     },
     orderBy: { assignedDate: "desc" },
   });
@@ -48,6 +49,7 @@ export async function POST(req: NextRequest) {
       assignedDate: new Date(body.assignedDate),
       dueDate: body.dueDate ? new Date(body.dueDate) : null,
       skillSubjectId: body.subjectId || null,
+      gradeCategoryId: body.gradeCategoryId || null,
       gradingType,
       maxPoints: gradingType === "points" ? Number(body.maxPoints) || 100 : null,
     },

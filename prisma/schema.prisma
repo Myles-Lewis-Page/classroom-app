@@ -50,6 +50,7 @@ model Classroom {
   skillSubjects  SkillSubject[]
   seatSlots      SeatSlot[]
   supportTypes   SupportType[]
+  gradeCategories GradeCategory[]
   activeForTeachers Teacher[] @relation("ActiveClassroom")
 }
 
@@ -309,6 +310,8 @@ model Assignment {
   classroom    Classroom  @relation(fields: [classroomId], references: [id], onDelete: Cascade)
   skillSubjectId String?
   skillSubject SkillSubject? @relation(fields: [skillSubjectId], references: [id], onDelete: SetNull)
+  gradeCategoryId String?
+  gradeCategory   GradeCategory? @relation(fields: [gradeCategoryId], references: [id], onDelete: SetNull)
   name         String
   assignedDate DateTime
   dueDate      DateTime?
@@ -317,6 +320,24 @@ model Assignment {
   createdAt    DateTime   @default(now())
 
   entries HomeworkEntry[]
+}
+
+// Weighted grading categories (e.g. Classwork 20%, Homework 30%, Tests 50%).
+// Teacher-configurable per classroom from the Gradebook page. Weights don't
+// have to sum to exactly 100 - the overall grade calculation normalizes
+// against whichever categories actually have graded work in them.
+model GradeCategory {
+  id          String    @id @default(cuid())
+  classroomId String
+  classroom   Classroom @relation(fields: [classroomId], references: [id], onDelete: Cascade)
+  name        String
+  weight      Int       @default(0) // percentage, 0-100
+  order       Int       @default(0)
+  createdAt   DateTime  @default(now())
+
+  assignments Assignment[]
+
+  @@unique([classroomId, name])
 }
 
 model HomeworkEntry {

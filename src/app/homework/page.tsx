@@ -4,12 +4,15 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 
 type SkillSubject = { id: string; name: string };
+type GradeCategory = { id: string; name: string; weight: number };
 type Assignment = {
   id: string;
   name: string;
   assignedDate: string;
   dueDate: string | null;
   skillSubjectId: string | null;
+  gradeCategoryId: string | null;
+  gradeCategory: { name: string } | null;
   gradingType: string;
   maxPoints: number | null;
   entries: { status: string; gradeStatus: string | null; gradeScore: number | null }[];
@@ -18,11 +21,13 @@ type Assignment = {
 export default function AssignmentsPage() {
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [subjects, setSubjects] = useState<SkillSubject[]>([]);
+  const [categories, setCategories] = useState<GradeCategory[]>([]);
   const [selectedSubjectId, setSelectedSubjectId] = useState<string>("all");
   const [name, setName] = useState("");
   const [assignedDate, setAssignedDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [dueDate, setDueDate] = useState("");
   const [newSubjectId, setNewSubjectId] = useState("");
+  const [newCategoryId, setNewCategoryId] = useState("");
   const [gradingType, setGradingType] = useState("completion");
   const [maxPoints, setMaxPoints] = useState("100");
   const [classroomId, setClassroomId] = useState("");
@@ -34,6 +39,7 @@ export default function AssignmentsPage() {
     load();
     loadClassroom();
     fetch("/api/skill-subjects").then((r) => r.json()).then(setSubjects);
+    fetch("/api/grade-categories").then((r) => r.json()).then(setCategories);
   }, []);
 
   function loadClassroom() {
@@ -78,6 +84,7 @@ export default function AssignmentsPage() {
         assignedDate,
         dueDate: dueDate || null,
         subjectId: newSubjectId || null,
+        gradeCategoryId: newCategoryId || null,
         gradingType,
         maxPoints: gradingType === "points" ? maxPoints : null,
       }),
@@ -148,6 +155,18 @@ export default function AssignmentsPage() {
             {subjects.map((s) => (
               <option key={s.id} value={s.id}>
                 {s.name}
+              </option>
+            ))}
+          </select>
+          <select
+            value={newCategoryId}
+            onChange={(e) => setNewCategoryId(e.target.value)}
+            className="border rounded px-2 py-1"
+          >
+            <option value="">No type</option>
+            {categories.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name} ({c.weight}%)
               </option>
             ))}
           </select>
@@ -250,6 +269,7 @@ export default function AssignmentsPage() {
             >
               <h3 className="font-bold">{a.name}</h3>
               <p className="text-sm text-slate-500 mb-2">
+                {a.gradeCategory && `${a.gradeCategory.name} · `}
                 Assigned {new Date(a.assignedDate).toLocaleDateString()}
                 {a.dueDate && ` · Due ${new Date(a.dueDate).toLocaleDateString()}`}
                 {" · "}

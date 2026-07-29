@@ -50,7 +50,15 @@ type StudentDetail = {
   homeworkEntries: {
     id: string;
     status: string;
-    assignment: { name: string; assignedDate: string };
+    gradeStatus: string | null;
+    gradeScore: number | null;
+    assignment: {
+      name: string;
+      assignedDate: string;
+      gradingType: string;
+      maxPoints: number | null;
+      gradeCategory: { id: string; name: string } | null;
+    };
   }[];
   behaviorEntries: {
     id: string;
@@ -88,6 +96,11 @@ export default function StudentProfilePage({ params }: { params: Promise<{ id: s
   const [student, setStudent] = useState<StudentDetail | null>(null);
   const [editMode, setEditMode] = useState(false);
   const [removing, setRemoving] = useState(false);
+  const [gradeCategories, setGradeCategories] = useState<{ id: string; name: string; weight: number }[]>([]);
+
+  useEffect(() => {
+    fetch("/api/grade-categories").then((r) => r.json()).then(setGradeCategories);
+  }, []);
 
   useEffect(() => {
     refresh();
@@ -351,15 +364,77 @@ export default function StudentProfilePage({ params }: { params: Promise<{ id: s
         </p>
       </section>
 
-      {/* Homework */}
+      {/* Homework & Grades */}
       <section className="card">
-        <h2 className="font-bold mb-2">Homework</h2>
+        <h2 className="font-bold mb-2">Homework & Grades</h2>
+        {(() => {
+          let weightedSum = 0;
+          let weightUsed = 0;
+          const totalWeight = gradeCategories.reduce((sum, c) => sum + c.weight, 0);
+          const byCategory = new Map<string, number[]>();
+          const uncategorized: number[] = [];
+
+          student.homeworkEntries.forEach((h) => {
+            let pct: number | null = null;
+            if (h.assignment.gradingType === "points") {
+              if (h.gradeScore !== null && h.assignment.maxPoints) {
+                pct = (h.gradeScore / h.assignment.maxPoints) * 100;
+              }
+            } else if (h.gradeStatus === "complete") {
+              pct = 100;
+            } else if (h.gradeStatus === "incomplete") {
+              pct = 0;
+            }
+            if (pct === null) return;
+            if (h.assignment.gradeCategory) {
+              const key = h.assignment.gradeCategory.id;
+              if (!byCategory.has(key)) byCategory.set(key, []);
+              byCategory.get(key)!.push(pct);
+            } else {
+              uncategorized.push(pct);
+            }
+          });
+
+          gradeCategories.forEach((cat) => {
+            const percents = byCategory.get(cat.id);
+            if (!percents || percents.length === 0) return;
+            const avg = percents.reduce((a, b) => a + b, 0) / percents.length;
+            weightedSum += avg * cat.weight;
+            weightUsed += cat.weight;
+          });
+          if (uncategorized.length > 0) {
+            const avg = uncategorized.reduce((a, b) => a + b, 0) / uncategorized.length;
+            const w = Math.max(0, 100 - totalWeight);
+            if (w > 0) {
+              weightedSum += avg * w;
+              weightUsed += w;
+            }
+          }
+          const overall = weightUsed > 0 ? Math.round(weightedSum / weightUsed) : null;
+
+          return (
+            <p className="text-sm font-medium mb-3">
+              Overall grade: {overall !== null ? `${overall}%` : "Not enough graded work yet"}
+            </p>
+          );
+        })()}
         <ul className="text-sm space-y-1">
-          {student.homeworkEntries.map((h) => (
-            <li key={h.id}>
-              {new Date(h.assignment.assignedDate).toLocaleDateString()} — {h.assignment.name}: {h.status}
-            </li>
-          ))}
+          {student.homeworkEntries.map((h) => {
+            const submitted = h.status === "handed_in" ? "Handed in" : "Missing";
+            const grade =
+              h.gradeScore !== null
+                ? `${h.gradeScore}/${h.assignment.maxPoints}`
+                : h.gradeStatus
+                ? h.gradeStatus
+                : "not graded";
+            return (
+              <li key={h.id}>
+                {new Date(h.assignment.assignedDate).toLocaleDateString()} —{" "}
+                {h.assignment.gradeCategory && `${h.assignment.gradeCategory.name}: `}
+                {h.assignment.name}: {submitted}, {grade}
+              </li>
+            );
+          })}
         </ul>
       </section>
 

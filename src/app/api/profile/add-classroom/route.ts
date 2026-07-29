@@ -41,6 +41,14 @@ export async function POST(req: NextRequest) {
     data: { teacherId, name: classroomName, schoolYear },
   });
 
+  await prisma.gradeCategory.createMany({
+    data: [
+      { classroomId: classroom.id, name: "Classwork", weight: 20, order: 0 },
+      { classroomId: classroom.id, name: "Homework", weight: 30, order: 1 },
+      { classroomId: classroom.id, name: "Tests", weight: 50, order: 2 },
+    ],
+  });
+
   await prisma.teacher.update({
     where: { id: teacherId },
     data: { activeClassroomId: classroom.id },
