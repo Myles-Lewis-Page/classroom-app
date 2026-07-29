@@ -26,6 +26,29 @@ model Teacher {
   activeClassroomId String?
   activeClassroom   Classroom?  @relation("ActiveClassroom", fields: [activeClassroomId], references: [id], onDelete: SetNull)
   resetTokens       PasswordResetToken[]
+  scheduleBlocks    ScheduleBlock[]
+}
+
+// A teacher's daily bell schedule - deliberately scoped to the TEACHER, not
+// a single Classroom, since the whole point is one unified view of the day
+// across every Period/class she teaches (each of which is its own Classroom
+// row under the Period system). Applies every school day; no per-weekday
+// variation for now.
+model ScheduleBlock {
+  id              String     @id @default(cuid())
+  teacherId       String
+  teacher         Teacher    @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  // Which Period/class this block is, if any - null for blocks that aren't
+  // tied to a specific class (lunch, recess, announcements, etc).
+  classroomId     String?
+  classroom       Classroom? @relation(fields: [classroomId], references: [id], onDelete: SetNull)
+  label           String
+  startTime       String // "HH:MM", 24-hour
+  endTime         String // "HH:MM", 24-hour
+  // Whether HER students are physically in her room for this block - false
+  // for specials/lunch/recess/anything where they're elsewhere.
+  studentsInClass Boolean    @default(true)
+  createdAt       DateTime   @default(now())
 }
 
 model Classroom {
@@ -60,6 +83,7 @@ model Classroom {
   pacingUnits     PacingUnit[]
   sections        Section[]
   calendarEvents  CalendarEvent[]
+  scheduleBlocks  ScheduleBlock[]
   activeForTeachers Teacher[] @relation("ActiveClassroom")
 }
 

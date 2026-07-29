@@ -13,6 +13,7 @@ const links = [
   { href: "/gradebook", label: "Gradebook" },
   { href: "/pacing-guide", label: "Pacing Guide" },
   { href: "/school-calendar", label: "School Calendar" },
+  { href: "/schedule", label: "Daily Schedule" },
   { href: "/groups", label: "Group Builder" },
   { href: "/seating", label: "Seating Chart" },
   { href: "/events", label: "Events" },
