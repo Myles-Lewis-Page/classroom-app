@@ -154,27 +154,18 @@ export default function SeatingChartPage() {
             {Array.from({ length: maxRow + 1 }).map((_, row) => {
               const rowSeats = seats.filter((s) => s.row === row).sort((a, b) => a.col - b.col);
               if (rowSeats.length === 0) {
-                // Fully empty row - this is a walkway between rows of desks
-                // (e.g. between two rows of pods). Render a visible
-                // horizontal divider instead of just collapsing the gap.
-                return (
-                  <div key={row} className="h-4 flex items-center">
-                    <div className="w-full h-0.5 bg-violet-200" />
-                  </div>
-                );
+                // Fully empty row - a walkway between rows of desks. Just
+                // one desk-height of blank space, no visible line.
+                return <div key={row} className="h-16" />;
               }
               return (
                 <div key={row} className="flex gap-1">
                   {Array.from({ length: maxCol + 1 }).map((_, col) => {
                     const seat = rowSeats.find((s) => s.col === col);
                     if (!seat) {
-                      // Gap in this row - render as a walkway with a visible
-                      // vertical divider line, instead of just blank space.
-                      return (
-                        <div key={col} className="w-20 h-16 shrink-0 flex justify-center">
-                          <div className="w-0.5 h-full bg-violet-200" />
-                        </div>
-                      );
+                      // Gap in this row - one desk-width of blank space, no
+                      // visible line, just the empty space itself.
+                      return <div key={col} className="w-20 h-16 shrink-0" />;
                     }
                     const student = studentAt(col, row);
                     const conflictWarning = student && isConflictAdjacent(student, col, row);

@@ -31,7 +31,7 @@ export async function GET() {
     prisma.student.findMany({ where: { isActive: true, classroomId } }),
     prisma.homeworkEntry.findMany({
       where: {
-        status: "needs_help",
+        gradeStatus: "incomplete",
         assignment: { assignedDate: today, classroomId },
       },
       include: { student: true, assignment: true },

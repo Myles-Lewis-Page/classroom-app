@@ -10,7 +10,12 @@ type StudentReport = {
   totalDaysTracked: number;
   ratingCounts: { green: number; yellow: number; red: number };
   behaviorComments: { subject: string; comment: string | null }[];
-  homework: { assignment: { name: string }; status: string }[];
+  homework: {
+    assignment: { name: string };
+    status: string;
+    gradeStatus: string | null;
+    gradeScore: number | null;
+  }[];
   observations: { note: string }[];
   praiseNotes: { note: string }[];
   missingEvents: string[];
@@ -66,7 +71,16 @@ export default function WeeklyReportPage() {
     }
     if (r.homework.length) {
       lines.push("", "Homework:");
-      r.homework.forEach((h) => lines.push(`- ${h.assignment.name}: ${h.status}`));
+      r.homework.forEach((h) => {
+        const submitted = h.status === "handed_in" ? "Handed in" : "Missing";
+        const grade =
+          h.gradeScore !== null
+            ? ` (score: ${h.gradeScore})`
+            : h.gradeStatus
+            ? ` (${h.gradeStatus})`
+            : "";
+        lines.push(`- ${h.assignment.name}: ${submitted}${grade}`);
+      });
     }
     if (r.observations.length) {
       lines.push("", "Notes from this week:");

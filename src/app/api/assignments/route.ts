@@ -25,9 +25,10 @@ export async function GET(req: NextRequest) {
   return NextResponse.json(assignments);
 }
 
-// POST { name, assignedDate, dueDate?, subjectId? } - classroomId derived from session.
-// Creates the assignment and auto-creates a "missing" entry for every active
-// student IN THIS CLASSROOM ONLY, matching the same pattern as Event Tracker.
+// POST { name, assignedDate, dueDate?, subjectId?, gradingType?, maxPoints? }
+// classroomId derived from session. Creates the assignment and
+// auto-creates a "missing" entry for every active student IN THIS
+// CLASSROOM ONLY, matching the same pattern as Event Tracker.
 export async function POST(req: NextRequest) {
   const session = await auth();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -38,6 +39,7 @@ export async function POST(req: NextRequest) {
   }
 
   const body = await req.json();
+  const gradingType = body.gradingType === "points" ? "points" : "completion";
 
   const assignment = await prisma.assignment.create({
     data: {
@@ -46,6 +48,8 @@ export async function POST(req: NextRequest) {
       assignedDate: new Date(body.assignedDate),
       dueDate: body.dueDate ? new Date(body.dueDate) : null,
       skillSubjectId: body.subjectId || null,
+      gradingType,
+      maxPoints: gradingType === "points" ? Number(body.maxPoints) || 100 : null,
     },
   });
 

@@ -123,7 +123,7 @@ export default function DashboardPage() {
         </div>
 
         <div className="card">
-          <h2 className="font-bold mb-2">Homework — Needs Help Today</h2>
+          <h2 className="font-bold mb-2">Homework — Marked Incomplete Today</h2>
           {data.homeworkNeedsHelp.length === 0 ? (
             <p className="text-gray-500 text-sm">Nothing flagged</p>
           ) : (

@@ -312,6 +312,8 @@ model Assignment {
   name         String
   assignedDate DateTime
   dueDate      DateTime?
+  gradingType  String     @default("completion") // "completion" (Complete/Incomplete) or "points" (score out of maxPoints)
+  maxPoints    Int?       // only used when gradingType = "points"
   createdAt    DateTime   @default(now())
 
   entries HomeworkEntry[]
@@ -323,8 +325,10 @@ model HomeworkEntry {
   student      Student    @relation(fields: [studentId], references: [id], onDelete: Cascade)
   assignmentId String
   assignment   Assignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
-  status       String     @default("missing") // "complete" / "incomplete" / "needs_help" / "missing" / "handed_in"
+  status       String     @default("missing") // SUBMISSION status only: "missing" / "handed_in"
   submittedAt  DateTime?  // set when status becomes "handed_in" - used to flag late submissions
+  gradeStatus  String?    // "complete" / "incomplete" - used when assignment.gradingType = "completion"
+  gradeScore   Int?       // score out of assignment.maxPoints - used when assignment.gradingType = "points"
   note         String?
   updatedAt    DateTime   @updatedAt
 

@@ -10,7 +10,9 @@ type Assignment = {
   assignedDate: string;
   dueDate: string | null;
   skillSubjectId: string | null;
-  entries: { status: string }[];
+  gradingType: string;
+  maxPoints: number | null;
+  entries: { status: string; gradeStatus: string | null; gradeScore: number | null }[];
 };
 
 export default function AssignmentsPage() {
@@ -21,6 +23,8 @@ export default function AssignmentsPage() {
   const [assignedDate, setAssignedDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [dueDate, setDueDate] = useState("");
   const [newSubjectId, setNewSubjectId] = useState("");
+  const [gradingType, setGradingType] = useState("completion");
+  const [maxPoints, setMaxPoints] = useState("100");
   const [classroomId, setClassroomId] = useState("");
   const [classroomError, setClassroomError] = useState(false);
   const [classroomLoading, setClassroomLoading] = useState(true);
@@ -74,6 +78,8 @@ export default function AssignmentsPage() {
         assignedDate,
         dueDate: dueDate || null,
         subjectId: newSubjectId || null,
+        gradingType,
+        maxPoints: gradingType === "points" ? maxPoints : null,
       }),
     });
     setName("");
@@ -82,7 +88,7 @@ export default function AssignmentsPage() {
   }
 
   function statusCounts(entries: { status: string }[]) {
-    const counts = { complete: 0, incomplete: 0, needs_help: 0, missing: 0, handed_in: 0 };
+    const counts = { handed_in: 0, missing: 0 };
     entries.forEach((e) => {
       if (e.status in counts) counts[e.status as keyof typeof counts]++;
     });
@@ -163,6 +169,29 @@ export default function AssignmentsPage() {
               className="border rounded px-2 py-1"
             />
           </div>
+          <div>
+            <label className="block text-xs text-slate-500">Grading</label>
+            <select
+              value={gradingType}
+              onChange={(e) => setGradingType(e.target.value)}
+              className="border rounded px-2 py-1"
+            >
+              <option value="completion">Completion (Complete/Incomplete)</option>
+              <option value="points">Points (grade out of X)</option>
+            </select>
+          </div>
+          {gradingType === "points" && (
+            <div>
+              <label className="block text-xs text-slate-500">Out of</label>
+              <input
+                type="number"
+                min={1}
+                value={maxPoints}
+                onChange={(e) => setMaxPoints(e.target.value)}
+                className="border rounded px-2 py-1 w-20"
+              />
+            </div>
+          )}
           <button
             onClick={createAssignment}
             disabled={!classroomId}
@@ -202,11 +231,17 @@ export default function AssignmentsPage() {
           const total = a.entries.length || 1;
           const segments = [
             { key: "handed_in", color: "#bae6fd", count: counts.handed_in },
-            { key: "complete", color: "#a7f3d0", count: counts.complete },
-            { key: "needs_help", color: "#fde68a", count: counts.needs_help },
-            { key: "incomplete", color: "#fecaca", count: counts.incomplete },
             { key: "missing", color: "#e0e7ff", count: counts.missing },
           ];
+
+          const gradeComplete = a.entries.filter((e) => e.gradeStatus === "complete").length;
+          const gradeIncomplete = a.entries.filter((e) => e.gradeStatus === "incomplete").length;
+          const scored = a.entries.filter((e) => e.gradeScore !== null);
+          const avgScore =
+            scored.length > 0
+              ? Math.round(scored.reduce((sum, e) => sum + (e.gradeScore ?? 0), 0) / scored.length)
+              : null;
+
           return (
             <Link
               key={a.id}
@@ -217,8 +252,12 @@ export default function AssignmentsPage() {
               <p className="text-sm text-slate-500 mb-2">
                 Assigned {new Date(a.assignedDate).toLocaleDateString()}
                 {a.dueDate && ` · Due ${new Date(a.dueDate).toLocaleDateString()}`}
+                {" · "}
+                {a.gradingType === "points" ? `Graded out of ${a.maxPoints}` : "Completion graded"}
               </p>
-              <div className="flex h-4 rounded overflow-hidden border">
+
+              <p className="text-xs text-slate-500 mb-1">Submitted</p>
+              <div className="flex h-4 rounded overflow-hidden border mb-2">
                 {segments.map(
                   (seg) =>
                     seg.count > 0 && (
@@ -230,12 +269,23 @@ export default function AssignmentsPage() {
                     )
                 )}
               </div>
-              <div className="flex gap-3 flex-wrap text-xs text-slate-600 mt-2">
+              <div className="flex gap-3 flex-wrap text-xs text-slate-600 mb-2">
                 <span>💙 {counts.handed_in} handed in</span>
-                <span>✅ {counts.complete} complete</span>
-                <span>⚠️ {counts.needs_help} needs help</span>
-                <span>❌ {counts.incomplete} incomplete</span>
                 <span>❓ {counts.missing} missing</span>
+              </div>
+
+              <p className="text-xs text-slate-500 mb-1">Grading</p>
+              <div className="flex gap-3 flex-wrap text-xs text-slate-600">
+                {a.gradingType === "points" ? (
+                  <span>
+                    Class average: {avgScore !== null ? `${avgScore}/${a.maxPoints}` : "not graded yet"}
+                  </span>
+                ) : (
+                  <>
+                    <span>✅ {gradeComplete} complete</span>
+                    <span>❌ {gradeIncomplete} incomplete</span>
+                  </>
+                )}
               </div>
             </Link>
           );

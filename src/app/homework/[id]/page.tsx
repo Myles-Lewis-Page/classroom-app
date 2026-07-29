@@ -6,6 +6,8 @@ import Link from "next/link";
 type Entry = {
   status: string;
   submittedAt: string | null;
+  gradeStatus: string | null;
+  gradeScore: number | null;
   student: { id: string; firstName: string; lastName: string };
 };
 type AssignmentDetail = {
@@ -13,24 +15,13 @@ type AssignmentDetail = {
   name: string;
   assignedDate: string;
   dueDate: string | null;
+  gradingType: string;
+  maxPoints: number | null;
   entries: Entry[];
 };
 
-const STATUS_OPTIONS = ["missing", "complete", "incomplete", "needs_help", "handed_in"] as const;
-const STATUS_LABEL: Record<string, string> = {
-  missing: "Missing",
-  complete: "Complete",
-  incomplete: "Incomplete",
-  needs_help: "Needs Help",
-  handed_in: "Handed In",
-};
-const STATUS_COLOR: Record<string, string> = {
-  missing: "#e0e7ff",
-  complete: "#a7f3d0",
-  incomplete: "#fecaca",
-  needs_help: "#fde68a",
-  handed_in: "#bae6fd",
-};
+const SUBMIT_LABEL: Record<string, string> = { missing: "Missing", handed_in: "Handed In" };
+const SUBMIT_COLOR: Record<string, string> = { missing: "#e0e7ff", handed_in: "#bae6fd" };
 
 export default function AssignmentDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -44,15 +35,18 @@ export default function AssignmentDetailPage({ params }: { params: Promise<{ id:
     fetch(`/api/assignments/${id}`).then((r) => r.json()).then(setAssignment);
   }
 
-  async function setStatus(studentId: string, status: string) {
-    // optimistic update
+  async function setSubmission(studentId: string, status: string) {
     setAssignment((prev) =>
       prev
         ? {
             ...prev,
             entries: prev.entries.map((e) =>
               e.student.id === studentId
-                ? { ...e, status, submittedAt: status === "handed_in" ? new Date().toISOString() : e.submittedAt }
+                ? {
+                    ...e,
+                    status,
+                    submittedAt: status === "handed_in" ? new Date().toISOString() : e.submittedAt,
+                  }
                 : e
             ),
           }
@@ -64,6 +58,44 @@ export default function AssignmentDetailPage({ params }: { params: Promise<{ id:
       body: JSON.stringify({ studentId, status }),
     });
     load();
+  }
+
+  async function setGradeStatus(studentId: string, gradeStatus: string) {
+    setAssignment((prev) =>
+      prev
+        ? {
+            ...prev,
+            entries: prev.entries.map((e) =>
+              e.student.id === studentId ? { ...e, gradeStatus } : e
+            ),
+          }
+        : prev
+    );
+    await fetch(`/api/assignments/${id}/grade`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ studentId, gradeStatus }),
+    });
+  }
+
+  async function setGradeScore(studentId: string, gradeScore: string) {
+    setAssignment((prev) =>
+      prev
+        ? {
+            ...prev,
+            entries: prev.entries.map((e) =>
+              e.student.id === studentId
+                ? { ...e, gradeScore: gradeScore === "" ? null : Number(gradeScore) }
+                : e
+            ),
+          }
+        : prev
+    );
+    await fetch(`/api/assignments/${id}/grade`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ studentId, gradeScore: gradeScore === "" ? null : gradeScore }),
+    });
   }
 
   function isLate(entry: Entry): boolean {
@@ -82,39 +114,79 @@ export default function AssignmentDetailPage({ params }: { params: Promise<{ id:
       <p className="text-slate-500 mb-4">
         Assigned {new Date(assignment.assignedDate).toLocaleDateString()}
         {assignment.dueDate && ` · Due ${new Date(assignment.dueDate).toLocaleDateString()}`}
+        {" · "}
+        {assignment.gradingType === "points"
+          ? `Graded out of ${assignment.maxPoints}`
+          : "Completion graded"}
       </p>
 
-      <p className="text-sm text-slate-500 mb-2">
-        Set each student's status - "Handed In" records the date/time and flags it Late
-        automatically if it's after the due date.
-      </p>
+      <div className="grid grid-cols-[1fr_auto_auto] gap-x-4 gap-y-2 items-center text-sm font-medium text-slate-500 mb-1 px-1">
+        <span>Student</span>
+        <span>Submitted</span>
+        <span>Grade</span>
+      </div>
 
       <ul className="space-y-2">
         {assignment.entries.map((e) => {
           const late = isLate(e);
           return (
-            <li key={e.student.id} className="flex items-center justify-between card py-2">
+            <li
+              key={e.student.id}
+              className="grid grid-cols-[1fr_auto_auto] gap-x-4 items-center card py-2"
+            >
               <span>
                 {e.student.lastName}, {e.student.firstName}
                 {e.status === "handed_in" && e.submittedAt && (
-                  <span className="text-xs text-slate-500 ml-2">
-                    ({new Date(e.submittedAt).toLocaleDateString()}
-                    {late && <span className="text-rose-600 font-medium"> · Late</span>})
+                  <span className="text-xs text-slate-500 block">
+                    {new Date(e.submittedAt).toLocaleDateString()}
+                    {late && <span className="text-rose-600 font-medium"> · Late</span>}
                   </span>
                 )}
               </span>
+
               <select
                 value={e.status}
-                onChange={(ev) => setStatus(e.student.id, ev.target.value)}
+                onChange={(ev) => setSubmission(e.student.id, ev.target.value)}
                 className="px-2 py-1 rounded text-sm border"
-                style={{ backgroundColor: STATUS_COLOR[e.status], color: "#1e293b" }}
+                style={{ backgroundColor: SUBMIT_COLOR[e.status], color: "#1e293b" }}
               >
-                {STATUS_OPTIONS.map((s) => (
-                  <option key={s} value={s}>
-                    {STATUS_LABEL[s]}
+                {Object.entries(SUBMIT_LABEL).map(([value, label]) => (
+                  <option key={value} value={value}>
+                    {label}
                   </option>
                 ))}
               </select>
+
+              {assignment.gradingType === "points" ? (
+                <input
+                  type="number"
+                  min={0}
+                  max={assignment.maxPoints ?? undefined}
+                  value={e.gradeScore ?? ""}
+                  onChange={(ev) => setGradeScore(e.student.id, ev.target.value)}
+                  placeholder={`/ ${assignment.maxPoints}`}
+                  className="w-20 px-2 py-1 rounded text-sm border"
+                />
+              ) : (
+                <select
+                  value={e.gradeStatus ?? ""}
+                  onChange={(ev) => setGradeStatus(e.student.id, ev.target.value)}
+                  className="px-2 py-1 rounded text-sm border"
+                  style={{
+                    backgroundColor:
+                      e.gradeStatus === "complete"
+                        ? "#a7f3d0"
+                        : e.gradeStatus === "incomplete"
+                        ? "#fecaca"
+                        : "#f5f3ff",
+                    color: "#1e293b",
+                  }}
+                >
+                  <option value="">Not graded</option>
+                  <option value="complete">Complete</option>
+                  <option value="incomplete">Incomplete</option>
+                </select>
+              )}
             </li>
           );
         })}

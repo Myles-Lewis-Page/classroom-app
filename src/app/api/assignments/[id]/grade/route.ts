@@ -3,9 +3,10 @@ import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
 import { getCurrentClassroomId, studentBelongsToClassroom } from "@/lib/classroomScope";
 
-// POST { studentId, status } - SUBMISSION status only ("missing" or
-// "handed_in"). Upserts by (assignmentId, studentId). Setting "handed_in"
-// records the timestamp, used elsewhere to flag late submissions.
+// POST { studentId, gradeStatus? , gradeScore? }
+// gradeStatus ("complete"/"incomplete") is used when the assignment's
+// gradingType is "completion"; gradeScore (a number) is used when it's
+// "points". Upserts by (assignmentId, studentId).
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -27,21 +28,24 @@ export async function POST(
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
-  const submittedAt = body.status === "handed_in" ? new Date() : undefined;
+  const data: { gradeStatus?: string | null; gradeScore?: number | null } = {};
+  if (assignment.gradingType === "points") {
+    const score = body.gradeScore === "" || body.gradeScore === null ? null : Number(body.gradeScore);
+    data.gradeScore = score;
+  } else {
+    data.gradeStatus = body.gradeStatus || null;
+  }
 
   const entry = await prisma.homeworkEntry.upsert({
     where: {
       assignmentId_studentId: { assignmentId: id, studentId: body.studentId },
     },
-    update: {
-      status: body.status,
-      ...(submittedAt ? { submittedAt } : {}),
-    },
+    update: data,
     create: {
       assignmentId: id,
       studentId: body.studentId,
-      status: body.status,
-      submittedAt: submittedAt ?? null,
+      status: "missing",
+      ...data,
     },
   });
 
