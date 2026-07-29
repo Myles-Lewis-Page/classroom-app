@@ -82,7 +82,7 @@ export default function AssignmentsPage() {
   }
 
   function statusCounts(entries: { status: string }[]) {
-    const counts = { complete: 0, incomplete: 0, needs_help: 0, missing: 0 };
+    const counts = { complete: 0, incomplete: 0, needs_help: 0, missing: 0, handed_in: 0 };
     entries.forEach((e) => {
       if (e.status in counts) counts[e.status as keyof typeof counts]++;
     });
@@ -199,26 +199,43 @@ export default function AssignmentsPage() {
       <div className="space-y-3">
         {visibleAssignments.map((a) => {
           const counts = statusCounts(a.entries);
+          const total = a.entries.length || 1;
+          const segments = [
+            { key: "handed_in", color: "#bae6fd", count: counts.handed_in },
+            { key: "complete", color: "#a7f3d0", count: counts.complete },
+            { key: "needs_help", color: "#fde68a", count: counts.needs_help },
+            { key: "incomplete", color: "#fecaca", count: counts.incomplete },
+            { key: "missing", color: "#e0e7ff", count: counts.missing },
+          ];
           return (
             <Link
               key={a.id}
               href={`/homework/${a.id}`}
               className="card block hover:bg-violet-50/40 transition"
             >
-              <div className="flex justify-between items-start">
-                <div>
-                  <h3 className="font-bold">{a.name}</h3>
-                  <p className="text-sm text-slate-500">
-                    Assigned {new Date(a.assignedDate).toLocaleDateString()}
-                    {a.dueDate && ` · Due ${new Date(a.dueDate).toLocaleDateString()}`}
-                  </p>
-                </div>
-                <div className="text-xs text-slate-600 text-right space-y-0.5">
-                  <p>✅ {counts.complete} complete</p>
-                  <p>⚠️ {counts.needs_help} needs help</p>
-                  <p>❌ {counts.incomplete} incomplete</p>
-                  <p>❓ {counts.missing} missing</p>
-                </div>
+              <h3 className="font-bold">{a.name}</h3>
+              <p className="text-sm text-slate-500 mb-2">
+                Assigned {new Date(a.assignedDate).toLocaleDateString()}
+                {a.dueDate && ` · Due ${new Date(a.dueDate).toLocaleDateString()}`}
+              </p>
+              <div className="flex h-4 rounded overflow-hidden border">
+                {segments.map(
+                  (seg) =>
+                    seg.count > 0 && (
+                      <div
+                        key={seg.key}
+                        style={{ width: `${(seg.count / total) * 100}%`, backgroundColor: seg.color }}
+                        title={`${seg.key}: ${seg.count}`}
+                      />
+                    )
+                )}
+              </div>
+              <div className="flex gap-3 flex-wrap text-xs text-slate-600 mt-2">
+                <span>💙 {counts.handed_in} handed in</span>
+                <span>✅ {counts.complete} complete</span>
+                <span>⚠️ {counts.needs_help} needs help</span>
+                <span>❌ {counts.incomplete} incomplete</span>
+                <span>❓ {counts.missing} missing</span>
               </div>
             </Link>
           );

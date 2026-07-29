@@ -27,16 +27,23 @@ export async function POST(
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
+  const submittedAt = body.status === "handed_in" ? new Date() : undefined;
+
   const entry = await prisma.homeworkEntry.upsert({
     where: {
       assignmentId_studentId: { assignmentId: id, studentId: body.studentId },
     },
-    update: { status: body.status, note: body.note ?? undefined },
+    update: {
+      status: body.status,
+      note: body.note ?? undefined,
+      ...(submittedAt ? { submittedAt } : {}),
+    },
     create: {
       assignmentId: id,
       studentId: body.studentId,
       status: body.status,
       note: body.note ?? null,
+      submittedAt: submittedAt ?? null,
     },
   });
 

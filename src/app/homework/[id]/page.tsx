@@ -5,6 +5,7 @@ import Link from "next/link";
 
 type Entry = {
   status: string;
+  submittedAt: string | null;
   student: { id: string; firstName: string; lastName: string };
 };
 type AssignmentDetail = {
@@ -15,18 +16,20 @@ type AssignmentDetail = {
   entries: Entry[];
 };
 
-const STATUS_CYCLE = ["missing", "complete", "incomplete", "needs_help"] as const;
+const STATUS_OPTIONS = ["missing", "complete", "incomplete", "needs_help", "handed_in"] as const;
 const STATUS_LABEL: Record<string, string> = {
   missing: "Missing",
   complete: "Complete",
   incomplete: "Incomplete",
   needs_help: "Needs Help",
+  handed_in: "Handed In",
 };
 const STATUS_COLOR: Record<string, string> = {
   missing: "#e0e7ff",
   complete: "#a7f3d0",
   incomplete: "#fecaca",
   needs_help: "#fde68a",
+  handed_in: "#bae6fd",
 };
 
 export default function AssignmentDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -41,16 +44,16 @@ export default function AssignmentDetailPage({ params }: { params: Promise<{ id:
     fetch(`/api/assignments/${id}`).then((r) => r.json()).then(setAssignment);
   }
 
-  async function cycle(studentId: string, current: string) {
-    const next =
-      STATUS_CYCLE[(STATUS_CYCLE.indexOf(current as (typeof STATUS_CYCLE)[number]) + 1) % 4];
+  async function setStatus(studentId: string, status: string) {
     // optimistic update
     setAssignment((prev) =>
       prev
         ? {
             ...prev,
             entries: prev.entries.map((e) =>
-              e.student.id === studentId ? { ...e, status: next } : e
+              e.student.id === studentId
+                ? { ...e, status, submittedAt: status === "handed_in" ? new Date().toISOString() : e.submittedAt }
+                : e
             ),
           }
         : prev
@@ -58,8 +61,14 @@ export default function AssignmentDetailPage({ params }: { params: Promise<{ id:
     await fetch(`/api/assignments/${id}/status`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ studentId, status: next }),
+      body: JSON.stringify({ studentId, status }),
     });
+    load();
+  }
+
+  function isLate(entry: Entry): boolean {
+    if (!assignment?.dueDate || !entry.submittedAt) return false;
+    return new Date(entry.submittedAt) > new Date(assignment.dueDate);
   }
 
   if (!assignment) return <div className="p-6">Loading...</div>;
@@ -76,24 +85,39 @@ export default function AssignmentDetailPage({ params }: { params: Promise<{ id:
       </p>
 
       <p className="text-sm text-slate-500 mb-2">
-        Tap a student's status to cycle: Missing → Complete → Incomplete → Needs Help
+        Set each student's status - "Handed In" records the date/time and flags it Late
+        automatically if it's after the due date.
       </p>
 
       <ul className="space-y-2">
-        {assignment.entries.map((e) => (
-          <li key={e.student.id} className="flex items-center justify-between card py-2">
-            <span>
-              {e.student.lastName}, {e.student.firstName}
-            </span>
-            <button
-              onClick={() => cycle(e.student.id, e.status)}
-              className="px-3 py-1 rounded text-sm"
-              style={{ backgroundColor: STATUS_COLOR[e.status], color: "#1e293b" }}
-            >
-              {STATUS_LABEL[e.status]}
-            </button>
-          </li>
-        ))}
+        {assignment.entries.map((e) => {
+          const late = isLate(e);
+          return (
+            <li key={e.student.id} className="flex items-center justify-between card py-2">
+              <span>
+                {e.student.lastName}, {e.student.firstName}
+                {e.status === "handed_in" && e.submittedAt && (
+                  <span className="text-xs text-slate-500 ml-2">
+                    ({new Date(e.submittedAt).toLocaleDateString()}
+                    {late && <span className="text-rose-600 font-medium"> · Late</span>})
+                  </span>
+                )}
+              </span>
+              <select
+                value={e.status}
+                onChange={(ev) => setStatus(e.student.id, ev.target.value)}
+                className="px-2 py-1 rounded text-sm border"
+                style={{ backgroundColor: STATUS_COLOR[e.status], color: "#1e293b" }}
+              >
+                {STATUS_OPTIONS.map((s) => (
+                  <option key={s} value={s}>
+                    {STATUS_LABEL[s]}
+                  </option>
+                ))}
+              </select>
+            </li>
+          );
+        })}
       </ul>
     </div>
   );

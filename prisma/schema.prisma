@@ -323,7 +323,8 @@ model HomeworkEntry {
   student      Student    @relation(fields: [studentId], references: [id], onDelete: Cascade)
   assignmentId String
   assignment   Assignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
-  status       String     @default("missing") // "complete" / "incomplete" / "needs_help" / "missing"
+  status       String     @default("missing") // "complete" / "incomplete" / "needs_help" / "missing" / "handed_in"
+  submittedAt  DateTime?  // set when status becomes "handed_in" - used to flag late submissions
   note         String?
   updatedAt    DateTime   @updatedAt
 

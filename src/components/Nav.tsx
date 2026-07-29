@@ -2,6 +2,7 @@ import Link from "next/link";
 import { auth, signOut } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getCurrentClassroomId } from "@/lib/classroomScope";
+import PeriodSwitcher from "@/components/PeriodSwitcher";
 
 const links = [
   { href: "/dashboard", label: "Dashboard" },
@@ -21,13 +22,23 @@ export default async function Nav() {
   const session = await auth();
   if (!session?.user) return null; // hide nav entirely on the login page / when logged out
 
+  const teacherId = (session.user as { id?: string })?.id;
   const classroomId = await getCurrentClassroomId();
-  const classroom = classroomId
-    ? await prisma.classroom.findUnique({
-        where: { id: classroomId },
-        select: { name: true, schoolName: true, schoolYear: true },
-      })
-    : null;
+  const [classroom, allClassrooms] = await Promise.all([
+    classroomId
+      ? prisma.classroom.findUnique({
+          where: { id: classroomId },
+          select: { name: true, schoolName: true, schoolYear: true },
+        })
+      : null,
+    teacherId
+      ? prisma.classroom.findMany({
+          where: { teacherId, isArchived: false },
+          select: { id: true, name: true, isArchived: true },
+          orderBy: { createdAt: "desc" },
+        })
+      : [],
+  ]);
 
   return (
     <nav className="app-nav">
@@ -56,6 +67,9 @@ export default async function Nav() {
             <Link href="/profile" className="text-sm text-rose-600 hover:underline whitespace-nowrap">
               Set up your classroom →
             </Link>
+          )}
+          {classroomId && (
+            <PeriodSwitcher classrooms={allClassrooms} currentId={classroomId} />
           )}
           <Link href="/profile" className="text-sm whitespace-nowrap text-slate-600 hover:text-sky-600">
             Profile

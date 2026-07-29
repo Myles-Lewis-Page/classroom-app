@@ -21,6 +21,10 @@ export default function ProfilePage() {
   const [savedName, setSavedName] = useState<string | null>(null);
   const [archiving, setArchiving] = useState(false);
   const [showSetupForm, setShowSetupForm] = useState(false);
+  const [showAddPeriod, setShowAddPeriod] = useState(false);
+  const [periodLabel, setPeriodLabel] = useState("");
+  const [periodGrade, setPeriodGrade] = useState("3rd");
+  const [addingPeriod, setAddingPeriod] = useState(false);
 
   // Subjects taught (generic + custom)
   const [selectedSubjects, setSelectedSubjects] = useState<string[]>([]);
@@ -79,6 +83,22 @@ export default function ProfilePage() {
       body: JSON.stringify({ classroomId }),
     });
     loadProfile();
+  }
+
+  async function addPeriod() {
+    if (!periodLabel.trim()) return;
+    setAddingPeriod(true);
+    const res = await fetch("/api/profile/add-classroom", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ grade: periodGrade, periodLabel: periodLabel.trim() }),
+    });
+    setAddingPeriod(false);
+    if (res.ok) {
+      setPeriodLabel("");
+      setShowAddPeriod(false);
+      loadProfile();
+    }
   }
 
   async function archiveAndStartNew() {
@@ -212,6 +232,52 @@ export default function ProfilePage() {
           </div>
         </div>
       )}
+
+      <div className="panel mb-4">
+        <p className="text-sm font-semibold mb-1">Track a second group separately?</p>
+        <p className="text-xs text-slate-500 mb-2">
+          If you teach two groups (e.g. "Group A" / "Group B", or two periods), add each as its
+          own classroom here - students, attendance, grades, everything stays completely separate
+          per group, and you switch between them any time using the buttons above.
+        </p>
+        {!showAddPeriod ? (
+          <button onClick={() => setShowAddPeriod(true)} className="btn-outline text-sm">
+            + Add Another Classroom/Period
+          </button>
+        ) : (
+          <div className="flex gap-2 flex-wrap items-end">
+            <div>
+              <label className="block text-xs text-slate-500">Group/Period label</label>
+              <input
+                placeholder="e.g. Group A"
+                value={periodLabel}
+                onChange={(e) => setPeriodLabel(e.target.value)}
+                className="border rounded px-2 py-1"
+              />
+            </div>
+            <div>
+              <label className="block text-xs text-slate-500">Grade</label>
+              <select
+                value={periodGrade}
+                onChange={(e) => setPeriodGrade(e.target.value)}
+                className="border rounded px-2 py-1"
+              >
+                {GRADE_OPTIONS.map((g) => (
+                  <option key={g} value={g}>
+                    {g} grade
+                  </option>
+                ))}
+              </select>
+            </div>
+            <button onClick={addPeriod} disabled={addingPeriod} className="btn-primary">
+              {addingPeriod ? "Creating..." : "Create"}
+            </button>
+            <button onClick={() => setShowAddPeriod(false)} className="btn-outline">
+              Cancel
+            </button>
+          </div>
+        )}
+      </div>
 
       {currentClassroom && (
         <div className="panel mb-4">
