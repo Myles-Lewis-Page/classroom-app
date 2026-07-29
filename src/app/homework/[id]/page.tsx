@@ -10,7 +10,8 @@ type Entry = {
 type AssignmentDetail = {
   id: string;
   name: string;
-  date: string;
+  assignedDate: string;
+  dueDate: string | null;
   entries: Entry[];
 };
 
@@ -69,7 +70,10 @@ export default function AssignmentDetailPage({ params }: { params: Promise<{ id:
         ← Back to Assignments
       </Link>
       <h1 className="text-2xl font-bold mt-2 mb-1">{assignment.name}</h1>
-      <p className="text-slate-500 mb-4">{new Date(assignment.date).toLocaleDateString()}</p>
+      <p className="text-slate-500 mb-4">
+        Assigned {new Date(assignment.assignedDate).toLocaleDateString()}
+        {assignment.dueDate && ` · Due ${new Date(assignment.dueDate).toLocaleDateString()}`}
+      </p>
 
       <p className="text-sm text-slate-500 mb-2">
         Tap a student's status to cycle: Missing → Complete → Incomplete → Needs Help

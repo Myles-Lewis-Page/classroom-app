@@ -49,6 +49,7 @@ model Classroom {
   assignments    Assignment[]
   skillSubjects  SkillSubject[]
   seatSlots      SeatSlot[]
+  supportTypes   SupportType[]
   activeForTeachers Teacher[] @relation("ActiveClassroom")
 }
 
@@ -103,6 +104,7 @@ model Student {
   allergies           Allergy[]
   dietaryRestrictions DietaryRestriction[]
   ieps                IEP[]
+  supports            StudentSupport[]
   parents             Parent[]
   behaviorEntries     BehaviorEntry[]
   attendanceEntries   AttendanceEntry[]
@@ -170,6 +172,51 @@ model IEP {
   reviewDate     DateTime?
   subSafeSummary String?
   createdAt      DateTime  @default(now())
+}
+
+// ---------- IEP/504 STRUCTURED SUPPORTS ----------
+// Separate from the free-text IEP model above: a checkbox+dropdown system
+// for specific support categories (Para Support, Classification, Personal
+// Supports, Behavior Supports, or any custom ones the teacher adds). Some
+// support types have a dropdown of options (e.g. Classification -> SLD,
+// Autism, ADHD...); types with no options defined are just a plain checkbox.
+
+model SupportType {
+  id          String    @id @default(cuid())
+  classroomId String
+  classroom   Classroom @relation(fields: [classroomId], references: [id], onDelete: Cascade)
+  name        String
+  order       Int       @default(0)
+  createdAt   DateTime  @default(now())
+
+  options         SupportOption[]
+  studentSupports StudentSupport[]
+
+  @@unique([classroomId, name])
+}
+
+model SupportOption {
+  id            String      @id @default(cuid())
+  supportTypeId String
+  supportType   SupportType @relation(fields: [supportTypeId], references: [id], onDelete: Cascade)
+  label         String
+  order         Int         @default(0)
+
+  studentSupports StudentSupport[]
+}
+
+model StudentSupport {
+  id               String         @id @default(cuid())
+  studentId        String
+  student          Student        @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  supportTypeId    String
+  supportType      SupportType    @relation(fields: [supportTypeId], references: [id], onDelete: Cascade)
+  selectedOptionId String?
+  selectedOption   SupportOption? @relation(fields: [selectedOptionId], references: [id], onDelete: SetNull)
+  notes            String?
+  createdAt        DateTime       @default(now())
+
+  @@unique([studentId, supportTypeId])
 }
 
 // ---------- PARENTS ----------
@@ -257,12 +304,15 @@ model AttendanceEntry {
 // (assignment, student) pair.
 
 model Assignment {
-  id          String   @id @default(cuid())
-  classroomId String
-  classroom   Classroom @relation(fields: [classroomId], references: [id], onDelete: Cascade)
-  name        String
-  date        DateTime
-  createdAt   DateTime @default(now())
+  id           String     @id @default(cuid())
+  classroomId  String
+  classroom    Classroom  @relation(fields: [classroomId], references: [id], onDelete: Cascade)
+  skillSubjectId String?
+  skillSubject SkillSubject? @relation(fields: [skillSubjectId], references: [id], onDelete: SetNull)
+  name         String
+  assignedDate DateTime
+  dueDate      DateTime?
+  createdAt    DateTime   @default(now())
 
   entries HomeworkEntry[]
 }
@@ -327,6 +377,7 @@ model SkillSubject {
   createdAt   DateTime  @default(now())
 
   skills Skill[]
+  assignments Assignment[]
 
   @@unique([classroomId, name])
 }
@@ -366,6 +417,7 @@ model ParentContactLog {
   reason    String   // "behavior" / "skill" / "positive" / "other"
   method    String   @default("phone") // "email" / "phone" / "in_person" / "other"
   comment   String?
+  followUp  Boolean  @default(false)
   createdAt DateTime @default(now())
 }
 

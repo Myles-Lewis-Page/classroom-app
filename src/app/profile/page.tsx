@@ -20,6 +20,7 @@ export default function ProfilePage() {
   const [saving, setSaving] = useState(false);
   const [savedName, setSavedName] = useState<string | null>(null);
   const [archiving, setArchiving] = useState(false);
+  const [showSetupForm, setShowSetupForm] = useState(false);
 
   // Subjects taught (generic + custom)
   const [selectedSubjects, setSelectedSubjects] = useState<string[]>([]);
@@ -62,6 +63,7 @@ export default function ProfilePage() {
           setTeacherEmail(teacher?.email ?? "");
           setNewEmail(teacher?.email ?? "");
           setCurrentClassroom(classroom);
+          setShowSetupForm(!classroom);
           setSchoolName(classroom?.schoolName ?? "");
           setAllClassrooms(allClassrooms ?? []);
           setExistingSubjects(skillSubjects ?? []);
@@ -228,12 +230,19 @@ export default function ProfilePage() {
         </div>
       )}
 
-      <form onSubmit={handleSubmit} className="card space-y-3">
-        <h2 className="font-semibold">Your Info</h2>
-        <div className="grid grid-cols-2 gap-3">
-          <input
-            placeholder="First name"
-            value={firstName}
+      {currentClassroom && !showSetupForm && (
+        <button onClick={() => setShowSetupForm(true)} className="btn-outline text-sm mb-4">
+          Edit classroom setup
+        </button>
+      )}
+
+      {showSetupForm && (
+        <form onSubmit={handleSubmit} className="card space-y-3">
+          <h2 className="font-semibold">Your Info</h2>
+          <div className="grid grid-cols-2 gap-3">
+            <input
+              placeholder="First name"
+              value={firstName}
             onChange={(e) => setFirstName(e.target.value)}
             className="border rounded px-2 py-1"
             required
@@ -345,7 +354,8 @@ export default function ProfilePage() {
             and use the rest of the app.
           </p>
         )}
-      </form>
+        </form>
+      )}
 
       <form onSubmit={handleAccountSubmit} className="card space-y-3 mt-6">
         <h2 className="font-semibold">Account Settings</h2>

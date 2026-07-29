@@ -31,12 +31,13 @@ export async function GET(
       praiseNotes: { orderBy: { date: "desc" }, take: 20 },
       attendanceEntries: { orderBy: { date: "desc" }, take: 30 },
       homeworkEntries: {
-        orderBy: { assignment: { date: "desc" } },
+        orderBy: { assignment: { assignedDate: "desc" } },
         take: 30,
         include: { assignment: true },
       },
       behaviorEntries: { orderBy: { date: "desc" }, take: 30, include: { subject: true } },
       parentContactLogs: { orderBy: { date: "desc" }, take: 20 },
+      supports: { include: { supportType: true, selectedOption: true } },
       skillStatuses: {
         where: { status: "5" },
         include: { skill: { include: { skillSubject: true } } },

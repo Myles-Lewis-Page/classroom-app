@@ -10,6 +10,7 @@ type ContactLog = {
   reason: string;
   method: string;
   comment: string | null;
+  followUp: boolean;
   student: { firstName: string; lastName: string };
 };
 
@@ -44,7 +45,9 @@ export default function ParentLogPage() {
   const [newReason, setNewReason] = useState("behavior");
   const [newMethod, setNewMethod] = useState("phone");
   const [newComment, setNewComment] = useState("");
+  const [newFollowUp, setNewFollowUp] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [showFollowUpOnly, setShowFollowUpOnly] = useState(false);
 
   useEffect(() => {
     fetch("/api/students").then((r) => r.json()).then(setStudents);
@@ -62,6 +65,15 @@ export default function ParentLogPage() {
     fetch(url).then((r) => r.json()).then(setLogs);
   }
 
+  async function toggleFollowUp(log: ContactLog) {
+    setLogs((prev) => prev.map((l) => (l.id === log.id ? { ...l, followUp: !l.followUp } : l)));
+    await fetch("/api/parent-contact-log", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: log.id, followUp: !log.followUp }),
+    });
+  }
+
   async function addRow() {
     if (!newStudentId) return;
     setSaving(true);
@@ -74,17 +86,24 @@ export default function ParentLogPage() {
         reason: newReason,
         method: newMethod,
         comment: newComment,
+        followUp: newFollowUp,
       }),
     });
     setSaving(false);
     setNewStudentId("");
     setNewComment("");
+    setNewFollowUp(false);
     load();
   }
 
   return (
     <div className="p-4 sm:p-6 max-w-5xl mx-auto">
-      <h1 className="text-2xl font-bold mb-4">Parent Contact Log</h1>
+      <div className="flex justify-between items-center mb-4">
+        <h1 className="text-2xl font-bold">Parent Contact Log</h1>
+        <button onClick={() => window.print()} className="btn-outline text-sm print:hidden">
+          Print
+        </button>
+      </div>
 
       <div className="mb-6">
         <ParentContactRotationWidget />
@@ -100,6 +119,7 @@ export default function ParentLogPage() {
               <th className="border p-2">Reason</th>
               <th className="border p-2">Contacted via</th>
               <th className="border p-2">Comments / important info</th>
+              <th className="border p-2">Follow up?</th>
               <th className="border p-2"></th>
             </tr>
           </thead>
@@ -162,6 +182,13 @@ export default function ParentLogPage() {
                 />
               </td>
               <td className="border p-1 text-center">
+                <input
+                  type="checkbox"
+                  checked={newFollowUp}
+                  onChange={(e) => setNewFollowUp(e.target.checked)}
+                />
+              </td>
+              <td className="border p-1 text-center">
                 <button
                   onClick={addRow}
                   disabled={saving || !newStudentId}
@@ -177,18 +204,28 @@ export default function ParentLogPage() {
 
       <div className="flex items-center justify-between mb-2">
         <h2 className="font-semibold">History</h2>
-        <select
-          value={filterStudentId}
-          onChange={(e) => setFilterStudentId(e.target.value)}
-          className="border rounded px-2 py-1 text-sm"
-        >
-          <option value="">All students</option>
-          {students.map((s) => (
-            <option key={s.id} value={s.id}>
-              {s.lastName}, {s.firstName}
-            </option>
-          ))}
-        </select>
+        <div className="flex items-center gap-3">
+          <label className="flex items-center gap-1 text-sm">
+            <input
+              type="checkbox"
+              checked={showFollowUpOnly}
+              onChange={(e) => setShowFollowUpOnly(e.target.checked)}
+            />
+            Needs follow up only
+          </label>
+          <select
+            value={filterStudentId}
+            onChange={(e) => setFilterStudentId(e.target.value)}
+            className="border rounded px-2 py-1 text-sm"
+          >
+            <option value="">All students</option>
+            {students.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.lastName}, {s.firstName}
+              </option>
+            ))}
+          </select>
+        </div>
       </div>
 
       <div className="overflow-x-auto">
@@ -200,20 +237,30 @@ export default function ParentLogPage() {
               <th>Reason</th>
               <th>Method</th>
               <th>Comments</th>
+              <th>Follow up?</th>
             </tr>
           </thead>
           <tbody>
-            {logs.map((log) => (
-              <tr key={log.id} className="border-b align-top">
-                <td className="py-2 whitespace-nowrap">
-                  {log.student.firstName} {log.student.lastName}
-                </td>
-                <td className="py-2 whitespace-nowrap">{new Date(log.date).toLocaleDateString()}</td>
-                <td className="py-2 whitespace-nowrap">{REASON_LABEL[log.reason] ?? log.reason}</td>
-                <td className="py-2 whitespace-nowrap">{METHOD_LABEL[log.method] ?? log.method}</td>
-                <td className="py-2">{log.comment}</td>
-              </tr>
-            ))}
+            {logs
+              .filter((log) => !showFollowUpOnly || log.followUp)
+              .map((log) => (
+                <tr key={log.id} className="border-b align-top">
+                  <td className="py-2 whitespace-nowrap">
+                    {log.student.firstName} {log.student.lastName}
+                  </td>
+                  <td className="py-2 whitespace-nowrap">{new Date(log.date).toLocaleDateString()}</td>
+                  <td className="py-2 whitespace-nowrap">{REASON_LABEL[log.reason] ?? log.reason}</td>
+                  <td className="py-2 whitespace-nowrap">{METHOD_LABEL[log.method] ?? log.method}</td>
+                  <td className="py-2">{log.comment}</td>
+                  <td className="py-2 text-center">
+                    <input
+                      type="checkbox"
+                      checked={log.followUp}
+                      onChange={() => toggleFollowUp(log)}
+                    />
+                  </td>
+                </tr>
+              ))}
           </tbody>
         </table>
         {logs.length === 0 && <p className="text-slate-500 mt-2">No contacts logged yet.</p>}

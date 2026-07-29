@@ -3,25 +3,29 @@ import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
 import { getCurrentClassroomId } from "@/lib/classroomScope";
 
-export async function GET() {
+// GET /api/assignments?subjectId=xxx (optional filter, like Skills)
+export async function GET(req: NextRequest) {
   const session = await auth();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const classroomId = await getCurrentClassroomId();
   if (!classroomId) return NextResponse.json([]);
 
+  const subjectId = req.nextUrl.searchParams.get("subjectId");
+
   const assignments = await prisma.assignment.findMany({
-    where: { classroomId },
+    where: { classroomId, ...(subjectId ? { skillSubjectId: subjectId } : {}) },
     include: {
       entries: true,
+      skillSubject: true,
     },
-    orderBy: { date: "desc" },
+    orderBy: { assignedDate: "desc" },
   });
 
   return NextResponse.json(assignments);
 }
 
-// POST { name, date } - classroomId derived from session.
+// POST { name, assignedDate, dueDate?, subjectId? } - classroomId derived from session.
 // Creates the assignment and auto-creates a "missing" entry for every active
 // student IN THIS CLASSROOM ONLY, matching the same pattern as Event Tracker.
 export async function POST(req: NextRequest) {
@@ -39,7 +43,9 @@ export async function POST(req: NextRequest) {
     data: {
       classroomId,
       name: body.name,
-      date: new Date(body.date),
+      assignedDate: new Date(body.assignedDate),
+      dueDate: body.dueDate ? new Date(body.dueDate) : null,
+      skillSubjectId: body.subjectId || null,
     },
   });
 

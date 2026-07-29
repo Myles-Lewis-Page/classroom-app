@@ -9,6 +9,7 @@ import EditBasicInfo from "@/components/EditBasicInfo";
 import EditTags from "@/components/EditTags";
 import EditAllergiesDietary from "@/components/EditAllergiesDietary";
 import EditIep from "@/components/EditIep";
+import EditSupports from "@/components/EditSupports";
 import EditParents from "@/components/EditParents";
 
 type StudentDetail = {
@@ -49,7 +50,7 @@ type StudentDetail = {
   homeworkEntries: {
     id: string;
     status: string;
-    assignment: { name: string; date: string };
+    assignment: { name: string; assignedDate: string };
   }[];
   behaviorEntries: {
     id: string;
@@ -64,6 +65,12 @@ type StudentDetail = {
     reason: string;
     method: string;
     comment: string | null;
+  }[];
+  supports: {
+    supportTypeId: string;
+    selectedOptionId: string | null;
+    supportType: { name: string };
+    selectedOption: { label: string } | null;
   }[];
   skillStatuses: {
     id: string;
@@ -140,15 +147,6 @@ export default function StudentProfilePage({ params }: { params: Promise<{ id: s
             {editMode ? "Done Editing" : "Edit"}
           </button>
         </div>
-        {editMode && (
-          <button
-            onClick={removeStudent}
-            disabled={removing}
-            className="text-rose-600 text-sm mt-2 hover:underline disabled:opacity-50"
-          >
-            {removing ? "Removing..." : "Remove from class"}
-          </button>
-        )}
         <div className="mt-1">
           {student.tags.map((t) => (
             <span key={t.tag.id} className="tag-chip">
@@ -228,6 +226,27 @@ export default function StudentProfilePage({ params }: { params: Promise<{ id: s
           )}
         </section>
       )}
+
+      {/* IEP/504 Supports - structured checkboxes with optional dropdowns */}
+      <section className="card">
+        <h2 className="font-bold mb-2">IEP / 504 Supports</h2>
+        {student.supports.length === 0 && !editMode && (
+          <p className="text-gray-500 text-sm">None checked</p>
+        )}
+        {!editMode && (
+          <ul className="text-sm space-y-1">
+            {student.supports.map((s) => (
+              <li key={s.supportTypeId}>
+                {s.supportType.name}
+                {s.selectedOption ? `: ${s.selectedOption.label}` : ""}
+              </li>
+            ))}
+          </ul>
+        )}
+        {editMode && (
+          <EditSupports studentId={student.id} currentSupports={student.supports} onChanged={refresh} />
+        )}
+      </section>
 
       {/* Parent / Guardian */}
       <section className="card">
@@ -338,7 +357,7 @@ export default function StudentProfilePage({ params }: { params: Promise<{ id: s
         <ul className="text-sm space-y-1">
           {student.homeworkEntries.map((h) => (
             <li key={h.id}>
-              {new Date(h.assignment.date).toLocaleDateString()} — {h.assignment.name}: {h.status}
+              {new Date(h.assignment.assignedDate).toLocaleDateString()} — {h.assignment.name}: {h.status}
             </li>
           ))}
         </ul>
@@ -357,17 +376,17 @@ export default function StudentProfilePage({ params }: { params: Promise<{ id: s
         <AddNote studentId={student.id} type="observation" onAdded={refresh} />
       </section>
 
-      <section className="card">
-        <h2 className="font-bold mb-2">🌟 Praise Notes</h2>
-        <ul className="text-sm space-y-1">
-          {student.praiseNotes.map((p) => (
-            <li key={p.id}>
-              {new Date(p.date).toLocaleDateString()} — {p.note}
-            </li>
-          ))}
-        </ul>
-        <AddNote studentId={student.id} type="praise" onAdded={refresh} />
-      </section>
+      {editMode && (
+        <div className="pt-4 border-t">
+          <button
+            onClick={removeStudent}
+            disabled={removing}
+            className="w-full bg-rose-100 hover:bg-rose-200 text-rose-700 font-medium rounded px-4 py-3 text-base disabled:opacity-50"
+          >
+            {removing ? "Removing..." : "Remove Student From Class"}
+          </button>
+        </div>
+      )}
     </div>
   );
 }

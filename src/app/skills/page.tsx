@@ -126,7 +126,12 @@ function SkillsPageInner() {
 
   return (
     <div className="p-4 sm:p-6 max-w-6xl mx-auto overflow-x-auto">
-      <h1 className="text-2xl font-bold mb-4">Skills</h1>
+      <div className="flex justify-between items-center mb-4">
+        <h1 className="text-2xl font-bold">Skills</h1>
+        <button onClick={() => window.print()} className="btn-outline text-sm print:hidden">
+          Print
+        </button>
+      </div>
 
       {subjects.length === 0 ? (
         <p className="text-slate-500">

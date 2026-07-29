@@ -159,8 +159,13 @@ export default function SeatingChartPage() {
                   {Array.from({ length: maxCol + 1 }).map((_, col) => {
                     const seat = rowSeats.find((s) => s.col === col);
                     if (!seat) {
-                      // Gap in this row - render as blank space (walkway)
-                      return <div key={col} className="w-20 h-16 shrink-0" />;
+                      // Gap in this row - render as a walkway with a visible
+                      // vertical divider line, instead of just blank space.
+                      return (
+                        <div key={col} className="w-20 h-16 shrink-0 flex justify-center">
+                          <div className="w-0.5 h-full bg-violet-200" />
+                        </div>
+                      );
                     }
                     const student = studentAt(col, row);
                     const conflictWarning = student && isConflictAdjacent(student, col, row);

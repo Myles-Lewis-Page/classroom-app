@@ -32,7 +32,7 @@ export async function GET() {
     prisma.homeworkEntry.findMany({
       where: {
         status: "needs_help",
-        assignment: { date: today, classroomId },
+        assignment: { assignedDate: today, classroomId },
       },
       include: { student: true, assignment: true },
     }),

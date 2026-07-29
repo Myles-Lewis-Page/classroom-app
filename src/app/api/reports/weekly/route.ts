@@ -37,7 +37,7 @@ export async function GET(req: NextRequest) {
             include: { subject: true },
           }),
           prisma.homeworkEntry.findMany({
-            where: { studentId: student.id, assignment: { date: { gte: start, lte: end } } },
+            where: { studentId: student.id, assignment: { assignedDate: { gte: start, lte: end } } },
             include: { assignment: true },
           }),
           prisma.observation.findMany({
