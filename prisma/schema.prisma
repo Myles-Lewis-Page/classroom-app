@@ -453,6 +453,8 @@ model PacingUnit {
   endDate     DateTime
   standards   String? // free text, e.g. "6.1A, 6.2B, 6.3C"
   topics      String? // free text, one per line
+  summatives  String? // free text, one per line, e.g. "8/20/26: Band Field Trip"
+  datesToRemember String? // free text, one per line, e.g. "9/4/26: Half Day"
   createdAt   DateTime  @default(now())
 
   days PacingUnitDay[]

@@ -1,18 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
+import { UNIT_COLORS } from "@/lib/unitColors";
 
-type Day = {
-  id: string;
-  date: string;
-  topic: string | null;
-  learningTarget: string | null;
-  standards: string | null;
-  supports: string | null;
-  lessonActivities: string | null;
-  warmUp: string | null;
-  materialsNeeded: string | null;
-};
 type Unit = {
   id: string;
   name: string;
@@ -20,16 +11,11 @@ type Unit = {
   endDate: string;
   standards: string | null;
   topics: string | null;
-  days: Day[];
+  days: { id: string }[];
 };
-
-const UNIT_COLORS = [
-  "#fecaca", "#fde68a", "#a7f3d0", "#bae6fd", "#ddd6fe", "#fbcfe8", "#fed7aa", "#e0e7ff",
-];
 
 export default function PacingGuidePage() {
   const [units, setUnits] = useState<Unit[]>([]);
-  const [expandedId, setExpandedId] = useState<string>("");
   const [editingId, setEditingId] = useState<string>("");
 
   // New unit form
@@ -79,15 +65,8 @@ export default function PacingGuidePage() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(updates),
     });
+    setEditingId("");
     load();
-  }
-
-  async function saveDayField(dayId: string, field: string, value: string) {
-    await fetch(`/api/pacing-units/days/${dayId}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ [field]: value }),
-    });
   }
 
   return (
@@ -102,18 +81,17 @@ export default function PacingGuidePage() {
       {units.length > 0 && (
         <div className="panel mb-6">
           <p className="text-sm font-semibold mb-2">Year at a Glance</p>
-          <div className="flex flex-wrap gap-2">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
             {units.map((u, i) => (
-              <button
+              <Link
                 key={u.id}
-                onClick={() => setExpandedId(u.id)}
-                className="px-3 py-1 rounded text-xs text-left"
+                href={`/pacing-guide/${u.id}`}
+                className="px-3 py-2 rounded text-xs text-left hover:brightness-95 transition"
                 style={{ backgroundColor: UNIT_COLORS[i % UNIT_COLORS.length] }}
               >
-                <span className="font-semibold">{u.name}</span>
-                <br />
+                <span className="font-semibold block">{u.name}</span>
                 {new Date(u.startDate).toLocaleDateString()} - {new Date(u.endDate).toLocaleDateString()}
-              </button>
+              </Link>
             ))}
           </div>
         </div>
@@ -177,30 +155,26 @@ export default function PacingGuidePage() {
         </div>
       )}
 
-      <div className="space-y-4">
+      <div className="space-y-3">
         {units.map((unit, i) => {
-          const isExpanded = expandedId === unit.id;
           const isEditing = editingId === unit.id;
           return (
             <div key={unit.id} className="card">
-              <div
-                className="flex justify-between items-start cursor-pointer"
-                onClick={() => setExpandedId(isExpanded ? "" : unit.id)}
-              >
-                <div className="flex items-center gap-2">
+              <div className="flex justify-between items-start">
+                <Link href={`/pacing-guide/${unit.id}`} className="flex items-center gap-2 flex-1">
                   <span
-                    className="w-3 h-3 rounded-full inline-block"
+                    className="w-3 h-3 rounded-full inline-block shrink-0"
                     style={{ backgroundColor: UNIT_COLORS[i % UNIT_COLORS.length] }}
                   />
                   <div>
-                    <h3 className="font-bold">{unit.name}</h3>
+                    <h3 className="font-bold hover:underline">{unit.name}</h3>
                     <p className="text-sm text-slate-500">
                       {new Date(unit.startDate).toLocaleDateString()} -{" "}
                       {new Date(unit.endDate).toLocaleDateString()} · {unit.days.length} days
                     </p>
                   </div>
-                </div>
-                <div className="flex gap-2" onClick={(e) => e.stopPropagation()}>
+                </Link>
+                <div className="flex gap-2">
                   <button
                     onClick={() => setEditingId(isEditing ? "" : unit.id)}
                     className="btn-outline text-xs"
@@ -218,46 +192,6 @@ export default function PacingGuidePage() {
 
               {isEditing && (
                 <UnitEditForm unit={unit} onSave={(updates) => saveUnitEdits(unit, updates)} />
-              )}
-
-              {(unit.standards || unit.topics) && !isEditing && (
-                <div className="mt-2 text-sm text-slate-600">
-                  {unit.standards && <p>Standards: {unit.standards}</p>}
-                  {unit.topics && (
-                    <div>
-                      Topics:
-                      <ul className="list-disc list-inside">
-                        {unit.topics.split("\n").filter(Boolean).map((t, idx) => (
-                          <li key={idx}>{t}</li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {isExpanded && (
-                <div className="mt-4 overflow-x-auto">
-                  <table className="border-collapse text-xs w-full">
-                    <thead>
-                      <tr className="text-left bg-violet-50/60">
-                        <th className="border p-1">Date</th>
-                        <th className="border p-1">Topic</th>
-                        <th className="border p-1">Learning Target</th>
-                        <th className="border p-1">Standards</th>
-                        <th className="border p-1">Supports</th>
-                        <th className="border p-1">Warm Up</th>
-                        <th className="border p-1">Lesson/Activities</th>
-                        <th className="border p-1">Materials Needed</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {unit.days.map((day) => (
-                        <DayRow key={day.id} day={day} onSave={saveDayField} />
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
               )}
             </div>
           );
@@ -323,62 +257,5 @@ function UnitEditForm({ unit, onSave }: { unit: Unit; onSave: (u: Partial<Unit>)
         Save Unit
       </button>
     </div>
-  );
-}
-
-function DayRow({
-  day,
-  onSave,
-}: {
-  day: Day;
-  onSave: (dayId: string, field: string, value: string) => void;
-}) {
-  const [fields, setFields] = useState({
-    topic: day.topic ?? "",
-    learningTarget: day.learningTarget ?? "",
-    standards: day.standards ?? "",
-    supports: day.supports ?? "",
-    warmUp: day.warmUp ?? "",
-    lessonActivities: day.lessonActivities ?? "",
-    materialsNeeded: day.materialsNeeded ?? "",
-  });
-
-  function update(field: keyof typeof fields, value: string) {
-    setFields((prev) => ({ ...prev, [field]: value }));
-  }
-
-  function blur(field: keyof typeof fields) {
-    onSave(day.id, field, fields[field]);
-  }
-
-  const cellClass = "border p-1";
-  const inputClass = "w-full text-xs border-none focus:outline-none focus:bg-sky-50";
-
-  return (
-    <tr>
-      <td className={`${cellClass} whitespace-nowrap font-medium`}>
-        {new Date(day.date).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })}
-      </td>
-      {(
-        [
-          "topic",
-          "learningTarget",
-          "standards",
-          "supports",
-          "warmUp",
-          "lessonActivities",
-          "materialsNeeded",
-        ] as const
-      ).map((field) => (
-        <td key={field} className={cellClass}>
-          <input
-            value={fields[field]}
-            onChange={(e) => update(field, e.target.value)}
-            onBlur={() => blur(field)}
-            className={inputClass}
-          />
-        </td>
-      ))}
-    </tr>
   );
 }

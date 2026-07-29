@@ -17,7 +17,28 @@ function weekdaysBetween(start: Date, end: Date): Date[] {
   return days;
 }
 
-// PATCH { name?, startDate?, endDate?, standards?, topics? }
+// GET - single unit with its day rows
+export async function GET(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const session = await auth();
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const { id } = await params;
+  const classroomId = await getCurrentClassroomId();
+  const unit = await prisma.pacingUnit.findUnique({
+    where: { id },
+    include: { days: { orderBy: { date: "asc" } } },
+  });
+  if (!classroomId || !unit || unit.classroomId !== classroomId) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+
+  return NextResponse.json(unit);
+}
+
+// PATCH { name?, startDate?, endDate?, standards?, topics?, summatives?, datesToRemember? }
 // If startDate/endDate change, day rows are regenerated to match the new
 // range (existing lesson plan details for days outside the new range are
 // lost - this is a deliberate simplification, the teacher just re-fills any
@@ -41,12 +62,16 @@ export async function PATCH(
     name?: string;
     standards?: string | null;
     topics?: string | null;
+    summatives?: string | null;
+    datesToRemember?: string | null;
     startDate?: Date;
     endDate?: Date;
   } = {};
   if (body.name !== undefined) data.name = body.name;
   if (body.standards !== undefined) data.standards = body.standards || null;
   if (body.topics !== undefined) data.topics = body.topics || null;
+  if (body.summatives !== undefined) data.summatives = body.summatives || null;
+  if (body.datesToRemember !== undefined) data.datesToRemember = body.datesToRemember || null;
 
   let datesChanged = false;
   let newStart = unit.startDate;
