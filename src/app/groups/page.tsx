@@ -1,17 +1,30 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { buildGroups, Group, StudentForGrouping } from "@/lib/groupBuilder";
+import { useSectionContext, filterBySection } from "@/components/SectionContext";
 
-type Student = { id: string; firstName: string; lastName: string; understandingLevel: number | null };
+type Student = {
+  id: string;
+  firstName: string;
+  lastName: string;
+  understandingLevel: number | null;
+  sectionId: string | null;
+};
 type Relationship = { studentId: string; relatedStudentId: string; type: string };
 
 export default function GroupBuilderPage() {
+  const { activeSectionId } = useSectionContext();
   const [students, setStudents] = useState<Student[]>([]);
   const [relationships, setRelationships] = useState<Relationship[]>([]);
   const [groupSize, setGroupSize] = useState(4);
   const [sortMode, setSortMode] = useState<"homogeneous" | "heterogeneous">("heterogeneous");
   const [groups, setGroups] = useState<Group[]>([]);
+
+  const visibleStudents = useMemo(
+    () => filterBySection(students, activeSectionId),
+    [students, activeSectionId]
+  );
 
   useEffect(() => {
     fetch("/api/groups/data")
@@ -23,16 +36,20 @@ export default function GroupBuilderPage() {
   }, []);
 
   function generate() {
-    const forGrouping: StudentForGrouping[] = students.map((s) => ({
+    const visibleIds = new Set(visibleStudents.map((s) => s.id));
+    const forGrouping: StudentForGrouping[] = visibleStudents.map((s) => ({
       id: s.id,
       name: `${s.firstName} ${s.lastName}`,
       level: s.understandingLevel ?? 3,
     }));
 
-    const conflicts = relationships
+    const relevant = relationships.filter(
+      (r) => visibleIds.has(r.studentId) && visibleIds.has(r.relatedStudentId)
+    );
+    const conflicts = relevant
       .filter((r) => r.type === "conflict")
       .map((r) => ({ a: r.studentId, b: r.relatedStudentId }));
-    const preferences = relationships
+    const preferences = relevant
       .filter((r) => r.type === "works_well")
       .map((r) => ({ a: r.studentId, b: r.relatedStudentId }));
 

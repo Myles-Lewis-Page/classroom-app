@@ -3,6 +3,7 @@
 import { useEffect, useState, useMemo, useRef } from "react";
 import Link from "next/link";
 import PieChart from "@/components/PieChart";
+import { useSectionContext, filterBySection } from "@/components/SectionContext";
 
 type Tag = { tag: { id: string; name: string; color: string | null } };
 type Student = {
@@ -11,12 +12,14 @@ type Student = {
   lastName: string;
   grade: string;
   section: string | null;
+  sectionId: string | null;
   tags: Tag[];
   allergies: { id: string }[];
 };
 type AttendanceEntry = { studentId: string; status: string };
 
 export default function RosterPage() {
+  const { activeSectionId } = useSectionContext();
   const [students, setStudents] = useState<Student[]>([]);
   const [attendance, setAttendance] = useState<Record<string, string>>({});
   const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
@@ -88,24 +91,29 @@ export default function RosterPage() {
   }
 
   async function markAllPresent() {
-    for (const s of students) {
+    for (const s of visibleStudents) {
       await setStatus(s.id, "present");
     }
   }
 
+  const visibleStudents = useMemo(
+    () => filterBySection(students, activeSectionId),
+    [students, activeSectionId]
+  );
+
   const filtered = useMemo(() => {
     const q = search.toLowerCase();
-    return students.filter(
+    return visibleStudents.filter(
       (s) =>
         s.firstName.toLowerCase().includes(q) ||
         s.lastName.toLowerCase().includes(q) ||
         s.grade.toLowerCase().includes(q)
     );
-  }, [students, search]);
+  }, [visibleStudents, search]);
 
-  const presentCount = students.filter((s) => (attendance[s.id] ?? "present") === "present").length;
-  const absentCount = students.filter((s) => attendance[s.id] === "absent").length;
-  const total = students.length || 1;
+  const presentCount = visibleStudents.filter((s) => (attendance[s.id] ?? "present") === "present").length;
+  const absentCount = visibleStudents.filter((s) => attendance[s.id] === "absent").length;
+  const total = visibleStudents.length || 1;
 
   return (
     <div className="p-4 sm:p-6 max-w-6xl mx-auto">

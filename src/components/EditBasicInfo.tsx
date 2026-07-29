@@ -1,6 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+
+type SectionOption = { id: string; name: string };
 
 export default function EditBasicInfo({
   studentId,
@@ -13,6 +15,7 @@ export default function EditBasicInfo({
     lastName: string;
     grade: string;
     section: string | null;
+    sectionId?: string | null;
     dob: string | null;
     understandingLevel: number | null;
   };
@@ -22,11 +25,17 @@ export default function EditBasicInfo({
   const [lastName, setLastName] = useState(initial.lastName);
   const [grade, setGrade] = useState(initial.grade);
   const [section, setSection] = useState(initial.section ?? "");
+  const [sectionId, setSectionId] = useState(initial.sectionId ?? "");
+  const [sections, setSections] = useState<SectionOption[]>([]);
   const [dob, setDob] = useState(initial.dob ? initial.dob.slice(0, 10) : "");
   const [understandingLevel, setUnderstandingLevel] = useState(
     initial.understandingLevel?.toString() ?? ""
   );
   const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    fetch("/api/sections").then((r) => r.json()).then(setSections);
+  }, []);
 
   async function save() {
     setSaving(true);
@@ -38,6 +47,7 @@ export default function EditBasicInfo({
         lastName,
         grade,
         section: section || null,
+        sectionId: sectionId || null,
         dob: dob || null,
         understandingLevel: understandingLevel ? Number(understandingLevel) : null,
       }),
@@ -72,6 +82,19 @@ export default function EditBasicInfo({
         placeholder="Section"
         className="border rounded px-2 py-1"
       />
+      <select
+        value={sectionId}
+        onChange={(e) => setSectionId(e.target.value)}
+        className="border rounded px-2 py-1"
+        title="Group/Section within this classroom"
+      >
+        <option value="">No group/section</option>
+        {sections.map((s) => (
+          <option key={s.id} value={s.id}>
+            {s.name}
+          </option>
+        ))}
+      </select>
       <input
         type="date"
         value={dob}

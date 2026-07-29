@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useState, Suspense } from "react";
+import { useEffect, useState, useMemo, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import PieChart from "@/components/PieChart";
 import { ratingScaleColor, parseRating } from "@/lib/skillRating";
+import { useSectionContext, filterBySection } from "@/components/SectionContext";
 
-type Student = { id: string; firstName: string; lastName: string };
+type Student = { id: string; firstName: string; lastName: string; sectionId: string | null };
 type SkillSubject = { id: string; name: string };
 type Skill = { id: string; category: string | null; skillName: string; order: number };
 type Status = { studentId: string; skillId: string; status: string };
@@ -13,6 +14,7 @@ type Status = { studentId: string; skillId: string; status: string };
 function SkillsPageInner() {
   const searchParams = useSearchParams();
   const subjectFromUrl = searchParams.get("subject");
+  const { activeSectionId } = useSectionContext();
 
   const [subjects, setSubjects] = useState<SkillSubject[]>([]);
   const [selectedSubjectId, setSelectedSubjectId] = useState<string>("");
@@ -21,6 +23,11 @@ function SkillsPageInner() {
   const [statuses, setStatuses] = useState<Record<string, string>>({});
   const [newSkillCategory, setNewSkillCategory] = useState("");
   const [newSkillName, setNewSkillName] = useState("");
+
+  const visibleStudents = useMemo(
+    () => filterBySection(students, activeSectionId),
+    [students, activeSectionId]
+  );
 
   useEffect(() => {
     fetch("/api/students").then((r) => r.json()).then(setStudents);
@@ -108,7 +115,7 @@ function SkillsPageInner() {
     let mastered = 0;
     let progressing = 0;
     let notStarted = 0;
-    students.forEach((student) => {
+    visibleStudents.forEach((student) => {
       skillSet.forEach((skill) => {
         const rating = parseRating(statuses[`${student.id}::${skill.id}`]);
         if (rating === 5) mastered++;
@@ -120,7 +127,7 @@ function SkillsPageInner() {
   }
 
   const overallBuckets = bucketCounts(skills);
-  const totalPairs = students.length * skills.length;
+  const totalPairs = visibleStudents.length * skills.length;
   const percentMastered =
     totalPairs > 0 ? Math.round((overallBuckets.mastered / totalPairs) * 100) : 0;
 
@@ -234,7 +241,7 @@ function SkillsPageInner() {
                         </tr>
                       </thead>
                       <tbody>
-                        {students.map((student) => {
+                        {visibleStudents.map((student) => {
                           const ratings = groupSkills.map((skill) =>
                             parseRating(statuses[`${student.id}::${skill.id}`])
                           );

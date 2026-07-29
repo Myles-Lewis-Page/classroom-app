@@ -2,12 +2,13 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useSectionContext } from "@/components/SectionContext";
 
 type EventStatus = {
   id: string;
   slipStatus: string;
   paymentStatus: string | null;
-  student: { id: string; firstName: string; lastName: string };
+  student: { id: string; firstName: string; lastName: string; sectionId: string | null };
 };
 type EventItem = {
   id: string;
@@ -18,6 +19,7 @@ type EventItem = {
 };
 
 export default function EventsPage() {
+  const { activeSectionId } = useSectionContext();
   const [events, setEvents] = useState<EventItem[]>([]);
   const [showMissingOnly, setShowMissingOnly] = useState(true);
   const [newName, setNewName] = useState("");
@@ -166,17 +168,20 @@ export default function EventsPage() {
       </label>
 
       {events.map((event) => {
-        const statuses = showMissingOnly
-          ? event.statuses.filter((s) => s.slipStatus === "missing")
+        const sectionStatuses = activeSectionId
+          ? event.statuses.filter((s) => s.student.sectionId === activeSectionId)
           : event.statuses;
+        const statuses = showMissingOnly
+          ? sectionStatuses.filter((s) => s.slipStatus === "missing")
+          : sectionStatuses;
         return (
           <div key={event.id} className="border rounded p-4 mb-4">
             <h3 className="font-bold mb-1">
               {event.name} — {new Date(event.date).toLocaleDateString()}
             </h3>
             <p className="text-sm text-gray-500 mb-2">
-              {event.statuses.filter((s) => s.slipStatus === "missing").length} missing of{" "}
-              {event.statuses.length}
+              {sectionStatuses.filter((s) => s.slipStatus === "missing").length} missing of{" "}
+              {sectionStatuses.length}
             </p>
             <ul className="space-y-1">
               {statuses.map((s) => (

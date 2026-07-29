@@ -1,14 +1,15 @@
 "use client";
 
-import { useEffect, useState, use } from "react";
+import { useEffect, useState, use, useMemo } from "react";
 import Link from "next/link";
+import { useSectionContext } from "@/components/SectionContext";
 
 type Entry = {
   status: string;
   submittedAt: string | null;
   gradeStatus: string | null;
   gradeScore: number | null;
-  student: { id: string; firstName: string; lastName: string };
+  student: { id: string; firstName: string; lastName: string; sectionId: string | null };
 };
 type AssignmentDetail = {
   id: string;
@@ -25,6 +26,7 @@ const SUBMIT_COLOR: Record<string, string> = { missing: "#e0e7ff", handed_in: "#
 
 export default function AssignmentDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
+  const { activeSectionId } = useSectionContext();
   const [assignment, setAssignment] = useState<AssignmentDetail | null>(null);
 
   useEffect(() => {
@@ -103,6 +105,12 @@ export default function AssignmentDetailPage({ params }: { params: Promise<{ id:
     return new Date(entry.submittedAt) > new Date(assignment.dueDate);
   }
 
+  const visibleEntries = useMemo(() => {
+    if (!assignment) return [];
+    if (!activeSectionId) return assignment.entries;
+    return assignment.entries.filter((e) => e.student.sectionId === activeSectionId);
+  }, [assignment, activeSectionId]);
+
   if (!assignment) return <div className="p-6">Loading...</div>;
 
   return (
@@ -127,7 +135,7 @@ export default function AssignmentDetailPage({ params }: { params: Promise<{ id:
       </div>
 
       <ul className="space-y-2">
-        {assignment.entries.map((e) => {
+        {visibleEntries.map((e) => {
           const late = isLate(e);
           return (
             <li

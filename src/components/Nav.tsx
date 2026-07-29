@@ -3,6 +3,7 @@ import { auth, signOut } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getCurrentClassroomId } from "@/lib/classroomScope";
 import PeriodSwitcher from "@/components/PeriodSwitcher";
+import SectionSwitcher from "@/components/SectionSwitcher";
 
 const links = [
   { href: "/dashboard", label: "Dashboard" },
@@ -11,6 +12,7 @@ const links = [
   { href: "/homework", label: "Homework" },
   { href: "/gradebook", label: "Gradebook" },
   { href: "/pacing-guide", label: "Pacing Guide" },
+  { href: "/school-calendar", label: "School Calendar" },
   { href: "/groups", label: "Group Builder" },
   { href: "/seating", label: "Seating Chart" },
   { href: "/events", label: "Events" },
@@ -73,6 +75,7 @@ export default async function Nav() {
           {classroomId && (
             <PeriodSwitcher classrooms={allClassrooms} currentId={classroomId} />
           )}
+          <SectionSwitcher />
           <Link href="/profile" className="text-sm whitespace-nowrap text-slate-600 hover:text-sky-600">
             Profile
           </Link>

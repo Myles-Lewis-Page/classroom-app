@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { UNIT_COLORS } from "@/lib/unitColors";
+import { formatShortDate, toDateInputValue } from "@/lib/dateOnly";
 
 type Unit = {
   id: string;
@@ -90,7 +91,7 @@ export default function PacingGuidePage() {
                 style={{ backgroundColor: UNIT_COLORS[i % UNIT_COLORS.length] }}
               >
                 <span className="font-semibold block">{u.name}</span>
-                {new Date(u.startDate).toLocaleDateString()} - {new Date(u.endDate).toLocaleDateString()}
+                {formatShortDate(u.startDate)} - {formatShortDate(u.endDate)}
               </Link>
             ))}
           </div>
@@ -169,8 +170,8 @@ export default function PacingGuidePage() {
                   <div>
                     <h3 className="font-bold hover:underline">{unit.name}</h3>
                     <p className="text-sm text-slate-500">
-                      {new Date(unit.startDate).toLocaleDateString()} -{" "}
-                      {new Date(unit.endDate).toLocaleDateString()} · {unit.days.length} days
+                      {formatShortDate(unit.startDate)} -{" "}
+                      {formatShortDate(unit.endDate)} · {unit.days.length} days
                     </p>
                   </div>
                 </Link>

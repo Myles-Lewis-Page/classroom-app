@@ -52,7 +52,43 @@ model Classroom {
   supportTypes   SupportType[]
   gradeCategories GradeCategory[]
   pacingUnits     PacingUnit[]
+  sections        Section[]
+  calendarEvents  CalendarEvent[]
   activeForTeachers Teacher[] @relation("ActiveClassroom")
+}
+
+// A lighter sub-grouping *within* one classroom (e.g. "Group A" / "Group B",
+// or a reading group) - distinct from the multi-classroom/Period system
+// above, which is for genuinely separate classes. Sections share all
+// classroom-level settings (subjects, grading weights, seating layout, etc)
+// and are just used to filter which students show up on a given page.
+model Section {
+  id          String    @id @default(cuid())
+  classroomId String
+  classroom   Classroom @relation(fields: [classroomId], references: [id], onDelete: Cascade)
+  name        String
+  order       Int       @default(0)
+  createdAt   DateTime  @default(now())
+
+  students Student[]
+
+  @@unique([classroomId, name])
+}
+
+// School-year-wide calendar entries: full days off (no school), half days,
+// and general "dates to remember" (field trips, picture day, etc). Feeds
+// the Pacing Guide's "Dates to Remember" (auto-pulled for whatever falls
+// inside a unit's date range) and grays out non-instructional days in the
+// unit's week-by-week lesson tables.
+model CalendarEvent {
+  id          String    @id @default(cuid())
+  classroomId String
+  classroom   Classroom @relation(fields: [classroomId], references: [id], onDelete: Cascade)
+  name        String
+  startDate   DateTime
+  endDate     DateTime
+  type        String    // "holiday" (no school) | "half_day" | "other" (reminder only, doesn't affect pacing)
+  createdAt   DateTime  @default(now())
 }
 
 // Self-serve password reset. Since no outbound email service is configured
@@ -96,6 +132,8 @@ model Student {
   lastName           String
   grade              String
   section            String?
+  sectionId          String?
+  sectionGroup       Section?  @relation(fields: [sectionId], references: [id], onDelete: SetNull)
   dob                DateTime?
   understandingLevel Int?
   photoConsent       Boolean   @default(true)
@@ -452,19 +490,58 @@ model PacingUnit {
   startDate   DateTime
   endDate     DateTime
   standards   String? // free text, e.g. "6.1A, 6.2B, 6.3C"
-  topics      String? // free text, one per line
-  summatives  String? // free text, one per line, e.g. "8/20/26: Band Field Trip"
-  datesToRemember String? // free text, one per line, e.g. "9/4/26: Half Day"
+  topics      String? // legacy free text, one per line - superseded by UnitTopic below, kept for back-compat
+  summatives  String? // legacy free text - superseded by UnitSummative below, kept for back-compat
+  datesToRemember String? // legacy free text - superseded by auto-pull from CalendarEvent, kept for back-compat
   createdAt   DateTime  @default(now())
 
-  days PacingUnitDay[]
+  days           PacingUnitDay[]
+  unitSummatives UnitSummative[]
+  unitTopics     UnitTopic[]
+}
+
+// A single summative assessment tied to a unit - Title + Date, added/removed
+// via a small popup rather than a free-text box.
+model UnitSummative {
+  id        String     @id @default(cuid())
+  unitId    String
+  unit      PacingUnit @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  title     String
+  date      DateTime
+  order     Int        @default(0)
+  createdAt DateTime   @default(now())
+}
+
+// A block of curriculum within a unit (e.g. "Fractions", 4 days). Adding one
+// auto-fills that many consecutive day-rows in the week tables, continuing
+// sequentially from wherever the previous topic left off (the first topic
+// starts at Day 1 of the unit).
+model UnitTopic {
+  id             String     @id @default(cuid())
+  unitId         String
+  unit           PacingUnit @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  name           String
+  days           Int // how many instructional days this topic spans
+  learningTarget String?
+  standards      String?
+  support        String?
+  order          Int        @default(0)
+  createdAt      DateTime   @default(now())
+
+  unitDays PacingUnitDay[]
 }
 
 model PacingUnitDay {
   id               String     @id @default(cuid())
   pacingUnitId     String
   pacingUnit       PacingUnit @relation(fields: [pacingUnitId], references: [id], onDelete: Cascade)
+  // Sequential position within the unit (1-based). This, not the date, is
+  // the source of truth for ordering/topic auto-fill/day insertion - the
+  // date is (re)computed from it whenever the schedule changes.
+  dayNumber        Int        @default(0)
   date             DateTime
+  topicId          String?
+  unitTopic        UnitTopic? @relation(fields: [topicId], references: [id], onDelete: SetNull)
   topic            String?
   learningTarget   String?
   standards        String?
@@ -472,8 +549,15 @@ model PacingUnitDay {
   lessonActivities String?
   warmUp           String?
   materialsNeeded  String?
+  // "not_started" | "completed" | "half_completed". Marking a day
+  // half_completed auto-inserts an extra day right after it (see the
+  // pacing-units/days/[dayId]/status route) since the lesson spills over.
+  status           String     @default("not_started")
+  // true if this row was auto-inserted because a previous day was marked
+  // half_completed - lets the UI offer to remove it if it ends up unused.
+  isExtraDay       Boolean    @default(false)
 
-  @@unique([pacingUnitId, date])
+  @@unique([pacingUnitId, dayNumber])
 }
 
 model ParentContactLog {

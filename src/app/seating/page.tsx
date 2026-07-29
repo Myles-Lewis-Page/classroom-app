@@ -1,22 +1,35 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import Link from "next/link";
+import { useSectionContext, filterBySection } from "@/components/SectionContext";
 
 type Student = {
   id: string;
   firstName: string;
   lastName: string;
+  sectionId: string | null;
   seatingAssignment: { posX: number; posY: number } | null;
 };
 type Relationship = { studentId: string; relatedStudentId: string };
 type Seat = { id: string; row: number; col: number };
 
 export default function SeatingChartPage() {
+  const { activeSectionId } = useSectionContext();
   const [students, setStudents] = useState<Student[]>([]);
   const [conflicts, setConflicts] = useState<Relationship[]>([]);
   const [seats, setSeats] = useState<Seat[]>([]);
   const [selectedStudentId, setSelectedStudentId] = useState<string>("");
+
+  // The seat grid itself always shows every student regardless of section -
+  // seats are shared physical positions in the room, so filtering them out
+  // would make an occupied seat look empty. Only the "pick a student to
+  // place" list and "not yet seated" summary are section-scoped, so a
+  // teacher looking at one group only sees that group's students to place.
+  const visibleStudents = useMemo(
+    () => filterBySection(students, activeSectionId),
+    [students, activeSectionId]
+  );
 
   useEffect(() => {
     load();
@@ -98,7 +111,7 @@ export default function SeatingChartPage() {
     });
   }
 
-  const unplaced = students.filter((s) => !s.seatingAssignment);
+  const unplaced = visibleStudents.filter((s) => !s.seatingAssignment);
   const selectedStudent = students.find((s) => s.id === selectedStudentId);
 
   const maxRow = seats.reduce((m, s) => Math.max(m, s.row), 0);
@@ -131,7 +144,7 @@ export default function SeatingChartPage() {
               className="border rounded px-2 py-1"
             >
               <option value="">Choose student...</option>
-              {students.map((s) => (
+              {visibleStudents.map((s) => (
                 <option key={s.id} value={s.id}>
                   {s.lastName}, {s.firstName}
                   {s.seatingAssignment ? " (seated)" : ""}

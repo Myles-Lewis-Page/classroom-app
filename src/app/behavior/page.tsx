@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { calculateRating, ratingColor } from "@/lib/behaviorRating";
 import PieChart from "@/components/PieChart";
+import { useSectionContext, filterBySection } from "@/components/SectionContext";
 
-type Student = { id: string; firstName: string; lastName: string };
+type Student = { id: string; firstName: string; lastName: string; sectionId: string | null };
 type Subject = { id: string; name: string; icon: string | null; order: number };
 type Parent = { name: string; relationship: string; phone: string | null; email: string | null };
 type Flags = {
@@ -40,6 +41,7 @@ const emptyFlags: Flags = {
 };
 
 export default function BehaviorLogPage() {
+  const { activeSectionId } = useSectionContext();
   const [students, setStudents] = useState<Student[]>([]);
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [selectedStudent, setSelectedStudent] = useState<string>("");
@@ -56,6 +58,11 @@ export default function BehaviorLogPage() {
     loadSubjects();
     fetch("/api/classroom").then((r) => r.json()).then((c) => setClassroomId(c?.id ?? ""));
   }, []);
+
+  const visibleStudents = useMemo(
+    () => filterBySection(students, activeSectionId),
+    [students, activeSectionId]
+  );
 
   function loadSubjects() {
     fetch("/api/subjects").then((r) => r.json()).then(setSubjects);
@@ -204,7 +211,7 @@ export default function BehaviorLogPage() {
           className="border rounded px-2 py-1"
         >
           <option value="">Select student...</option>
-          {students.map((s) => (
+          {visibleStudents.map((s) => (
             <option key={s.id} value={s.id}>
               {s.lastName}, {s.firstName}
             </option>
@@ -317,7 +324,7 @@ export default function BehaviorLogPage() {
                 </tr>
               </thead>
               <tbody>
-                {students
+                {visibleStudents
                   .filter((s) => dayEntries.some((e) => e.studentId === s.id))
                   .map((s) => {
                     const studentEntries = dayEntries.filter((e) => e.studentId === s.id);

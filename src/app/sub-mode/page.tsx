@@ -1,11 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
+import { useSectionContext, filterBySection } from "@/components/SectionContext";
 
 type SubStudent = {
   id: string;
   firstName: string;
   lastName: string;
+  sectionId: string | null;
   allergies: { allergen: string; severity: string; reaction: string | null }[];
   dietaryRestrictions: { restriction: string }[];
   ieps: { subSafeSummary: string | null; accommodations: string }[];
@@ -15,8 +17,14 @@ type SubStudent = {
 type Subject = { id: string; name: string };
 
 export default function SubModePage() {
+  const { activeSectionId } = useSectionContext();
   const [students, setStudents] = useState<SubStudent[]>([]);
   const [subjects, setSubjects] = useState<Subject[]>([]);
+
+  const visibleStudents = useMemo(
+    () => filterBySection(students, activeSectionId),
+    [students, activeSectionId]
+  );
 
   useEffect(() => {
     fetch("/api/sub-mode")
@@ -55,7 +63,7 @@ export default function SubModePage() {
       <section>
         <h2 className="font-bold text-lg mb-2">Student Notes</h2>
         <div className="space-y-3">
-          {students.map((s) => {
+          {visibleStudents.map((s) => {
             const hasSafetyInfo = s.allergies.length > 0 || s.dietaryRestrictions.length > 0;
             const hasIep = s.ieps.length > 0;
             const hasNotes = s.observations.length > 0;

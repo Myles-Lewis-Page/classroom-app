@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
 import { getCurrentClassroomId } from "@/lib/classroomScope";
+import { parseDateOnly } from "@/lib/dateOnly";
+import { generateInstructionalDates, getHolidayRanges } from "@/lib/pacing";
 
 export async function GET() {
   const session = await auth();
@@ -12,29 +14,17 @@ export async function GET() {
 
   const units = await prisma.pacingUnit.findMany({
     where: { classroomId },
-    include: { days: { orderBy: { date: "asc" } } },
+    include: { days: { orderBy: { dayNumber: "asc" } } },
     orderBy: [{ order: "asc" }, { startDate: "asc" }],
   });
 
   return NextResponse.json(units);
 }
 
-function weekdaysBetween(start: Date, end: Date): Date[] {
-  const days: Date[] = [];
-  const cur = new Date(start);
-  cur.setHours(0, 0, 0, 0);
-  const last = new Date(end);
-  last.setHours(0, 0, 0, 0);
-  while (cur <= last) {
-    const dow = cur.getDay();
-    if (dow !== 0 && dow !== 6) days.push(new Date(cur));
-    cur.setDate(cur.getDate() + 1);
-  }
-  return days;
-}
-
 // POST { name, startDate, endDate, standards?, topics? }
-// Creates the unit and auto-generates one PacingUnitDay per weekday in range.
+// Creates the unit and auto-generates one PacingUnitDay per instructional
+// weekday in range (weekends and full days-off from the school calendar are
+// skipped).
 export async function POST(req: NextRequest) {
   const session = await auth();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -45,8 +35,8 @@ export async function POST(req: NextRequest) {
   }
 
   const body = await req.json();
-  const startDate = new Date(body.startDate);
-  const endDate = new Date(body.endDate);
+  const startDate = parseDateOnly(body.startDate);
+  const endDate = parseDateOnly(body.endDate);
   if (isNaN(startDate.getTime()) || isNaN(endDate.getTime()) || endDate < startDate) {
     return NextResponse.json({ error: "Valid start and end dates are required" }, { status: 400 });
   }
@@ -65,14 +55,24 @@ export async function POST(req: NextRequest) {
     },
   });
 
-  const days = weekdaysBetween(startDate, endDate);
+  // Rough day count from the requested range - this is just the initial
+  // generation; it can grow later (topics running long, half-completed
+  // days) via ensureDayCount/recomputeUnitDayDates.
+  const holidays = await getHolidayRanges(classroomId);
+  const roughDates = generateInstructionalDates(
+    startDate,
+    // upper bound on how many weekdays could possibly fit in the range
+    Math.ceil((endDate.getTime() - startDate.getTime()) / 86400000) + 1,
+    holidays
+  ).filter((d) => d <= endDate);
+
   await prisma.pacingUnitDay.createMany({
-    data: days.map((d) => ({ pacingUnitId: unit.id, date: d })),
+    data: roughDates.map((d, i) => ({ pacingUnitId: unit.id, dayNumber: i + 1, date: d })),
   });
 
   const withDays = await prisma.pacingUnit.findUnique({
     where: { id: unit.id },
-    include: { days: { orderBy: { date: "asc" } } },
+    include: { days: { orderBy: { dayNumber: "asc" } } },
   });
 
   return NextResponse.json(withDays, { status: 201 });

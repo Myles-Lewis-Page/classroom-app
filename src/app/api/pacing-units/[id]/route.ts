@@ -2,22 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
 import { getCurrentClassroomId } from "@/lib/classroomScope";
+import { parseDateOnly } from "@/lib/dateOnly";
+import { generateInstructionalDates, getHolidayRanges } from "@/lib/pacing";
 
-function weekdaysBetween(start: Date, end: Date): Date[] {
-  const days: Date[] = [];
-  const cur = new Date(start);
-  cur.setHours(0, 0, 0, 0);
-  const last = new Date(end);
-  last.setHours(0, 0, 0, 0);
-  while (cur <= last) {
-    const dow = cur.getDay();
-    if (dow !== 0 && dow !== 6) days.push(new Date(cur));
-    cur.setDate(cur.getDate() + 1);
-  }
-  return days;
-}
-
-// GET - single unit with its day rows
+// GET - single unit with its day rows, topics, and summatives
 export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -29,7 +17,11 @@ export async function GET(
   const classroomId = await getCurrentClassroomId();
   const unit = await prisma.pacingUnit.findUnique({
     where: { id },
-    include: { days: { orderBy: { date: "asc" } } },
+    include: {
+      days: { orderBy: { dayNumber: "asc" } },
+      unitSummatives: { orderBy: { date: "asc" } },
+      unitTopics: { orderBy: { order: "asc" } },
+    },
   });
   if (!classroomId || !unit || unit.classroomId !== classroomId) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
@@ -38,11 +30,12 @@ export async function GET(
   return NextResponse.json(unit);
 }
 
-// PATCH { name?, startDate?, endDate?, standards?, topics?, summatives?, datesToRemember? }
+// PATCH { name?, startDate?, endDate?, standards?, topics? }
 // If startDate/endDate change, day rows are regenerated to match the new
 // range (existing lesson plan details for days outside the new range are
-// lost - this is a deliberate simplification, the teacher just re-fills any
-// days that shift).
+// lost) - the teacher just re-fills any days that shift. Topics get
+// reapplied to the freshly generated days afterward so their auto-fill
+// isn't lost.
 export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -62,50 +55,62 @@ export async function PATCH(
     name?: string;
     standards?: string | null;
     topics?: string | null;
-    summatives?: string | null;
-    datesToRemember?: string | null;
     startDate?: Date;
     endDate?: Date;
   } = {};
   if (body.name !== undefined) data.name = body.name;
   if (body.standards !== undefined) data.standards = body.standards || null;
   if (body.topics !== undefined) data.topics = body.topics || null;
-  if (body.summatives !== undefined) data.summatives = body.summatives || null;
-  if (body.datesToRemember !== undefined) data.datesToRemember = body.datesToRemember || null;
 
   let datesChanged = false;
   let newStart = unit.startDate;
   let newEnd = unit.endDate;
   if (body.startDate !== undefined) {
-    newStart = new Date(body.startDate);
+    newStart = parseDateOnly(body.startDate);
     data.startDate = newStart;
     datesChanged = true;
   }
   if (body.endDate !== undefined) {
-    newEnd = new Date(body.endDate);
+    newEnd = parseDateOnly(body.endDate);
     data.endDate = newEnd;
     datesChanged = true;
   }
 
-  const updated = await prisma.pacingUnit.update({ where: { id }, data });
+  await prisma.pacingUnit.update({ where: { id }, data });
 
   if (datesChanged) {
     await prisma.pacingUnitDay.deleteMany({ where: { pacingUnitId: id } });
-    const days = weekdaysBetween(newStart, newEnd);
+    const holidays = await getHolidayRanges(classroomId);
+    const roughDates = generateInstructionalDates(
+      newStart,
+      Math.ceil((newEnd.getTime() - newStart.getTime()) / 86400000) + 1,
+      holidays
+    ).filter((d) => d <= newEnd);
     await prisma.pacingUnitDay.createMany({
-      data: days.map((d) => ({ pacingUnitId: id, date: d })),
+      data: roughDates.map((d, i) => ({ pacingUnitId: id, dayNumber: i + 1, date: d })),
     });
+
+    // Re-apply any existing topics' auto-fill onto the fresh day rows.
+    const topics = await prisma.unitTopic.findMany({ where: { unitId: id }, orderBy: { order: "asc" } });
+    const { applyTopicToDays } = await import("@/lib/pacing");
+    for (const t of topics) {
+      await applyTopicToDays(id, t.id);
+    }
   }
 
   const withDays = await prisma.pacingUnit.findUnique({
     where: { id },
-    include: { days: { orderBy: { date: "asc" } } },
+    include: {
+      days: { orderBy: { dayNumber: "asc" } },
+      unitSummatives: { orderBy: { date: "asc" } },
+      unitTopics: { orderBy: { order: "asc" } },
+    },
   });
 
   return NextResponse.json(withDays);
 }
 
-// DELETE - removes the unit entirely (cascades to its day rows)
+// DELETE - removes the unit entirely (cascades to its day rows, topics, summatives)
 export async function DELETE(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }

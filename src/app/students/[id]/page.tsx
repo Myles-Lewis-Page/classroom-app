@@ -18,6 +18,7 @@ type StudentDetail = {
   lastName: string;
   grade: string;
   section: string | null;
+  sectionId: string | null;
   dob: string | null;
   understandingLevel: number | null;
   tags: { tag: { id: string; name: string } }[];
@@ -176,6 +177,7 @@ export default function StudentProfilePage({ params }: { params: Promise<{ id: s
                 lastName: student.lastName,
                 grade: student.grade,
                 section: student.section,
+                sectionId: student.sectionId,
                 dob: student.dob,
                 understandingLevel: student.understandingLevel,
               }}

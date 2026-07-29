@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import Link from "next/link";
+import { useSectionContext, filterBySection } from "@/components/SectionContext";
 
-type Student = { id: string; firstName: string; lastName: string };
+type Student = { id: string; firstName: string; lastName: string; sectionId: string | null };
 type SkillSubject = { id: string; name: string };
 type GradeCategory = { id: string; name: string; weight: number };
 type Entry = {
@@ -24,6 +25,7 @@ type Assignment = {
 };
 
 export default function GradebookPage() {
+  const { activeSectionId } = useSectionContext();
   const [students, setStudents] = useState<Student[]>([]);
   const [subjects, setSubjects] = useState<SkillSubject[]>([]);
   const [categories, setCategories] = useState<GradeCategory[]>([]);
@@ -33,6 +35,11 @@ export default function GradebookPage() {
   const [weightInputs, setWeightInputs] = useState<Record<string, string>>({});
   const [newCategoryName, setNewCategoryName] = useState("");
   const [newCategoryWeight, setNewCategoryWeight] = useState("0");
+
+  const visibleStudents = useMemo(
+    () => filterBySection(students, activeSectionId),
+    [students, activeSectionId]
+  );
 
   useEffect(() => {
     fetch("/api/students").then((r) => r.json()).then(setStudents);
@@ -267,7 +274,7 @@ export default function GradebookPage() {
             </tr>
           </thead>
           <tbody>
-            {students.map((student) => {
+            {visibleStudents.map((student) => {
               const avg = studentWeightedAverage(student.id);
               return (
                 <tr key={student.id}>

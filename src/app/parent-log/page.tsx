@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import ParentContactRotationWidget from "@/components/ParentContactRotationWidget";
+import { useSectionContext, filterBySection } from "@/components/SectionContext";
 
-type Student = { id: string; firstName: string; lastName: string };
+type Student = { id: string; firstName: string; lastName: string; sectionId: string | null };
 type ContactLog = {
   id: string;
   date: string;
@@ -35,6 +36,7 @@ const METHOD_LABEL: Record<string, string> = Object.fromEntries(
 );
 
 export default function ParentLogPage() {
+  const { activeSectionId } = useSectionContext();
   const [students, setStudents] = useState<Student[]>([]);
   const [logs, setLogs] = useState<ContactLog[]>([]);
   const [filterStudentId, setFilterStudentId] = useState("");
@@ -48,6 +50,11 @@ export default function ParentLogPage() {
   const [newFollowUp, setNewFollowUp] = useState(false);
   const [saving, setSaving] = useState(false);
   const [showFollowUpOnly, setShowFollowUpOnly] = useState(false);
+
+  const visibleStudents = useMemo(
+    () => filterBySection(students, activeSectionId),
+    [students, activeSectionId]
+  );
 
   useEffect(() => {
     fetch("/api/students").then((r) => r.json()).then(setStudents);
@@ -132,7 +139,7 @@ export default function ParentLogPage() {
                   className="border rounded px-2 py-1 w-full"
                 >
                   <option value="">Select...</option>
-                  {students.map((s) => (
+                  {visibleStudents.map((s) => (
                     <option key={s.id} value={s.id}>
                       {s.lastName}, {s.firstName}
                     </option>
@@ -219,7 +226,7 @@ export default function ParentLogPage() {
             className="border rounded px-2 py-1 text-sm"
           >
             <option value="">All students</option>
-            {students.map((s) => (
+            {visibleStudents.map((s) => (
               <option key={s.id} value={s.id}>
                 {s.lastName}, {s.firstName}
               </option>
