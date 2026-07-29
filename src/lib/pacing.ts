@@ -11,9 +11,14 @@
 import { prisma } from "@/lib/prisma";
 import { addUtcDays, isWeekend } from "@/lib/dateOnly";
 
+// Date ranges that are NOT instructional days at all - full holidays and
+// teacher work days (school is in session for staff, but not students).
+// Both are skipped entirely when generating a unit's day sequence, exactly
+// like a weekend. Half days are deliberately NOT included here - they're
+// still instructional, just flagged in the UI.
 export async function getHolidayRanges(classroomId: string) {
   const events = await prisma.calendarEvent.findMany({
-    where: { classroomId, type: "holiday" },
+    where: { classroomId, type: { in: ["holiday", "teacher_work_day"] } },
   });
   return events.map((e) => ({ startDate: e.startDate, endDate: e.endDate }));
 }

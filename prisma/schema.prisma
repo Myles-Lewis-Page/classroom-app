@@ -38,6 +38,12 @@ model Classroom {
   isArchived Boolean   @default(false)
   createdAt  DateTime  @default(now())
 
+  // The school year's overall bounds - set once, then holidays/teacher work
+  // days/half days get layered on top. Any weekday in between that isn't
+  // otherwise flagged is implicitly a regular student day.
+  firstDayOfSchool DateTime?
+  lastDayOfSchool  DateTime?
+
   // Canvas bounds for the Seating Layout editor (how big a grid the teacher
   // can place seats within) - not the seat count itself, that's SeatSlot.
   seatingRows Int @default(8)
@@ -75,11 +81,15 @@ model Section {
   @@unique([classroomId, name])
 }
 
-// School-year-wide calendar entries: full days off (no school), half days,
-// and general "dates to remember" (field trips, picture day, etc). Feeds
-// the Pacing Guide's "Dates to Remember" (auto-pulled for whatever falls
-// inside a unit's date range) and grays out non-instructional days in the
-// unit's week-by-week lesson tables.
+// School-year-wide calendar entries layered on top of the classroom's
+// firstDayOfSchool/lastDayOfSchool bounds: full days off (no school for
+// anyone), teacher work days (school for staff, but not students - also
+// excluded from the Pacing Guide's instructional day count, same as a
+// holiday), half days, and general "dates to remember" (field trips,
+// picture day, etc - doesn't affect pacing at all). Feeds the Pacing
+// Guide's "Dates to Remember" (auto-pulled for whatever falls inside a
+// unit's date range) and grays out non-instructional days in the unit's
+// week-by-week lesson tables.
 model CalendarEvent {
   id          String    @id @default(cuid())
   classroomId String
@@ -87,7 +97,7 @@ model CalendarEvent {
   name        String
   startDate   DateTime
   endDate     DateTime
-  type        String    // "holiday" (no school) | "half_day" | "other" (reminder only, doesn't affect pacing)
+  type        String    // "holiday" | "teacher_work_day" | "half_day" | "other"
   createdAt   DateTime  @default(now())
 }
 

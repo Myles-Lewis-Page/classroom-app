@@ -288,7 +288,7 @@ const STATUS_COLOR: Record<DayStatus, string> = {
 
 type Row =
   | { kind: "day"; date: Date; day: Day; halfDayLabel: string | null }
-  | { kind: "off"; date: Date; label: string };
+  | { kind: "off"; date: Date; label: string; eventType: string };
 
 export default function UnitDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -369,7 +369,10 @@ export default function UnitDetailPage({ params }: { params: Promise<{ id: strin
     load();
   }
 
-  const holidayEvents = useMemo(() => calendarEvents.filter((e) => e.type === "holiday"), [calendarEvents]);
+  const holidayEvents = useMemo(
+    () => calendarEvents.filter((e) => e.type === "holiday" || e.type === "teacher_work_day"),
+    [calendarEvents]
+  );
   const halfDayEvents = useMemo(() => calendarEvents.filter((e) => e.type === "half_day"), [calendarEvents]);
 
   const rows: Row[] = useMemo(() => {
@@ -393,7 +396,7 @@ export default function UnitDetailPage({ params }: { params: Promise<{ id: strin
           const off = holidayEvents.find(
             (h) => cursor >= parseDateOnly(h.startDate) && cursor <= parseDateOnly(h.endDate)
           );
-          if (off) out.push({ kind: "off", date: new Date(cursor), label: off.name });
+          if (off) out.push({ kind: "off", date: new Date(cursor), label: off.name, eventType: off.type });
         }
       }
       cursor = addUtcDays(cursor, 1);
@@ -536,6 +539,9 @@ export default function UnitDetailPage({ params }: { params: Promise<{ id: strin
                       ` - ${formatShortDate(e.endDate)}`}
                     : {e.name}
                     {e.type === "holiday" && <span className="text-xs text-slate-400"> (day off)</span>}
+                    {e.type === "teacher_work_day" && (
+                      <span className="text-xs text-slate-400"> (teacher work day)</span>
+                    )}
                     {e.type === "half_day" && <span className="text-xs text-slate-400"> (half day)</span>}
                   </li>
                 ))}
@@ -616,7 +622,7 @@ export default function UnitDetailPage({ params }: { params: Promise<{ id: strin
                       {formatShortWeekday(row.date)}
                     </td>
                     <td className="border p-1 text-slate-500 italic" colSpan={8}>
-                      {row.label} (no school)
+                      {row.label} {row.eventType === "teacher_work_day" ? "(no students)" : "(no school)"}
                     </td>
                   </tr>
                 ) : (

@@ -23,7 +23,7 @@ export async function DELETE(
 
   await prisma.calendarEvent.delete({ where: { id } });
 
-  if (event.type === "holiday") {
+  if (event.type === "holiday" || event.type === "teacher_work_day") {
     const units = await prisma.pacingUnit.findMany({ where: { classroomId }, select: { id: true } });
     for (const u of units) {
       await recomputeUnitDayDates(u.id);

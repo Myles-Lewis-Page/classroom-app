@@ -22,7 +22,7 @@ export async function GET() {
   return NextResponse.json(events);
 }
 
-// POST { name, startDate, endDate?, type } - type is "holiday" | "half_day" | "other"
+// POST { name, startDate, endDate?, type } - type is "holiday" | "teacher_work_day" | "half_day" | "other"
 export async function POST(req: NextRequest) {
   const session = await auth();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -34,7 +34,8 @@ export async function POST(req: NextRequest) {
 
   const body = await req.json();
   const name = (body.name ?? "").trim();
-  const type = ["holiday", "half_day", "other"].includes(body.type) ? body.type : "other";
+  const validTypes = ["holiday", "teacher_work_day", "half_day", "other"];
+  const type = validTypes.includes(body.type) ? body.type : "other";
   if (!name || !body.startDate) {
     return NextResponse.json({ error: "name and startDate are required" }, { status: 400 });
   }
@@ -46,7 +47,7 @@ export async function POST(req: NextRequest) {
     data: { classroomId, name, startDate, endDate, type },
   });
 
-  if (type === "holiday") {
+  if (type === "holiday" || type === "teacher_work_day") {
     const units = await prisma.pacingUnit.findMany({ where: { classroomId }, select: { id: true } });
     for (const u of units) {
       await recomputeUnitDayDates(u.id);
