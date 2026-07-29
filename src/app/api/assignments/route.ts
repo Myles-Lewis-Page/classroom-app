@@ -16,7 +16,7 @@ export async function GET(req: NextRequest) {
   const assignments = await prisma.assignment.findMany({
     where: { classroomId, ...(subjectId ? { skillSubjectId: subjectId } : {}) },
     include: {
-      entries: true,
+      entries: { include: { student: true } },
       skillSubject: true,
       gradeCategory: true,
     },
