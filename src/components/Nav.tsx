@@ -10,6 +10,7 @@ const links = [
   { href: "/behavior", label: "Behavior Log" },
   { href: "/homework", label: "Homework" },
   { href: "/gradebook", label: "Gradebook" },
+  { href: "/pacing-guide", label: "Pacing Guide" },
   { href: "/groups", label: "Group Builder" },
   { href: "/seating", label: "Seating Chart" },
   { href: "/events", label: "Events" },

@@ -51,6 +51,7 @@ model Classroom {
   seatSlots      SeatSlot[]
   supportTypes   SupportType[]
   gradeCategories GradeCategory[]
+  pacingUnits     PacingUnit[]
   activeForTeachers Teacher[] @relation("ActiveClassroom")
 }
 
@@ -434,6 +435,44 @@ model StudentSkillStatus {
 // ---------- PARENT CONTACT LOG ----------
 // Tracks every time the teacher contacts a parent: why (behavior concern,
 // skill update, positive note, or something else), a comment, and the date.
+
+// ---------- PACING GUIDE (curriculum units) ----------
+// A Unit is a chunk of curriculum with a date range (e.g. "Unit 1 - Ancient
+// Middle Ages", 8/10-9/11). Creating/resizing a unit auto-generates a
+// PacingUnitDay row for every weekday in that range, which the teacher can
+// fill in with daily lesson plan details. Units can be freely added or
+// removed ("add or subtract units").
+
+model PacingUnit {
+  id          String    @id @default(cuid())
+  classroomId String
+  classroom   Classroom @relation(fields: [classroomId], references: [id], onDelete: Cascade)
+  name        String
+  order       Int       @default(0)
+  startDate   DateTime
+  endDate     DateTime
+  standards   String? // free text, e.g. "6.1A, 6.2B, 6.3C"
+  topics      String? // free text, one per line
+  createdAt   DateTime  @default(now())
+
+  days PacingUnitDay[]
+}
+
+model PacingUnitDay {
+  id               String     @id @default(cuid())
+  pacingUnitId     String
+  pacingUnit       PacingUnit @relation(fields: [pacingUnitId], references: [id], onDelete: Cascade)
+  date             DateTime
+  topic            String?
+  learningTarget   String?
+  standards        String?
+  supports         String?
+  lessonActivities String?
+  warmUp           String?
+  materialsNeeded  String?
+
+  @@unique([pacingUnitId, date])
+}
 
 model ParentContactLog {
   id        String   @id @default(cuid())
