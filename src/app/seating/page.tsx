@@ -153,7 +153,16 @@ export default function SeatingChartPage() {
           <div className="space-y-1 overflow-x-auto">
             {Array.from({ length: maxRow + 1 }).map((_, row) => {
               const rowSeats = seats.filter((s) => s.row === row).sort((a, b) => a.col - b.col);
-              if (rowSeats.length === 0) return null;
+              if (rowSeats.length === 0) {
+                // Fully empty row - this is a walkway between rows of desks
+                // (e.g. between two rows of pods). Render a visible
+                // horizontal divider instead of just collapsing the gap.
+                return (
+                  <div key={row} className="h-4 flex items-center">
+                    <div className="w-full h-0.5 bg-violet-200" />
+                  </div>
+                );
+              }
               return (
                 <div key={row} className="flex gap-1">
                   {Array.from({ length: maxCol + 1 }).map((_, col) => {
