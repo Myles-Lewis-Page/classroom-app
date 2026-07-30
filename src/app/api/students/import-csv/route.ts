@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
 import { getCurrentClassroomId } from "@/lib/classroomScope";
+import { backfillHomeworkEntriesForStudent } from "@/lib/homeworkBackfill";
 import Papa from "papaparse";
 
 // POST { csvText }
@@ -50,6 +51,11 @@ export async function POST(req: NextRequest) {
       })
     )
   );
+
+  // CSV import has no Period column, so every imported student is
+  // classroom-wide (sectionId null) - they only backfill onto assignments
+  // that aren't restricted to a specific Period.
+  await Promise.all(created.map((s) => backfillHomeworkEntriesForStudent(s.id, classroomId, null)));
 
   return NextResponse.json({ imported: created.length });
 }

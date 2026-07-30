@@ -11,7 +11,7 @@ export type GradableAssignment = {
 };
 
 export type GradableEntry = {
-  status: string; // "missing" | "handed_in"
+  status: string; // "missing" | "handed_in" | "exempt"
   submittedAt: string | Date | null;
   gradeStatus: string | null; // "complete" | "incomplete"
   gradeScore: number | null;
@@ -33,8 +33,9 @@ export function daysLate(assignment: GradableAssignment, entry: GradableEntry): 
   return Math.round((submitted.getTime() - due.getTime()) / 86400000);
 }
 
-/** The raw grade percent (0-100) before any late penalty, or null if ungraded. */
+/** The raw grade percent (0-100) before any late penalty, or null if ungraded (or exempt - never counted). */
 export function rawGradePercent(assignment: GradableAssignment, entry: GradableEntry): number | null {
+  if (entry.status === "exempt") return null;
   if (assignment.gradingType === "points") {
     if (entry.gradeScore === null || !assignment.maxPoints) return null;
     return (entry.gradeScore / assignment.maxPoints) * 100;

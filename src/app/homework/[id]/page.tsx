@@ -25,8 +25,8 @@ type AssignmentDetail = {
   entries: Entry[];
 };
 
-const SUBMIT_LABEL: Record<string, string> = { missing: "Missing", handed_in: "Handed In" };
-const SUBMIT_COLOR: Record<string, string> = { missing: "#e0e7ff", handed_in: "#bae6fd" };
+const SUBMIT_LABEL: Record<string, string> = { missing: "Missing", handed_in: "Handed In", exempt: "Exempt" };
+const SUBMIT_COLOR: Record<string, string> = { missing: "#e0e7ff", handed_in: "#bae6fd", exempt: "#e2e8f0" };
 
 export default function AssignmentDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -265,8 +265,9 @@ export default function AssignmentDetailPage({ params }: { params: Promise<{ id:
                     max={assignment.maxPoints ?? undefined}
                     value={e.gradeScore ?? ""}
                     onChange={(ev) => setGradeScore(e.student.id, ev.target.value)}
-                    placeholder={`/ ${assignment.maxPoints}`}
-                    className="w-20 px-2 py-1 rounded text-sm border"
+                    placeholder={e.status === "exempt" ? "Exempt" : `/ ${assignment.maxPoints}`}
+                    disabled={e.status === "exempt"}
+                    className="w-20 px-2 py-1 rounded text-sm border disabled:opacity-50 disabled:bg-slate-100"
                   />
                   {late && assignment.latePenaltyPercentPerDay && e.gradeScore !== null && (
                     <span className="text-xs text-amber-600">
@@ -279,7 +280,8 @@ export default function AssignmentDetailPage({ params }: { params: Promise<{ id:
                   <select
                     value={e.gradeStatus ?? ""}
                     onChange={(ev) => setGradeStatus(e.student.id, ev.target.value)}
-                    className="px-2 py-1 rounded text-sm border"
+                    disabled={e.status === "exempt"}
+                    className="px-2 py-1 rounded text-sm border disabled:opacity-50 disabled:bg-slate-100"
                     style={{
                       backgroundColor:
                         e.gradeStatus === "complete"

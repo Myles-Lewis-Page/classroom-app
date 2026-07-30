@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
 import { getCurrentClassroomId } from "@/lib/classroomScope";
+import { backfillHomeworkEntriesForStudent } from "@/lib/homeworkBackfill";
 
 // POST full student payload:
 // {
@@ -121,6 +122,8 @@ export async function POST(req: NextRequest) {
         : undefined,
     },
   });
+
+  await backfillHomeworkEntriesForStudent(student.id, classroomId, sectionId);
 
   return NextResponse.json(student, { status: 201 });
 }

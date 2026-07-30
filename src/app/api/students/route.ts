@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
 import { getCurrentClassroomId } from "@/lib/classroomScope";
+import { backfillHomeworkEntriesForStudent } from "@/lib/homeworkBackfill";
 
 export async function GET() {
   const session = await auth();
@@ -39,6 +40,7 @@ export async function POST(req: NextRequest) {
   const student = await prisma.student.create({
     data: {
       classroomId,
+      sectionId: body.sectionId || null,
       firstName: body.firstName,
       lastName: body.lastName,
       grade: body.grade,
@@ -47,6 +49,8 @@ export async function POST(req: NextRequest) {
       understandingLevel: body.understandingLevel ?? null,
     },
   });
+
+  await backfillHomeworkEntriesForStudent(student.id, classroomId, student.sectionId);
 
   return NextResponse.json(student, { status: 201 });
 }

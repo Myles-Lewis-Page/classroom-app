@@ -5,6 +5,8 @@ import Link from "next/link";
 import { UNIT_COLORS } from "@/lib/unitColors";
 import { formatShortDate, toDateInputValue } from "@/lib/dateOnly";
 
+type UnitTopicOpt = { id: string; name: string };
+type PeriodModifiedDate = { sectionId: string; sectionName: string; date: string };
 type Unit = {
   id: string;
   name: string;
@@ -12,6 +14,8 @@ type Unit = {
   endDate: string;
   standards: string | null;
   topics: string | null;
+  unitTopics: UnitTopicOpt[];
+  periodModifiedDates: PeriodModifiedDate[];
   days: { id: string; date: string; dayNumber: number }[];
 };
 
@@ -101,30 +105,6 @@ export default function PacingGuidePage() {
         </button>
       </div>
 
-      {units.length > 0 && (
-        <div className="panel mb-6">
-          <p className="text-sm font-semibold mb-2">Year at a Glance</p>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-            {units.map((u, i) => (
-              <Link
-                key={u.id}
-                href={`/pacing-guide/${u.id}`}
-                className="px-3 py-2 rounded text-xs text-left hover:brightness-95 transition"
-                style={{ backgroundColor: UNIT_COLORS[i % UNIT_COLORS.length] }}
-              >
-                <span className="font-semibold block">{u.name}</span>
-                {formatShortDate(u.startDate)} -{" "}
-                {toDateInputValue(actualEndDate(u)) !== toDateInputValue(u.endDate) ? (
-                  <span className="text-rose-600 font-medium">{formatShortDate(actualEndDate(u))}</span>
-                ) : (
-                  formatShortDate(u.endDate)
-                )}
-              </Link>
-            ))}
-          </div>
-        </div>
-      )}
-
       {!showAddUnit ? (
         <button onClick={() => setShowAddUnit(true)} className="btn-primary mb-6">
           + Add Unit
@@ -184,54 +164,99 @@ export default function PacingGuidePage() {
         </div>
       )}
 
-      <div className="space-y-3">
+      <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {units.map((unit, i) => {
           const isEditing = editingId === unit.id;
+          const color = UNIT_COLORS[i % UNIT_COLORS.length];
+          const standardsList = (unit.standards ?? "")
+            .split(/[,\n]/)
+            .map((s) => s.trim())
+            .filter(Boolean);
           return (
-            <div key={unit.id} className="card">
-              <div className="flex justify-between items-start">
-                <Link href={`/pacing-guide/${unit.id}`} className="flex items-center gap-2 flex-1">
-                  <span
-                    className="w-3 h-3 rounded-full inline-block shrink-0"
-                    style={{ backgroundColor: UNIT_COLORS[i % UNIT_COLORS.length] }}
-                  />
-                  <div>
+            <div key={unit.id} className="rounded-lg border overflow-hidden flex flex-col">
+              <div className="p-3" style={{ backgroundColor: color }}>
+                <div className="flex justify-between items-start gap-2">
+                  <Link href={`/pacing-guide/${unit.id}`} className="flex-1">
                     <h3 className="font-bold hover:underline">{unit.name}</h3>
-                    <p className="text-sm text-slate-500">
+                    <p className="text-sm text-slate-700">
                       {formatShortDate(unit.startDate)} -{" "}
                       {toDateInputValue(actualEndDate(unit)) !== toDateInputValue(unit.endDate) ? (
-                        <span className="text-rose-600 font-medium">
-                          {formatShortDate(actualEndDate(unit))}
-                        </span>
+                        <span className="text-rose-700 font-medium">{formatShortDate(actualEndDate(unit))}</span>
                       ) : (
                         formatShortDate(unit.endDate)
                       )}{" "}
                       · {unit.days.length} days
                     </p>
+                  </Link>
+                  <div className="flex gap-2 shrink-0">
+                    <button onClick={() => setEditingId(isEditing ? "" : unit.id)} className="btn-outline text-xs bg-white">
+                      Edit
+                    </button>
+                    <button
+                      onClick={() => removeUnit(unit.id, unit.name)}
+                      className="text-rose-700 text-xs hover:underline bg-white px-2 py-1 rounded"
+                    >
+                      Remove
+                    </button>
                   </div>
-                </Link>
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => setEditingId(isEditing ? "" : unit.id)}
-                    className="btn-outline text-xs"
-                  >
-                    Edit
-                  </button>
-                  <button
-                    onClick={() => removeUnit(unit.id, unit.name)}
-                    className="text-rose-600 text-xs hover:underline"
-                  >
-                    Remove Unit
-                  </button>
                 </div>
+                {unit.periodModifiedDates.length > 0 && (
+                  <div className="mt-2 flex flex-wrap gap-1">
+                    {unit.periodModifiedDates.map((p) => (
+                      <span
+                        key={p.sectionId}
+                        className="text-[11px] bg-white/70 rounded px-2 py-0.5 font-medium text-slate-700"
+                        title={`${p.sectionName} needed extra time and now actually ends on this date`}
+                      >
+                        {p.sectionName}: ends {formatShortDate(p.date)}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="p-3 bg-white flex-1 space-y-3">
+                {standardsList.length > 0 && (
+                  <div>
+                    <p className="text-xs font-semibold text-slate-500 mb-1">Standards</p>
+                    <div className="flex flex-wrap gap-1">
+                      {standardsList.map((s, si) => (
+                        <span key={si} className="text-[11px] bg-slate-100 rounded px-2 py-0.5">
+                          {s}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {unit.unitTopics.length > 0 && (
+                  <div>
+                    <p className="text-xs font-semibold text-slate-500 mb-1">Topics</p>
+                    <div className="flex flex-wrap gap-1">
+                      {unit.unitTopics.map((t, ti) => (
+                        <span
+                          key={t.id}
+                          className="text-[11px] rounded px-2 py-0.5"
+                          style={{ backgroundColor: UNIT_COLORS[ti % UNIT_COLORS.length] }}
+                        >
+                          {t.name}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {standardsList.length === 0 && unit.unitTopics.length === 0 && (
+                  <p className="text-xs text-slate-400">No standards or topics added yet.</p>
+                )}
               </div>
 
               {isEditing && (
-                <UnitEditForm
-                  unit={unit}
-                  error={editErrors[unit.id]}
-                  onSave={(updates) => saveUnitEdits(unit, updates)}
-                />
+                <div className="p-3 border-t">
+                  <UnitEditForm
+                    unit={unit}
+                    error={editErrors[unit.id]}
+                    onSave={(updates) => saveUnitEdits(unit, updates)}
+                  />
+                </div>
               )}
             </div>
           );

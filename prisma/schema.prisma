@@ -155,6 +155,7 @@ model Section {
   assignments    Assignment[] @relation("AssignmentSections")
   scheduleBlocks ScheduleBlock[]
   pacingDayStatuses PacingUnitDayPeriod[]
+  pacingOffsets PeriodPacingOffset[]
 
   @@unique([classroomId, name])
 }
@@ -643,6 +644,7 @@ model PacingUnit {
   unitSummatives UnitSummative[]
   unitTopics     UnitTopic[]
   assignments    Assignment[]
+  periodOffsets  PeriodPacingOffset[]
 }
 
 // A single summative assessment tied to a unit - Title + Date, added/removed
@@ -723,6 +725,24 @@ model PacingUnitDayPeriod {
   updatedAt        DateTime      @updatedAt
 
   @@unique([pacingUnitDayId, sectionId])
+}
+
+// How many extra instructional days a given Period needs beyond the shared
+// unit schedule - incremented when that Period (not the whole class) marks
+// a day half_completed, mirroring the shared half_completed → extra-day
+// behavior but scoped to just that Period instead of inserting a real day
+// into the shared PacingUnitDay sequence every other Period would also see.
+// Used to compute that Period's own "actually ends" date on the unit list.
+model PeriodPacingOffset {
+  id           String     @id @default(cuid())
+  pacingUnitId String
+  pacingUnit   PacingUnit @relation(fields: [pacingUnitId], references: [id], onDelete: Cascade)
+  sectionId    String
+  section      Section    @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+  extraDays    Int        @default(0)
+  updatedAt    DateTime   @updatedAt
+
+  @@unique([pacingUnitId, sectionId])
 }
 
 model ParentContactLog {

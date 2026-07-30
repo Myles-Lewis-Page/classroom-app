@@ -474,11 +474,57 @@ export async function setDayStatusForSection(
   sectionId: string,
   status: "not_started" | "completed" | "half_completed"
 ) {
-  return prisma.pacingUnitDayPeriod.upsert({
+  const existing = await prisma.pacingUnitDayPeriod.findUnique({
+    where: { pacingUnitDayId_sectionId: { pacingUnitDayId: dayId, sectionId } },
+  });
+  const wasHalfCompleted = existing?.status === "half_completed";
+
+  const updated = await prisma.pacingUnitDayPeriod.upsert({
     where: { pacingUnitDayId_sectionId: { pacingUnitDayId: dayId, sectionId } },
     update: { status },
     create: { pacingUnitDayId: dayId, sectionId, status },
   });
+
+  // Marking half_completed means this Period's lesson spilled over and it
+  // now needs one more day than the shared schedule - same reason the
+  // shared version inserts a real extra day, but here it can't touch the
+  // shared PacingUnitDay sequence (every other Period would see it too), so
+  // it's tracked as a per-Period offset instead.
+  if (status === "half_completed" && !wasHalfCompleted) {
+    const day = await prisma.pacingUnitDay.findUnique({ where: { id: dayId } });
+    if (day) {
+      await prisma.periodPacingOffset.upsert({
+        where: { pacingUnitId_sectionId: { pacingUnitId: day.pacingUnitId, sectionId } },
+        update: { extraDays: { increment: 1 } },
+        create: { pacingUnitId: day.pacingUnitId, sectionId, extraDays: 1 },
+      });
+    }
+  }
+
+  return updated;
+}
+
+/**
+ * A given Period's own "actually ends" date for a unit, accounting for any
+ * extra days it alone has needed beyond the shared schedule (see
+ * setDayStatusForSection) - null if that Period has no extra days, meaning
+ * it's still exactly on the shared schedule.
+ */
+export async function getPeriodModifiedEndDate(
+  unitId: string,
+  sectionId: string,
+  classroomId: string
+): Promise<Date | null> {
+  const offset = await prisma.periodPacingOffset.findUnique({
+    where: { pacingUnitId_sectionId: { pacingUnitId: unitId, sectionId } },
+  });
+  if (!offset || offset.extraDays === 0) return null;
+
+  const sharedLastDate = await getUnitLastDayDate(unitId);
+  if (!sharedLastDate) return null;
+
+  const holidays = await getHolidayRanges(classroomId);
+  return addInstructionalDays(sharedLastDate, offset.extraDays, holidays);
 }
 
 

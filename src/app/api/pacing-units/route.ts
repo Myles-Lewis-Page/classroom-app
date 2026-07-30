@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
 import { getCurrentClassroomId } from "@/lib/classroomScope";
 import { parseDateOnly, formatShortDate } from "@/lib/dateOnly";
-import { generateInstructionalDates, getHolidayRanges, findOverlappingUnit } from "@/lib/pacing";
+import { generateInstructionalDates, getHolidayRanges, findOverlappingUnit, getPeriodModifiedEndDate } from "@/lib/pacing";
 
 export async function GET() {
   const session = await auth();
@@ -14,11 +14,31 @@ export async function GET() {
 
   const units = await prisma.pacingUnit.findMany({
     where: { classroomId },
-    include: { days: { orderBy: { dayNumber: "asc" } }, unitTopics: { orderBy: { order: "asc" } } },
+    include: {
+      days: { orderBy: { dayNumber: "asc" } },
+      unitTopics: { orderBy: { order: "asc" } },
+      periodOffsets: { where: { extraDays: { gt: 0 } }, include: { section: { select: { id: true, name: true } } } },
+    },
     orderBy: [{ order: "asc" }, { startDate: "asc" }],
   });
 
-  return NextResponse.json(units);
+  // Precompute each Period's own "actually ends" date wherever it's drifted
+  // from the shared schedule - only Periods with extra days show up here at
+  // all, so the client can just check for a non-empty array.
+  const withPeriodDates = await Promise.all(
+    units.map(async (u) => {
+      const periodModifiedDates = await Promise.all(
+        u.periodOffsets.map(async (o) => ({
+          sectionId: o.sectionId,
+          sectionName: o.section.name,
+          date: await getPeriodModifiedEndDate(u.id, o.sectionId, classroomId),
+        }))
+      );
+      return { ...u, periodModifiedDates: periodModifiedDates.filter((p) => p.date !== null) };
+    })
+  );
+
+  return NextResponse.json(withPeriodDates);
 }
 
 // POST { name, startDate, endDate, standards?, topics? }
