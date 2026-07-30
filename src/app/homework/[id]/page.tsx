@@ -4,7 +4,7 @@ import { useEffect, useState, use, useMemo } from "react";
 import Link from "next/link";
 import { useSectionContext } from "@/components/SectionContext";
 import { effectiveGradePercent, daysLate } from "@/lib/grading";
-import { formatShortDate } from "@/lib/dateOnly";
+import { formatShortDate, todayLocalDateString, parseDateOnly } from "@/lib/dateOnly";
 
 type Entry = {
   status: string;
@@ -41,6 +41,15 @@ export default function AssignmentDetailPage({ params }: { params: Promise<{ id:
   }
 
   async function setSubmission(studentId: string, status: string) {
+    // Captured once so the optimistic UI update and the actual request use
+    // the exact same value - this is the teacher's real local calendar
+    // date, not the server's, which is what "late" needs to be compared
+    // against (the due date is a calendar date with no time-of-day, so
+    // comparing it to a precise server timestamp is what caused submissions
+    // made later in the day, or from a server in a different timezone, to
+    // wrongly show as a day or more late even when handed in on time).
+    const submittedDate = todayLocalDateString();
+
     setAssignment((prev) =>
       prev
         ? {
@@ -50,7 +59,7 @@ export default function AssignmentDetailPage({ params }: { params: Promise<{ id:
                 ? {
                     ...e,
                     status,
-                    submittedAt: status === "handed_in" ? new Date().toISOString() : e.submittedAt,
+                    submittedAt: status === "handed_in" ? parseDateOnly(submittedDate).toISOString() : e.submittedAt,
                   }
                 : e
             ),
@@ -60,7 +69,7 @@ export default function AssignmentDetailPage({ params }: { params: Promise<{ id:
     await fetch(`/api/assignments/${id}/status`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ studentId, status }),
+      body: JSON.stringify({ studentId, status, submittedDate }),
     });
     load();
   }

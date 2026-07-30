@@ -17,13 +17,20 @@ export type GradableEntry = {
   gradeScore: number | null;
 };
 
-/** Whole days late (0 if on time, not late, or there's nothing to compare). */
+/**
+ * Whole days late (0 if on time, not late, or there's nothing to compare).
+ * Both dueDate and submittedAt are stored as UTC-midnight "calendar dates"
+ * with no meaningful time-of-day (see the status route for why that matters
+ * for submittedAt specifically), so the gap between them is always a clean
+ * whole number of days - no rounding surprises from comparing a precise
+ * timestamp against a date-only value.
+ */
 export function daysLate(assignment: GradableAssignment, entry: GradableEntry): number {
   if (!assignment.dueDate || !entry.submittedAt) return 0;
   const due = new Date(assignment.dueDate);
   const submitted = new Date(entry.submittedAt);
   if (submitted <= due) return 0;
-  return Math.ceil((submitted.getTime() - due.getTime()) / 86400000);
+  return Math.round((submitted.getTime() - due.getTime()) / 86400000);
 }
 
 /** The raw grade percent (0-100) before any late penalty, or null if ungraded. */

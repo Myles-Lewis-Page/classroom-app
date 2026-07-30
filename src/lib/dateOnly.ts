@@ -11,6 +11,20 @@
 // getters/setters instead of local ones, which makes the calendar date
 // identical no matter what timezone the browser or server happens to be in.
 
+// The browser's actual local calendar date as "YYYY-MM-DD", using LOCAL
+// getters (not UTC ones) - this is the one place we deliberately want the
+// viewer's own timezone, for capturing "what day is it for the person right
+// now" (e.g. when they mark something handed in). Everywhere else in this
+// file is about *storing and displaying* a date-only value without drift;
+// this is about *reading* one from the moment it's happening.
+export function todayLocalDateString(): string {
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = String(now.getMonth() + 1).padStart(2, "0");
+  const d = String(now.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
 export function parseDateOnly(input: string | Date): Date {
   if (input instanceof Date) return atUtcMidnight(input);
   // "YYYY-MM-DD" (what <input type="date"> gives us) - build directly from

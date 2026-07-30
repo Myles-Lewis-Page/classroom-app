@@ -41,6 +41,21 @@ export default function RosterPage() {
     fetch("/api/classroom").then((r) => r.json()).then((c) => setClassroomId(c?.id ?? ""));
   }, []);
 
+  function downloadTemplate() {
+    const csv = [
+      "First Name,Last Name,Grade,Section",
+      "Jane,Doe,3rd,Group A",
+      "John,Smith,3rd,",
+    ].join("\n");
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "roster-template.csv";
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
   async function handleImportFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file || !classroomId) return;
@@ -138,6 +153,9 @@ export default function RosterPage() {
             <a href="/api/reports/export-csv" className="btn-outline">
               Export CSV
             </a>
+            <button onClick={downloadTemplate} className="btn-outline">
+              Download Template
+            </button>
             <input
               ref={fileInputRef}
               type="file"
@@ -153,6 +171,10 @@ export default function RosterPage() {
               Print View
             </a>
           </div>
+          <p className="text-xs text-slate-400 mb-4 -mt-2">
+            Import expects columns First Name, Last Name, Grade, and (optional) Section - download
+            the template above if you're not sure how to format it.
+          </p>
 
           {loading ? (
             <p className="text-slate-500">Loading...</p>
