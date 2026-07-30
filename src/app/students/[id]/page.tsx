@@ -11,6 +11,8 @@ import EditAllergiesDietary from "@/components/EditAllergiesDietary";
 import EditIep from "@/components/EditIep";
 import EditSupports from "@/components/EditSupports";
 import EditParents from "@/components/EditParents";
+import PieChart from "@/components/PieChart";
+import LineChart from "@/components/LineChart";
 
 type StudentDetail = {
   id: string;
@@ -51,11 +53,13 @@ type StudentDetail = {
   homeworkEntries: {
     id: string;
     status: string;
+    submittedAt: string | null;
     gradeStatus: string | null;
     gradeScore: number | null;
     assignment: {
       name: string;
       assignedDate: string;
+      dueDate: string | null;
       gradingType: string;
       maxPoints: number | null;
       gradeCategory: { id: string; name: string } | null;
@@ -384,9 +388,9 @@ export default function StudentProfilePage({ params }: { params: Promise<{ id: s
         </p>
       </section>
 
-      {/* Homework & Grades */}
+      {/* Assignments (this student's personal gradebook) */}
       <section className="card">
-        <h2 className="font-bold mb-2">Homework & Grades</h2>
+        <h2 className="font-bold mb-2">Assignments</h2>
         {(() => {
           let weightedSum = 0;
           let weightUsed = 0;
@@ -432,30 +436,123 @@ export default function StudentProfilePage({ params }: { params: Promise<{ id: s
           }
           const overall = weightUsed > 0 ? Math.round(weightedSum / weightUsed) : null;
 
+          // Submission timing: Missing / Late / On Time, for the pie chart.
+          let missing = 0;
+          let late = 0;
+          let onTime = 0;
+          student.homeworkEntries.forEach((h) => {
+            if (h.status === "missing") {
+              missing++;
+            } else if (h.status === "handed_in") {
+              if (h.assignment.dueDate && h.submittedAt && new Date(h.submittedAt) > new Date(h.assignment.dueDate)) {
+                late++;
+              } else {
+                onTime++;
+              }
+            }
+          });
+
+          // Grade trend, oldest to newest (homeworkEntries arrive newest-first).
+          const gradePoints = [...student.homeworkEntries]
+            .reverse()
+            .map((h) => {
+              let pct: number | null = null;
+              if (h.assignment.gradingType === "points") {
+                if (h.gradeScore !== null && h.assignment.maxPoints) {
+                  pct = Math.round((h.gradeScore / h.assignment.maxPoints) * 100);
+                }
+              } else if (h.gradeStatus === "complete") {
+                pct = 100;
+              } else if (h.gradeStatus === "incomplete") {
+                pct = 0;
+              }
+              return pct === null ? null : { label: h.assignment.name, value: pct };
+            })
+            .filter((p): p is { label: string; value: number } => p !== null);
+
           return (
-            <p className="text-sm font-medium mb-3">
-              Overall grade: {overall !== null ? `${overall}%` : "Not enough graded work yet"}
-            </p>
+            <>
+              <p className="text-sm font-medium mb-3">
+                Overall grade: {overall !== null ? `${overall}%` : "Not enough graded work yet"}
+              </p>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+                <div>
+                  <p className="text-xs text-slate-500 mb-1">Missing / Late / On Time</p>
+                  <PieChart
+                    size={90}
+                    slices={[
+                      { label: "On Time", value: onTime, color: "#a7f3d0" },
+                      { label: "Late", value: late, color: "#fde68a" },
+                      { label: "Missing", value: missing, color: "#fecaca" },
+                    ]}
+                  />
+                </div>
+                <div>
+                  <p className="text-xs text-slate-500 mb-1">Grade Trend</p>
+                  <LineChart
+                    points={gradePoints}
+                    width={200}
+                    height={90}
+                    min={0}
+                    max={100}
+                    formatValue={(v) => `${v}%`}
+                  />
+                </div>
+              </div>
+            </>
           );
         })()}
-        <ul className="text-sm space-y-1">
-          {student.homeworkEntries.map((h) => {
-            const submitted = h.status === "handed_in" ? "Handed in" : "Missing";
-            const grade =
-              h.gradeScore !== null
-                ? `${h.gradeScore}/${h.assignment.maxPoints}`
-                : h.gradeStatus
-                ? h.gradeStatus
-                : "not graded";
-            return (
-              <li key={h.id}>
-                {new Date(h.assignment.assignedDate).toLocaleDateString()} —{" "}
-                {h.assignment.gradeCategory && `${h.assignment.gradeCategory.name}: `}
-                {h.assignment.name}: {submitted}, {grade}
-              </li>
-            );
-          })}
-        </ul>
+        <table className="w-full text-sm border-collapse">
+          <thead>
+            <tr className="text-left border-b text-slate-500">
+              <th className="py-1">Assignment</th>
+              <th>Assigned</th>
+              <th>Due</th>
+              <th>Status</th>
+              <th>Grade</th>
+            </tr>
+          </thead>
+          <tbody>
+            {student.homeworkEntries.map((h) => {
+              const late =
+                h.status === "handed_in" &&
+                h.assignment.dueDate &&
+                h.submittedAt &&
+                new Date(h.submittedAt) > new Date(h.assignment.dueDate);
+              const grade =
+                h.gradeScore !== null
+                  ? `${h.gradeScore}/${h.assignment.maxPoints}`
+                  : h.gradeStatus === "complete"
+                  ? "Complete (100%)"
+                  : h.gradeStatus === "incomplete"
+                  ? "Incomplete (0%)"
+                  : "Not graded";
+              return (
+                <tr key={h.id} className="border-b align-top">
+                  <td className="py-1">
+                    {h.assignment.gradeCategory && `${h.assignment.gradeCategory.name}: `}
+                    {h.assignment.name}
+                  </td>
+                  <td className="whitespace-nowrap">{new Date(h.assignment.assignedDate).toLocaleDateString()}</td>
+                  <td className="whitespace-nowrap">
+                    {h.assignment.dueDate ? new Date(h.assignment.dueDate).toLocaleDateString() : "—"}
+                  </td>
+                  <td>
+                    {h.status === "missing" ? (
+                      <span className="text-rose-600 font-medium">Missing</span>
+                    ) : late ? (
+                      <span className="text-amber-600 font-medium">Late</span>
+                    ) : (
+                      "Handed in"
+                    )}
+                  </td>
+                  <td>{grade}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
       </section>
 
       {/* Quick notes & Praise */}

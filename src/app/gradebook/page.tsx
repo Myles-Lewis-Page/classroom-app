@@ -11,12 +11,14 @@ type Entry = {
   status: string;
   gradeStatus: string | null;
   gradeScore: number | null;
+  submittedAt: string | null;
   student: { id: string };
 };
 type Assignment = {
   id: string;
   name: string;
   assignedDate: string;
+  dueDate: string | null;
   gradingType: string;
   maxPoints: number | null;
   skillSubjectId: string | null;
@@ -96,6 +98,18 @@ export default function GradebookPage() {
     return assignment.entries.find((e) => e.student.id === studentId);
   }
 
+  // "Missing" (never handed in) or "Late" (handed in after the due date) -
+  // shown as a small tag under the grade in each cell. Neither applies once
+  // there's no due date to compare against, or the work's handed in on time.
+  function submissionTag(assignment: Assignment, entry: Entry | undefined): "Missing" | "Late" | null {
+    if (!entry) return null;
+    if (entry.status === "missing") return "Missing";
+    if (entry.status === "handed_in" && assignment.dueDate && entry.submittedAt) {
+      if (new Date(entry.submittedAt) > new Date(assignment.dueDate)) return "Late";
+    }
+    return null;
+  }
+
   function cellDisplay(assignment: Assignment, entry: Entry | undefined) {
     if (!entry) return { text: "—", color: "#f5f3ff" };
     if (assignment.gradingType === "points") {
@@ -104,8 +118,8 @@ export default function GradebookPage() {
       const color = pct >= 0.9 ? "#a7f3d0" : pct >= 0.7 ? "#fde68a" : "#fecaca";
       return { text: `${entry.gradeScore}/${assignment.maxPoints}`, color };
     }
-    if (entry.gradeStatus === "complete") return { text: "Complete", color: "#a7f3d0" };
-    if (entry.gradeStatus === "incomplete") return { text: "Incomplete", color: "#fecaca" };
+    if (entry.gradeStatus === "complete") return { text: "Complete (100%)", color: "#a7f3d0" };
+    if (entry.gradeStatus === "incomplete") return { text: "Incomplete (0%)", color: "#fecaca" };
     return { text: "Not graded", color: "#f5f3ff" };
   }
 
@@ -250,7 +264,7 @@ export default function GradebookPage() {
         <p className="text-slate-500">
           No assignments yet.{" "}
           <Link href="/homework" className="underline text-sky-600">
-            Create one on the Homework page
+            Create one on the Assignments page
           </Link>{" "}
           to see it here.
         </p>
@@ -266,7 +280,13 @@ export default function GradebookPage() {
                   </Link>
                   <br />
                   <span className="text-xs text-slate-400">
-                    {new Date(a.assignedDate).toLocaleDateString()}
+                    Assigned {new Date(a.assignedDate).toLocaleDateString()}
+                    {a.dueDate && (
+                      <>
+                        <br />
+                        Due {new Date(a.dueDate).toLocaleDateString()}
+                      </>
+                    )}
                   </span>
                 </th>
               ))}
@@ -286,6 +306,7 @@ export default function GradebookPage() {
                   {visibleAssignments.map((a) => {
                     const entry = entryFor(a, student.id);
                     const { text, color } = cellDisplay(a, entry);
+                    const tag = submissionTag(a, entry);
                     return (
                       <td key={a.id} className="border p-1 text-center">
                         <span
@@ -294,6 +315,14 @@ export default function GradebookPage() {
                         >
                           {text}
                         </span>
+                        {tag && (
+                          <span
+                            className="block text-[10px] mt-0.5 font-medium"
+                            style={{ color: tag === "Missing" ? "#b91c1c" : "#b45309" }}
+                          >
+                            {tag}
+                          </span>
+                        )}
                       </td>
                     );
                   })}

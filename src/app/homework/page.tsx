@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import LineChart from "@/components/LineChart";
 
 type SkillSubject = { id: string; name: string };
 type GradeCategory = { id: string; name: string; weight: number };
@@ -94,6 +95,17 @@ export default function AssignmentsPage() {
     load();
   }
 
+  async function removeAssignment(id: string, assignmentName: string) {
+    if (
+      !confirm(
+        `Delete "${assignmentName}"? This removes it and every student's grade/submission status for it - this can't be undone.`
+      )
+    )
+      return;
+    await fetch(`/api/assignments/${id}`, { method: "DELETE" });
+    load();
+  }
+
   function statusCounts(entries: { status: string }[]) {
     const counts = { handed_in: 0, missing: 0 };
     entries.forEach((e) => {
@@ -102,14 +114,35 @@ export default function AssignmentsPage() {
     return counts;
   }
 
+  // Distribution line chart data: score-by-score counts for points-graded
+  // assignments, or a simple Incomplete/Complete pair for completion-graded.
+  function distributionPoints(a: Assignment) {
+    if (a.gradingType === "points") {
+      const byScore = new Map<number, number>();
+      a.entries.forEach((e) => {
+        if (e.gradeScore !== null) byScore.set(e.gradeScore, (byScore.get(e.gradeScore) ?? 0) + 1);
+      });
+      return Array.from(byScore.entries())
+        .sort((a, b) => a[0] - b[0])
+        .map(([score, count]) => ({ label: `${score}/${a.maxPoints}`, value: count }));
+    }
+    const complete = a.entries.filter((e) => e.gradeStatus === "complete").length;
+    const incomplete = a.entries.filter((e) => e.gradeStatus === "incomplete").length;
+    if (complete === 0 && incomplete === 0) return [];
+    return [
+      { label: "Incomplete (0%)", value: incomplete },
+      { label: "Complete (100%)", value: complete },
+    ];
+  }
+
   const visibleAssignments =
     selectedSubjectId === "all"
       ? assignments
       : assignments.filter((a) => a.skillSubjectId === selectedSubjectId);
 
   return (
-    <div className="p-4 sm:p-6 max-w-3xl mx-auto">
-      <h1 className="text-2xl font-bold mb-4">Homework — Assignments</h1>
+    <div className="p-4 sm:p-6 max-w-4xl mx-auto">
+      <h1 className="text-2xl font-bold mb-4">Assignments</h1>
 
       <div className="panel mb-6">
         <h2 className="font-semibold mb-2">New Assignment</h2>
@@ -262,52 +295,68 @@ export default function AssignmentsPage() {
               : null;
 
           return (
-            <Link
-              key={a.id}
-              href={`/homework/${a.id}`}
-              className="card block hover:bg-violet-50/40 transition"
-            >
-              <h3 className="font-bold">{a.name}</h3>
-              <p className="text-sm text-slate-500 mb-2">
-                {a.gradeCategory && `${a.gradeCategory.name} · `}
-                Assigned {new Date(a.assignedDate).toLocaleDateString()}
-                {a.dueDate && ` · Due ${new Date(a.dueDate).toLocaleDateString()}`}
-                {" · "}
-                {a.gradingType === "points" ? `Graded out of ${a.maxPoints}` : "Completion graded"}
-              </p>
+            <div key={a.id} className="card flex gap-4 items-start justify-between flex-wrap">
+              <Link href={`/homework/${a.id}`} className="flex-1 min-w-[220px] hover:opacity-80">
+                <h3 className="font-bold">{a.name}</h3>
+                <p className="text-sm text-slate-500 mb-2">
+                  {a.gradeCategory && `${a.gradeCategory.name} · `}
+                  Assigned {new Date(a.assignedDate).toLocaleDateString()}
+                  {a.dueDate && ` · Due ${new Date(a.dueDate).toLocaleDateString()}`}
+                  {" · "}
+                  {a.gradingType === "points" ? `Graded out of ${a.maxPoints}` : "Completion graded"}
+                </p>
 
-              <p className="text-xs text-slate-500 mb-1">Submitted</p>
-              <div className="flex h-4 rounded overflow-hidden border mb-2">
-                {segments.map(
-                  (seg) =>
-                    seg.count > 0 && (
-                      <div
-                        key={seg.key}
-                        style={{ width: `${(seg.count / total) * 100}%`, backgroundColor: seg.color }}
-                        title={`${seg.key}: ${seg.count}`}
-                      />
-                    )
-                )}
-              </div>
-              <div className="flex gap-3 flex-wrap text-xs text-slate-600 mb-2">
-                <span>💙 {counts.handed_in} handed in</span>
-                <span>❓ {counts.missing} missing</span>
-              </div>
+                <p className="text-xs text-slate-500 mb-1">Submitted</p>
+                <div className="flex h-4 rounded overflow-hidden border mb-2">
+                  {segments.map(
+                    (seg) =>
+                      seg.count > 0 && (
+                        <div
+                          key={seg.key}
+                          style={{ width: `${(seg.count / total) * 100}%`, backgroundColor: seg.color }}
+                          title={`${seg.key}: ${seg.count}`}
+                        />
+                      )
+                  )}
+                </div>
+                <div className="flex gap-3 flex-wrap text-xs text-slate-600 mb-2">
+                  <span>{counts.handed_in} handed in</span>
+                  <span>{counts.missing} missing</span>
+                </div>
 
-              <p className="text-xs text-slate-500 mb-1">Grading</p>
-              <div className="flex gap-3 flex-wrap text-xs text-slate-600">
-                {a.gradingType === "points" ? (
-                  <span>
-                    Class average: {avgScore !== null ? `${avgScore}/${a.maxPoints}` : "not graded yet"}
-                  </span>
-                ) : (
-                  <>
-                    <span>✅ {gradeComplete} complete</span>
-                    <span>❌ {gradeIncomplete} incomplete</span>
-                  </>
-                )}
+                <p className="text-xs text-slate-500 mb-1">Grading</p>
+                <div className="flex gap-3 flex-wrap text-xs text-slate-600">
+                  {a.gradingType === "points" ? (
+                    <span>
+                      Class average: {avgScore !== null ? `${avgScore}/${a.maxPoints}` : "not graded yet"}
+                    </span>
+                  ) : (
+                    <>
+                      <span>{gradeComplete} complete</span>
+                      <span>{gradeIncomplete} incomplete</span>
+                    </>
+                  )}
+                </div>
+              </Link>
+
+              <div className="shrink-0 flex flex-col items-end gap-2">
+                <button
+                  onClick={() => removeAssignment(a.id, a.name)}
+                  className="text-rose-600 text-xs hover:underline"
+                >
+                  Remove
+                </button>
+                <div>
+                  <p className="text-xs text-slate-400 text-center mb-1">Distribution</p>
+                  <LineChart
+                    points={distributionPoints(a)}
+                    width={180}
+                    height={70}
+                    color={a.gradingType === "points" ? "#7dd3fc" : "#a7f3d0"}
+                  />
+                </div>
               </div>
-            </Link>
+            </div>
           );
         })}
         {visibleAssignments.length === 0 && (

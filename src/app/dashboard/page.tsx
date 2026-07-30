@@ -19,10 +19,42 @@ type AttendanceStats = {
   month: { present: number; absent: number };
   ytd: { present: number; absent: number };
 };
+type PacingDay = {
+  id: string;
+  date: string;
+  topic: string | null;
+  status: "not_started" | "completed" | "half_completed";
+  dayNumber: number;
+};
+type PacingWidgetData = {
+  unit: { id: string; name: string } | null;
+  totalDays?: number;
+  completedDays?: number;
+  halfCompletedDays?: number;
+  notStartedDays?: number;
+  thisWeekDays?: PacingDay[];
+};
+
+const STATUS_LABEL: Record<PacingDay["status"], string> = {
+  not_started: "Not Started",
+  completed: "Completed",
+  half_completed: "Half Completed",
+};
+const STATUS_COLOR: Record<PacingDay["status"], string> = {
+  not_started: "#e2e8f0",
+  completed: "#bbf7d0",
+  half_completed: "#fde68a",
+};
+
+function formatWeekday(dateStr: string): string {
+  const d = new Date(dateStr);
+  return d.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric", timeZone: "UTC" });
+}
 
 export default function DashboardPage() {
   const [data, setData] = useState<DashboardData | null>(null);
   const [attendanceStats, setAttendanceStats] = useState<AttendanceStats | null>(null);
+  const [pacing, setPacing] = useState<PacingWidgetData | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -35,6 +67,7 @@ export default function DashboardPage() {
       .catch((err) => setError(err.message || "Failed to load dashboard"));
 
     fetch("/api/attendance/stats").then((r) => r.json()).then(setAttendanceStats);
+    fetch("/api/dashboard/pacing").then((r) => r.json()).then(setPacing);
   }, []);
 
   if (error) {
@@ -62,6 +95,72 @@ export default function DashboardPage() {
       )}
 
       <ParentContactRotationWidget compact />
+
+      <div className="card">
+        <div className="flex justify-between items-center mb-2">
+          <h3 className="font-semibold">This Week's Pacing Guide</h3>
+          {pacing?.unit && (
+            <Link href={`/pacing-guide/${pacing.unit.id}`} className="text-sky-600 text-sm hover:underline">
+              Open unit →
+            </Link>
+          )}
+        </div>
+        {!pacing ? (
+          <p className="text-sm text-gray-500">Loading...</p>
+        ) : !pacing.unit ? (
+          <p className="text-sm text-gray-500">
+            No unit is scheduled for today.{" "}
+            <Link href="/pacing-guide" className="text-sky-600 hover:underline">
+              Check the Pacing Guide →
+            </Link>
+          </p>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <p className="text-sm text-slate-600 mb-2">{pacing.unit.name}</p>
+              <PieChart
+                size={100}
+                slices={[
+                  { label: "Completed", value: pacing.completedDays ?? 0, color: STATUS_COLOR.completed },
+                  {
+                    label: "Half Completed",
+                    value: pacing.halfCompletedDays ?? 0,
+                    color: STATUS_COLOR.half_completed,
+                  },
+                  { label: "Not Started", value: pacing.notStartedDays ?? 0, color: STATUS_COLOR.not_started },
+                ]}
+              />
+              <p className="text-xs text-slate-500 mt-2">
+                {(pacing.completedDays ?? 0) + (pacing.halfCompletedDays ?? 0)} of {pacing.totalDays ?? 0} days
+                through the unit
+              </p>
+            </div>
+            <div>
+              <p className="text-sm font-medium mb-1">This Week</p>
+              {(pacing.thisWeekDays?.length ?? 0) === 0 ? (
+                <p className="text-sm text-gray-500">No instructional days scheduled this week.</p>
+              ) : (
+                <ul className="text-sm space-y-1">
+                  {pacing.thisWeekDays!.map((d) => (
+                    <li key={d.id} className="flex items-center justify-between gap-2 border-b py-1">
+                      <span>
+                        <span className="text-slate-500">{formatWeekday(d.date)}</span>
+                        {d.topic && <span className="ml-2">{d.topic}</span>}
+                      </span>
+                      <span
+                        className="text-xs px-2 py-0.5 rounded-full shrink-0"
+                        style={{ backgroundColor: STATUS_COLOR[d.status] }}
+                      >
+                        {STATUS_LABEL[d.status]}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
 
       {attendanceStats && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -123,7 +222,7 @@ export default function DashboardPage() {
         </div>
 
         <div className="card">
-          <h2 className="font-bold mb-2">Homework — Marked Incomplete Today</h2>
+          <h2 className="font-bold mb-2">Assignments — Marked Incomplete Today</h2>
           {data.homeworkNeedsHelp.length === 0 ? (
             <p className="text-gray-500 text-sm">Nothing flagged</p>
           ) : (
@@ -136,7 +235,7 @@ export default function DashboardPage() {
             </ul>
           )}
           <Link href="/homework" className="text-sky-600 text-sm hover:underline">
-            Go to Homework →
+            Go to Assignments →
           </Link>
         </div>
 

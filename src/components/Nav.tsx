@@ -9,7 +9,7 @@ const links = [
   { href: "/dashboard", label: "Dashboard" },
   { href: "/roster", label: "Roster & Attendance" },
   { href: "/behavior", label: "Behavior & Contact Log" },
-  { href: "/homework", label: "Homework" },
+  { href: "/homework", label: "Assignments" },
   { href: "/gradebook", label: "Gradebook" },
   { href: "/pacing-guide", label: "Pacing Guide" },
   { href: "/school-calendar", label: "School Calendar" },
