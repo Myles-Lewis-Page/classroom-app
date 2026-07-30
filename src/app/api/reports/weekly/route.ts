@@ -27,14 +27,13 @@ export async function GET(req: NextRequest) {
 
   const reports = await Promise.all(
     students.map(async (student) => {
-      const [attendance, behavior, homework, observations, praiseNotes, missingEvents] =
+      const [attendance, behaviorNotes, homework, observations, praiseNotes, missingEvents] =
         await Promise.all([
           prisma.attendanceEntry.findMany({
             where: { studentId: student.id, date: { gte: start, lte: end } },
           }),
-          prisma.behaviorEntry.findMany({
+          prisma.behaviorNote.findMany({
             where: { studentId: student.id, date: { gte: start, lte: end } },
-            include: { subject: true },
           }),
           prisma.homeworkEntry.findMany({
             where: { studentId: student.id, assignment: { assignedDate: { gte: start, lte: end } } },
@@ -53,12 +52,10 @@ export async function GET(req: NextRequest) {
         ]);
 
       const absences = attendance.filter((a) => a.status === "absent").length;
-      const ratingCounts = { green: 0, yellow: 0, red: 0 };
-      behavior.forEach((b) => {
-        if (b.rating && b.rating in ratingCounts) {
-          ratingCounts[b.rating as keyof typeof ratingCounts]++;
-        }
-      });
+      const behaviorCounts = {
+        good: behaviorNotes.filter((b) => b.type === "good").length,
+        bad: behaviorNotes.filter((b) => b.type === "bad").length,
+      };
 
       return {
         studentId: student.id,
@@ -66,11 +63,8 @@ export async function GET(req: NextRequest) {
         parentEmail: student.parents.find((p) => p.email)?.email ?? null,
         absences,
         totalDaysTracked: attendance.length,
-        ratingCounts,
-        behaviorComments: behavior.filter((b) => b.comment).map((b) => ({
-          subject: b.subject.name,
-          comment: b.comment,
-        })),
+        behaviorCounts,
+        behaviorTags: behaviorNotes.map((b) => ({ type: b.type, tag: b.tag })),
         homework,
         observations,
         praiseNotes,

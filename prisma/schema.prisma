@@ -181,6 +181,7 @@ model Student {
   supports            StudentSupport[]
   parents             Parent[]
   behaviorEntries     BehaviorEntry[]
+  behaviorNotes       BehaviorNote[]
   attendanceEntries   AttendanceEntry[]
   homeworkEntries     HomeworkEntry[]
   eventStatuses       EventStatus[]
@@ -334,6 +335,7 @@ model Subject {
   order       Int
 
   behaviorEntries BehaviorEntry[]
+  behaviorNotes   BehaviorNote[]
 }
 
 // ---------- BEHAVIOR LOG ----------
@@ -356,6 +358,30 @@ model BehaviorEntry {
   createdAt     DateTime @default(now())
 
   @@unique([studentId, subjectId, date])
+}
+
+// ---------- BEHAVIOR NOTES (replaces the daily rubric above as the primary
+// behavior-tracking workflow) ----------
+//
+// A single dated incident - good or bad - rather than a per-subject daily
+// rating. Optionally tagged with which class period it happened during.
+// "Called about it" isn't a separate flag: it's whether a ParentContactLog
+// entry is linked (contactLogId) - logging the call and marking the note as
+// handled are the same action, so there's only ever one source of truth for
+// whether/when/how a call happened.
+model BehaviorNote {
+  id           String            @id @default(cuid())
+  studentId    String
+  student      Student           @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  date         DateTime
+  type         String // "good" | "bad"
+  tag          String // short label, e.g. "Kind to a classmate" / "Talking out of turn"
+  note         String?
+  subjectId    String?
+  subject      Subject?          @relation(fields: [subjectId], references: [id], onDelete: SetNull)
+  contactLogId String?           @unique
+  contactLog   ParentContactLog? @relation(fields: [contactLogId], references: [id], onDelete: SetNull)
+  createdAt    DateTime          @default(now())
 }
 
 // ---------- ATTENDANCE ----------
@@ -604,6 +630,10 @@ model ParentContactLog {
   comment   String?
   followUp  Boolean  @default(false)
   createdAt DateTime @default(now())
+
+  // Set when this call was logged directly from a BehaviorNote's "Log Call"
+  // action - the reverse side of BehaviorNote.contactLogId.
+  behaviorNote BehaviorNote?
 }
 
 // ---------- NOTES: Observations (quick-notes) & Praise ----------

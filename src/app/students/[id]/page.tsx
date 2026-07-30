@@ -68,6 +68,15 @@ type StudentDetail = {
     comment: string | null;
     subject: { name: string };
   }[];
+  behaviorNotes: {
+    id: string;
+    date: string;
+    type: "good" | "bad";
+    tag: string;
+    note: string | null;
+    subject: { name: string } | null;
+    contactLog: { date: string; method: string } | null;
+  }[];
   parentContactLogs: {
     id: string;
     date: string;
@@ -318,24 +327,33 @@ export default function StudentProfilePage({ params }: { params: Promise<{ id: s
         </ul>
       </section>
 
-      {/* Behavior history */}
+      {/* Behavior notes */}
       <section className="card">
-        <h2 className="font-bold mb-2">Recent Behavior Log</h2>
+        <h2 className="font-bold mb-2">Recent Behavior Notes</h2>
+        {student.behaviorNotes.length === 0 && (
+          <p className="text-gray-500 text-sm">None logged yet.</p>
+        )}
         <ul className="text-sm space-y-1">
-          {student.behaviorEntries.map((b) => (
+          {student.behaviorNotes.map((b) => (
             <li key={b.id}>
-              {new Date(b.date).toLocaleDateString()} — {b.subject.name}:{" "}
-              <span
-                style={{
-                  color: b.rating === "green" ? "green" : b.rating === "yellow" ? "#b58900" : "red",
-                }}
-              >
-                {b.rating ?? "unrated"}
+              {new Date(b.date).toLocaleDateString()} —{" "}
+              <span style={{ color: b.type === "good" ? "green" : "#b91c1c" }}>
+                {b.type === "good" ? "Good" : "Bad"}
               </span>
-              {b.comment && ` — ${b.comment}`}
+              : {b.tag}
+              {b.subject && ` (${b.subject.name})`}
+              {b.note && ` — ${b.note}`}
+              {b.contactLog ? (
+                <span className="text-emerald-700"> · called {new Date(b.contactLog.date).toLocaleDateString()}</span>
+              ) : (
+                <span className="text-slate-400"> · not called yet</span>
+              )}
             </li>
           ))}
         </ul>
+        <a href="/behavior" className="text-sky-600 text-sm hover:underline">
+          Go to Behavior & Contact Log →
+        </a>
       </section>
 
       {/* Parent Contact Log - shown on profile only, intentionally left out
@@ -353,8 +371,8 @@ export default function StudentProfilePage({ params }: { params: Promise<{ id: s
             </li>
           ))}
         </ul>
-        <a href="/parent-log" className="text-sky-600 text-sm hover:underline">
-          Go to Parent Log →
+        <a href="/behavior" className="text-sky-600 text-sm hover:underline">
+          Go to Behavior & Contact Log →
         </a>
       </section>
 

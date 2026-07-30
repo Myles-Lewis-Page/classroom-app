@@ -8,7 +8,7 @@ import SectionSwitcher from "@/components/SectionSwitcher";
 const links = [
   { href: "/dashboard", label: "Dashboard" },
   { href: "/roster", label: "Roster & Attendance" },
-  { href: "/behavior", label: "Behavior Log" },
+  { href: "/behavior", label: "Behavior & Contact Log" },
   { href: "/homework", label: "Homework" },
   { href: "/gradebook", label: "Gradebook" },
   { href: "/pacing-guide", label: "Pacing Guide" },
@@ -18,7 +18,6 @@ const links = [
   { href: "/seating", label: "Seating Chart" },
   { href: "/events", label: "Events" },
   { href: "/skills", label: "Skills" },
-  { href: "/parent-log", label: "Parent Log" },
   { href: "/reports", label: "Weekly Report" },
   { href: "/sub-mode", label: "Sub Mode" },
 ];

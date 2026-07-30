@@ -33,8 +33,8 @@ export default function ParentContactRotationWidget({ compact = false }: { compa
           {met ? "✅" : "📞"} Weekly Positive-Call Goal: {data.weeklyCount}/{data.weeklyGoal}
         </h3>
         {!compact && (
-          <Link href="/parent-log" className="text-sky-600 text-sm hover:underline">
-            Go to Parent Log →
+          <Link href="/behavior" className="text-sky-600 text-sm hover:underline">
+            Go to Behavior & Contact Log →
           </Link>
         )}
       </div>

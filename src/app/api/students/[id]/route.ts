@@ -36,6 +36,11 @@ export async function GET(
         include: { assignment: { include: { gradeCategory: true } } },
       },
       behaviorEntries: { orderBy: { date: "desc" }, take: 30, include: { subject: true } },
+      behaviorNotes: {
+        orderBy: { date: "desc" },
+        take: 30,
+        include: { subject: true, contactLog: true },
+      },
       parentContactLogs: { orderBy: { date: "desc" }, take: 20 },
       supports: { include: { supportType: true, selectedOption: true } },
       skillStatuses: {

@@ -8,8 +8,8 @@ type StudentReport = {
   parentEmail: string | null;
   absences: number;
   totalDaysTracked: number;
-  ratingCounts: { green: number; yellow: number; red: number };
-  behaviorComments: { subject: string; comment: string | null }[];
+  behaviorCounts: { good: number; bad: number };
+  behaviorTags: { type: "good" | "bad"; tag: string }[];
   homework: {
     assignment: { name: string };
     status: string;
@@ -63,11 +63,11 @@ export default function WeeklyReportPage() {
       "",
       `Attendance: ${r.totalDaysTracked - r.absences} present / ${r.absences} absent`,
       "",
-      `Behavior this week: ${r.ratingCounts.green} green, ${r.ratingCounts.yellow} yellow, ${r.ratingCounts.red} red days`,
+      `Behavior this week: ${r.behaviorCounts.good} good, ${r.behaviorCounts.bad} needs improvement`,
     ];
-    if (r.behaviorComments.length) {
+    if (r.behaviorTags.length) {
       lines.push("", "Behavior notes:");
-      r.behaviorComments.forEach((c) => lines.push(`- ${c.subject}: ${c.comment}`));
+      r.behaviorTags.forEach((t) => lines.push(`- ${t.type === "good" ? "👍" : "⚠️"} ${t.tag}`));
     }
     if (r.homework.length) {
       lines.push("", "Homework:");
@@ -124,7 +124,7 @@ export default function WeeklyReportPage() {
               <p className="text-sm text-gray-600">
                 Attendance: {r.totalDaysTracked - r.absences} present / {r.absences} absent
                 {"  ·  "}
-                Behavior: {r.ratingCounts.green}🟢 {r.ratingCounts.yellow}🟡 {r.ratingCounts.red}🔴
+                Behavior: {r.behaviorCounts.good}🙂 {r.behaviorCounts.bad}🙁
               </p>
               {r.missingEvents.length > 0 && (
                 <p className="text-sm text-rose-600">

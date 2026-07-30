@@ -25,7 +25,10 @@ export async function GET(req: NextRequest) {
   return NextResponse.json(logs);
 }
 
-// POST { studentId, date, reason, method, comment, followUp }
+// POST { studentId, date, reason, method, comment, followUp, linkBehaviorNoteId? }
+// If linkBehaviorNoteId is given, the new contact log entry gets attached to
+// that BehaviorNote in the same transaction - that's the entire "mark as
+// called" mechanism, so a note is "called" exactly when it has a linked log.
 export async function POST(req: NextRequest) {
   const session = await auth();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -36,15 +39,35 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
-  const log = await prisma.parentContactLog.create({
-    data: {
-      studentId: body.studentId,
-      date: body.date ? new Date(body.date) : new Date(),
-      reason: body.reason,
-      method: body.method || "phone",
-      comment: body.comment || null,
-      followUp: !!body.followUp,
-    },
+  let linkNote: { id: string } | null = null;
+  if (body.linkBehaviorNoteId) {
+    const note = await prisma.behaviorNote.findUnique({
+      where: { id: body.linkBehaviorNoteId },
+      include: { student: true },
+    });
+    if (note && note.student.classroomId === classroomId && note.studentId === body.studentId) {
+      linkNote = { id: note.id };
+    }
+  }
+
+  const log = await prisma.$transaction(async (tx) => {
+    const created = await tx.parentContactLog.create({
+      data: {
+        studentId: body.studentId,
+        date: body.date ? new Date(body.date) : new Date(),
+        reason: body.reason,
+        method: body.method || "phone",
+        comment: body.comment || null,
+        followUp: !!body.followUp,
+      },
+    });
+    if (linkNote) {
+      await tx.behaviorNote.update({
+        where: { id: linkNote.id },
+        data: { contactLogId: created.id },
+      });
+    }
+    return created;
   });
 
   return NextResponse.json(log, { status: 201 });
