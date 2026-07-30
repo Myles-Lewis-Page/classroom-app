@@ -27,6 +27,7 @@ type Assignment = {
   skillSubjectId: string | null;
   gradeCategoryId: string | null;
   entries: Entry[];
+  sections: { id: string }[];
 };
 
 export default function GradebookPage() {
@@ -50,7 +51,8 @@ export default function GradebookPage() {
     fetch("/api/students").then((r) => r.json()).then(setStudents);
     fetch("/api/skill-subjects").then((r) => r.json()).then(setSubjects);
     loadCategories();
-    fetch("/api/assignments").then((r) => r.json()).then(setAssignments);
+    // Drafts (not yet handed out) never show on the Gradebook.
+    fetch("/api/assignments?handedOut=true").then((r) => r.json()).then(setAssignments);
   }, []);
 
   function loadCategories() {
@@ -92,10 +94,9 @@ export default function GradebookPage() {
 
   const totalWeight = categories.reduce((sum, c) => sum + c.weight, 0);
 
-  const visibleAssignments =
-    selectedSubjectId === "all"
-      ? assignments
-      : assignments.filter((a) => a.skillSubjectId === selectedSubjectId);
+  const visibleAssignments = assignments
+    .filter((a) => (selectedSubjectId === "all" ? true : a.skillSubjectId === selectedSubjectId))
+    .filter((a) => !activeSectionId || a.sections.length === 0 || a.sections.some((s) => s.id === activeSectionId));
 
   function entryFor(assignment: Assignment, studentId: string) {
     return assignment.entries.find((e) => e.student.id === studentId);

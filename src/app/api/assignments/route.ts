@@ -13,13 +13,24 @@ export async function GET(req: NextRequest) {
   if (!classroomId) return NextResponse.json([]);
 
   const subjectId = req.nextUrl.searchParams.get("subjectId");
+  // ?handedOut=true restricts to handed-out assignments only - used by the
+  // Gradebook and Student Profile, which should never show draft assignments
+  // that haven't actually been given to students yet.
+  const handedOutOnly = req.nextUrl.searchParams.get("handedOut") === "true";
 
   const assignments = await prisma.assignment.findMany({
-    where: { classroomId, ...(subjectId ? { skillSubjectId: subjectId } : {}) },
+    where: {
+      classroomId,
+      ...(subjectId ? { skillSubjectId: subjectId } : {}),
+      ...(handedOutOnly ? { handedOut: true } : {}),
+    },
     include: {
       entries: { include: { student: true } },
       skillSubject: true,
       gradeCategory: true,
+      sections: true,
+      pacingUnit: { select: { id: true, name: true } },
+      pacingTopic: { select: { id: true, name: true } },
     },
     orderBy: { assignedDate: "desc" },
   });
@@ -43,6 +54,11 @@ export async function POST(req: NextRequest) {
   const body = await req.json();
   const gradingType = body.gradingType === "points" ? "points" : "completion";
 
+  // sectionIds: which Sections (subgroups) this assignment goes to. Empty/
+  // missing = the whole classroom, matching the existing "no section means
+  // everyone" convention used across the app.
+  const sectionIds: string[] = Array.isArray(body.sectionIds) ? body.sectionIds.filter(Boolean) : [];
+
   const assignment = await prisma.assignment.create({
     data: {
       classroomId,
@@ -57,10 +73,24 @@ export async function POST(req: NextRequest) {
         body.latePenaltyPercentPerDay !== undefined && body.latePenaltyPercentPerDay !== ""
           ? Number(body.latePenaltyPercentPerDay) || null
           : null,
+      // Draft workflow: teachers can prep an assignment ahead of time and
+      // only flip it visible (on Gradebook/Student Profile) once actually
+      // handed out. Defaults to true so quick one-step creation still works
+      // exactly like before.
+      handedOut: body.handedOut === undefined ? true : !!body.handedOut,
+      pacingUnitId: body.pacingUnitId || null,
+      pacingTopicId: body.pacingTopicId || null,
+      ...(sectionIds.length > 0 ? { sections: { connect: sectionIds.map((id) => ({ id })) } } : {}),
     },
   });
 
-  const students = await prisma.student.findMany({ where: { isActive: true, classroomId } });
+  const students = await prisma.student.findMany({
+    where: {
+      isActive: true,
+      classroomId,
+      ...(sectionIds.length > 0 ? { sectionId: { in: sectionIds } } : {}),
+    },
+  });
   await prisma.homeworkEntry.createMany({
     data: students.map((s) => ({
       assignmentId: assignment.id,

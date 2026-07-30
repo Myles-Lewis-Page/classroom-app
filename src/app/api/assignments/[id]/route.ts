@@ -20,6 +20,9 @@ export async function GET(
       entries: {
         include: { student: true },
       },
+      sections: true,
+      pacingUnit: { select: { id: true, name: true } },
+      pacingTopic: { select: { id: true, name: true } },
     },
   });
 
@@ -55,7 +58,22 @@ export async function PATCH(
     gradingType?: string;
     maxPoints?: number | null;
     latePenaltyPercentPerDay?: number | null;
+    handedOut?: boolean;
+    pacingUnitId?: string | null;
+    pacingTopicId?: string | null;
+    sections?: { set: { id: string }[] };
   } = {};
+
+  if (body.handedOut !== undefined) data.handedOut = !!body.handedOut;
+  if (body.pacingUnitId !== undefined) data.pacingUnitId = body.pacingUnitId || null;
+  if (body.pacingTopicId !== undefined) data.pacingTopicId = body.pacingTopicId || null;
+
+  let newSectionIds: string[] | null = null;
+  if (body.sectionIds !== undefined) {
+    const ids: string[] = Array.isArray(body.sectionIds) ? body.sectionIds.filter(Boolean) : [];
+    newSectionIds = ids;
+    data.sections = { set: ids.map((id) => ({ id })) };
+  }
 
   if (body.name !== undefined) data.name = body.name;
   if (body.assignedDate !== undefined) data.assignedDate = parseDateOnly(body.assignedDate);
@@ -78,6 +96,34 @@ export async function PATCH(
   }
 
   const assignment = await prisma.assignment.update({ where: { id }, data });
+
+  // If the Section scope widened (e.g. a new Period was added to this
+  // assignment), make sure any newly-in-scope students have an entry -
+  // never removes entries for students who fall out of scope, so existing
+  // grades/submissions are never silently lost.
+  if (newSectionIds !== null) {
+    const sectionScope: string[] = newSectionIds;
+    const students = await prisma.student.findMany({
+      where: {
+        isActive: true,
+        classroomId,
+        ...(sectionScope.length > 0 ? { sectionId: { in: sectionScope } } : {}),
+      },
+      select: { id: true },
+    });
+    const existingEntries = await prisma.homeworkEntry.findMany({
+      where: { assignmentId: id },
+      select: { studentId: true },
+    });
+    const existingIds = new Set(existingEntries.map((e) => e.studentId));
+    const missing = students.filter((s) => !existingIds.has(s.id));
+    if (missing.length > 0) {
+      await prisma.homeworkEntry.createMany({
+        data: missing.map((s) => ({ assignmentId: id, studentId: s.id, status: "missing" })),
+      });
+    }
+  }
+
   return NextResponse.json(assignment);
 }
 

@@ -139,7 +139,7 @@ function MiniCalendar({
               {week.map((day, di) => {
                 const inMonth = day.getUTCMonth() === month && day.getUTCFullYear() === year;
                 if (!inMonth) return <td key={di} className="p-1" />;
-                const inRange = day >= startDate && day <= endDate;
+                const inRange = day >= startDate && day <= endDate && !isWeekend(day);
                 const holiday = inRange && isHoliday(day);
                 return (
                   <td

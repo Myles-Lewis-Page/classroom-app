@@ -66,6 +66,7 @@ type StudentDetail = {
       maxPoints: number | null;
       latePenaltyPercentPerDay: number | null;
       gradeCategory: { id: string; name: string } | null;
+      handedOut: boolean;
     };
   }[];
   behaviorEntries: {

@@ -14,7 +14,7 @@ export async function GET() {
 
   const units = await prisma.pacingUnit.findMany({
     where: { classroomId },
-    include: { days: { orderBy: { dayNumber: "asc" } } },
+    include: { days: { orderBy: { dayNumber: "asc" } }, unitTopics: { orderBy: { order: "asc" } } },
     orderBy: [{ order: "asc" }, { startDate: "asc" }],
   });
 

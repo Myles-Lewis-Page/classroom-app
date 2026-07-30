@@ -18,6 +18,12 @@ if (process.env.SEED_ON_BOOT === "true") {
   console.log("Seed complete.");
 }
 
+if (process.env.MERGE_CLASSROOMS_PRIMARY && process.env.MERGE_CLASSROOMS_SECONDARY) {
+  console.log("MERGE_CLASSROOMS_PRIMARY/SECONDARY are set — running classroom merge...");
+  run("npm run merge-classrooms");
+  console.log("Classroom merge step finished.");
+}
+
 if (process.env.RESET_PASSWORD_EMAIL) {
   console.log("RESET_PASSWORD_EMAIL is set — running password reset...");
   run("npm run reset-password");

@@ -25,7 +25,7 @@ export default function SectionManager() {
   async function removeSection(id: string, sectionName: string) {
     if (
       !confirm(
-        `Remove "${sectionName}"? Students in it won't be deleted - they'll just no longer belong to a group/section.`
+        `Remove "${sectionName}"? Students in it won't be deleted - they'll just no longer belong to a Period.`
       )
     )
       return;
@@ -36,12 +36,12 @@ export default function SectionManager() {
   return (
     <div className="card space-y-3">
       <div>
-        <h2 className="font-semibold">Class Sections / Groups</h2>
+        <h2 className="font-semibold">Periods</h2>
         <p className="text-sm text-slate-500">
-          Optional sub-groups within this classroom (e.g. "Group A" / "Group B", or a reading
-          group) - not a separate class, just a way to split students up. Once you have at least
-          one, a switcher shows up in the top nav on every page so you can flip between groups
-          without leaving the page you're on.
+          Periods within this classroom (e.g. "Period 1" / "Period 2") - not a separate class, just
+          a way to split students up for grading and scheduling. Once you have at least one, a
+          switcher shows up in the top nav on every page so you can flip between Periods without
+          leaving the page you're on.
         </p>
       </div>
 
@@ -71,7 +71,7 @@ export default function SectionManager() {
               addSection();
             }
           }}
-          placeholder="New section/group name"
+          placeholder="New Period name (e.g. Period 3)"
           className="border rounded px-2 py-1 flex-1"
         />
         <button onClick={addSection} disabled={saving} className="btn-outline text-sm">

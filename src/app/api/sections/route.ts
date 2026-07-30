@@ -3,11 +3,21 @@ import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
 import { getCurrentClassroomId } from "@/lib/classroomScope";
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   const session = await auth();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const classroomId = await getCurrentClassroomId();
+  const requestedClassroomId = req.nextUrl.searchParams.get("classroomId");
+  let classroomId: string | null;
+  if (requestedClassroomId) {
+    const teacherId = (session.user as { id?: string } | undefined)?.id;
+    const owned = teacherId
+      ? await prisma.classroom.findFirst({ where: { id: requestedClassroomId, teacherId } })
+      : null;
+    classroomId = owned ? requestedClassroomId : null;
+  } else {
+    classroomId = await getCurrentClassroomId();
+  }
   if (!classroomId) return NextResponse.json([]);
 
   const sections = await prisma.section.findMany({

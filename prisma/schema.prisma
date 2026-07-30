@@ -42,6 +42,10 @@ model ScheduleBlock {
   // tied to a specific class (lunch, recess, announcements, etc).
   classroomId     String?
   classroom       Classroom? @relation(fields: [classroomId], references: [id], onDelete: SetNull)
+  // Which Period (Section) within that classroom, if the block is specific
+  // to one - null means "the whole classroom" for this block.
+  sectionId       String?
+  section         Section?   @relation(fields: [sectionId], references: [id], onDelete: SetNull)
   label           String
   startTime       String // "HH:MM", 24-hour
   endTime         String // "HH:MM", 24-hour
@@ -100,7 +104,9 @@ model Section {
   order       Int       @default(0)
   createdAt   DateTime  @default(now())
 
-  students Student[]
+  students       Student[]
+  assignments    Assignment[] @relation("AssignmentSections")
+  scheduleBlocks ScheduleBlock[]
 
   @@unique([classroomId, name])
 }
@@ -424,9 +430,23 @@ model Assignment {
   // Null/0 = no penalty. Applies uniformly to both grading types, since
   // both ultimately reduce to a 0-100 percent grade.
   latePenaltyPercentPerDay Int?
+  // Draft workflow: an assignment can be created ahead of time (entries
+  // exist so grading/prep can happen) without yet being visible on the
+  // Gradebook or Student Profile - only flips to true once actually handed
+  // out to students.
+  handedOut    Boolean    @default(true)
+  // Optional tag linking this assignment to a spot in the Pacing Guide.
+  pacingUnitId  String?
+  pacingUnit    PacingUnit?  @relation(fields: [pacingUnitId], references: [id], onDelete: SetNull)
+  pacingTopicId String?
+  pacingTopic   UnitTopic?   @relation(fields: [pacingTopicId], references: [id], onDelete: SetNull)
   createdAt    DateTime   @default(now())
 
-  entries HomeworkEntry[]
+  entries  HomeworkEntry[]
+  // Which Sections (subgroups) this assignment was given to. Empty = the
+  // whole classroom (all students, no subgroup restriction) - matches the
+  // convention used elsewhere that "no section" means "everyone".
+  sections Section[]       @relation("AssignmentSections")
 }
 
 // Weighted grading categories (e.g. Classwork 20%, Homework 30%, Tests 50%).
@@ -574,6 +594,7 @@ model PacingUnit {
   days           PacingUnitDay[]
   unitSummatives UnitSummative[]
   unitTopics     UnitTopic[]
+  assignments    Assignment[]
 }
 
 // A single summative assessment tied to a unit - Title + Date, added/removed
@@ -604,7 +625,8 @@ model UnitTopic {
   order          Int        @default(0)
   createdAt      DateTime   @default(now())
 
-  unitDays PacingUnitDay[]
+  unitDays    PacingUnitDay[]
+  assignments Assignment[]
 }
 
 model PacingUnitDay {

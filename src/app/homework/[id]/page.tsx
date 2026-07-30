@@ -3,6 +3,7 @@
 import { useEffect, useState, use, useMemo } from "react";
 import Link from "next/link";
 import { useSectionContext } from "@/components/SectionContext";
+import GradeHistogram from "@/components/GradeHistogram";
 import { effectiveGradePercent, daysLate } from "@/lib/grading";
 import { formatShortDate, todayLocalDateString, parseDateOnly, toDateInputValue } from "@/lib/dateOnly";
 
@@ -29,8 +30,9 @@ const SUBMIT_COLOR: Record<string, string> = { missing: "#e0e7ff", handed_in: "#
 
 export default function AssignmentDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
-  const { activeSectionId } = useSectionContext();
+  const { activeSectionId, sections } = useSectionContext();
   const [assignment, setAssignment] = useState<AssignmentDetail | null>(null);
+  const [histogramMode, setHistogramMode] = useState<"all" | "byPeriod">("all");
 
   useEffect(() => {
     load();
@@ -165,6 +167,52 @@ export default function AssignmentDetailPage({ params }: { params: Promise<{ id:
           : "Completion graded"}
         {!!assignment.latePenaltyPercentPerDay && ` · -${assignment.latePenaltyPercentPerDay}%/day late`}
       </p>
+
+      {sections.length > 0 && (
+        <div className="panel mb-4">
+          <div className="flex items-center justify-between mb-2">
+            <h2 className="font-semibold text-sm">Grade Distribution</h2>
+            <div className="flex gap-2 text-xs">
+              <button
+                onClick={() => setHistogramMode("all")}
+                className={`px-2 py-1 rounded ${histogramMode === "all" ? "btn-primary" : "bg-white border"}`}
+              >
+                All Periods
+              </button>
+              <button
+                onClick={() => setHistogramMode("byPeriod")}
+                className={`px-2 py-1 rounded ${histogramMode === "byPeriod" ? "btn-primary" : "bg-white border"}`}
+              >
+                By Period
+              </button>
+            </div>
+          </div>
+          {histogramMode === "all" ? (
+            <GradeHistogram
+              values={assignment.entries
+                .map((e) => effectiveGradePercent(assignment, e))
+                .filter((p): p is number => p !== null)}
+              width={400}
+              height={140}
+            />
+          ) : (
+            <div className="flex flex-wrap gap-4">
+              {sections.map((s) => {
+                const vals = assignment.entries
+                  .filter((e) => e.student.sectionId === s.id)
+                  .map((e) => effectiveGradePercent(assignment, e))
+                  .filter((p): p is number => p !== null);
+                return (
+                  <div key={s.id}>
+                    <p className="text-xs text-slate-500 text-center mb-1">{s.name}</p>
+                    <GradeHistogram values={vals} width={190} height={120} />
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="grid grid-cols-[1fr_auto_auto] gap-x-4 gap-y-2 items-center text-sm font-medium text-slate-500 mb-1 px-1">
         <span>Student</span>

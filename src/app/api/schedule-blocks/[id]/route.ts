@@ -29,6 +29,7 @@ export async function PATCH(
     endTime?: string;
     studentsInClass?: boolean;
     classroomId?: string | null;
+    sectionId?: string | null;
   } = {};
 
   if (body.label !== undefined) data.label = body.label.trim();
@@ -43,11 +44,25 @@ export async function PATCH(
       data.classroomId = null;
     }
   }
+  if (body.sectionId !== undefined) {
+    const effectiveClassroomId = data.classroomId !== undefined ? data.classroomId : existing.classroomId;
+    if (body.sectionId && effectiveClassroomId) {
+      const ownedSection = await prisma.section.findFirst({
+        where: { id: body.sectionId, classroomId: effectiveClassroomId },
+      });
+      data.sectionId = ownedSection ? body.sectionId : null;
+    } else {
+      data.sectionId = null;
+    }
+  }
 
   const block = await prisma.scheduleBlock.update({
     where: { id },
     data,
-    include: { classroom: { select: { id: true, name: true } } },
+    include: {
+      classroom: { select: { id: true, name: true } },
+      section: { select: { id: true, name: true } },
+    },
   });
   return NextResponse.json(block);
 }

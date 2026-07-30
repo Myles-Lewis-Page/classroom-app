@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { UNIT_COLORS } from "@/lib/unitColors";
 
 type Classroom = { id: string; name: string; isArchived: boolean };
+type SectionOpt = { id: string; name: string };
 type ScheduleBlock = {
   id: string;
   label: string;
@@ -12,6 +13,8 @@ type ScheduleBlock = {
   studentsInClass: boolean;
   classroomId: string | null;
   classroom: { id: string; name: string } | null;
+  sectionId: string | null;
+  section: { id: string; name: string } | null;
 };
 
 function formatTime(t: string): string {
@@ -33,11 +36,13 @@ const emptyForm = {
   endTime: "",
   studentsInClass: true,
   classroomId: "",
+  sectionId: "",
 };
 
 export default function DailySchedulePage() {
   const [blocks, setBlocks] = useState<ScheduleBlock[]>([]);
   const [classrooms, setClassrooms] = useState<Classroom[]>([]);
+  const [formSections, setFormSections] = useState<SectionOpt[]>([]);
   const [form, setForm] = useState(emptyForm);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -50,6 +55,20 @@ export default function DailySchedulePage() {
         setClassrooms((data.allClassrooms || []).filter((c) => !c.isArchived));
       });
   }, []);
+
+  // Whenever the tagged classroom changes, load that classroom's Periods
+  // (Sections) so the right list of options shows up - Daily Schedule spans
+  // classrooms, so this can't just rely on "the current classroom".
+  useEffect(() => {
+    if (!form.classroomId) {
+      setFormSections([]);
+      return;
+    }
+    fetch(`/api/sections?classroomId=${form.classroomId}`)
+      .then((r) => r.json())
+      .then(setFormSections)
+      .catch(() => setFormSections([]));
+  }, [form.classroomId]);
 
   function load() {
     fetch("/api/schedule-blocks").then((r) => r.json()).then(setBlocks);
@@ -85,6 +104,7 @@ export default function DailySchedulePage() {
       endTime: block.endTime,
       studentsInClass: block.studentsInClass,
       classroomId: block.classroomId ?? "",
+      sectionId: block.sectionId ?? "",
     });
   }
 
@@ -102,6 +122,7 @@ export default function DailySchedulePage() {
       endTime: form.endTime,
       studentsInClass: form.studentsInClass,
       classroomId: form.classroomId || null,
+      sectionId: form.sectionId || null,
     };
     if (editingId) {
       await fetch(`/api/schedule-blocks/${editingId}`, {
@@ -167,7 +188,7 @@ export default function DailySchedulePage() {
             <label className="block text-xs text-slate-500">Period / class</label>
             <select
               value={form.classroomId}
-              onChange={(e) => setForm((f) => ({ ...f, classroomId: e.target.value }))}
+              onChange={(e) => setForm((f) => ({ ...f, classroomId: e.target.value, sectionId: "" }))}
               className="border rounded px-2 py-1"
             >
               <option value="">Not tied to a period</option>
@@ -178,6 +199,23 @@ export default function DailySchedulePage() {
               ))}
             </select>
           </div>
+          {form.classroomId && formSections.length > 0 && (
+            <div>
+              <label className="block text-xs text-slate-500">Which Period</label>
+              <select
+                value={form.sectionId}
+                onChange={(e) => setForm((f) => ({ ...f, sectionId: e.target.value }))}
+                className="border rounded px-2 py-1"
+              >
+                <option value="">Whole class</option>
+                {formSections.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
           <label className="flex items-center gap-2 text-sm mb-1">
             <input
               type="checkbox"
@@ -222,7 +260,8 @@ export default function DailySchedulePage() {
                 <span className="font-normal">{b.label}</span>
               </p>
               <p className="text-xs text-slate-500">
-                {b.classroom ? b.classroom.name : "No period tagged"} ·{" "}
+                {b.classroom ? b.classroom.name : "No period tagged"}
+                {b.section ? ` – ${b.section.name}` : ""} ·{" "}
                 {b.studentsInClass ? "Students in class" : "Students elsewhere"}
               </p>
             </div>

@@ -31,6 +31,7 @@ export async function GET(
       praiseNotes: { orderBy: { date: "desc" }, take: 20 },
       attendanceEntries: { orderBy: { date: "desc" }, take: 30 },
       homeworkEntries: {
+        where: { assignment: { handedOut: true } },
         orderBy: { assignment: { assignedDate: "desc" } },
         take: 30,
         include: { assignment: { include: { gradeCategory: true } } },

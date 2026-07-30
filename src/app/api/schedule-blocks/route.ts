@@ -17,13 +17,16 @@ export async function GET() {
 
   const blocks = await prisma.scheduleBlock.findMany({
     where: { teacherId },
-    include: { classroom: { select: { id: true, name: true } } },
+    include: {
+      classroom: { select: { id: true, name: true } },
+      section: { select: { id: true, name: true } },
+    },
     orderBy: { startTime: "asc" },
   });
   return NextResponse.json(blocks);
 }
 
-// POST { label, startTime, endTime, studentsInClass, classroomId? }
+// POST { label, startTime, endTime, studentsInClass, classroomId?, sectionId? }
 export async function POST(req: NextRequest) {
   const teacherId = await currentTeacherId();
   if (!teacherId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -43,6 +46,17 @@ export async function POST(req: NextRequest) {
     if (!owned) classroomId = null;
   }
 
+  // A Period (Section) tag only makes sense under the tagged classroom -
+  // ignore it if it doesn't belong to that classroom (or no classroom is
+  // tagged at all).
+  let sectionId: string | null = body.sectionId || null;
+  if (sectionId) {
+    const ownedSection = classroomId
+      ? await prisma.section.findFirst({ where: { id: sectionId, classroomId } })
+      : null;
+    if (!ownedSection) sectionId = null;
+  }
+
   const block = await prisma.scheduleBlock.create({
     data: {
       teacherId,
@@ -51,8 +65,12 @@ export async function POST(req: NextRequest) {
       endTime,
       studentsInClass: body.studentsInClass !== false,
       classroomId,
+      sectionId,
     },
-    include: { classroom: { select: { id: true, name: true } } },
+    include: {
+      classroom: { select: { id: true, name: true } },
+      section: { select: { id: true, name: true } },
+    },
   });
 
   return NextResponse.json(block, { status: 201 });

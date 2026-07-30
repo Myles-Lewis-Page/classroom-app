@@ -5,14 +5,19 @@ import Link from "next/link";
 import GradeHistogram from "@/components/GradeHistogram";
 import { effectiveGradePercent } from "@/lib/grading";
 import { formatShortDate } from "@/lib/dateOnly";
+import { useSectionContext } from "@/components/SectionContext";
 
 type SkillSubject = { id: string; name: string };
 type GradeCategory = { id: string; name: string; weight: number };
+type SectionOpt = { id: string; name: string };
+type UnitTopicOpt = { id: string; name: string };
+type PacingUnitOpt = { id: string; name: string; unitTopics: UnitTopicOpt[] };
 type Entry = {
   status: string;
   submittedAt: string | null;
   gradeStatus: string | null;
   gradeScore: number | null;
+  student: { sectionId: string | null };
 };
 type Assignment = {
   id: string;
@@ -25,13 +30,22 @@ type Assignment = {
   gradingType: string;
   maxPoints: number | null;
   latePenaltyPercentPerDay: number | null;
+  handedOut: boolean;
+  pacingUnitId: string | null;
+  pacingTopicId: string | null;
+  pacingUnit: { id: string; name: string } | null;
+  pacingTopic: { id: string; name: string } | null;
+  sections: SectionOpt[];
   entries: Entry[];
 };
 
 export default function AssignmentsPage() {
+  const { activeSectionId } = useSectionContext();
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [subjects, setSubjects] = useState<SkillSubject[]>([]);
   const [categories, setCategories] = useState<GradeCategory[]>([]);
+  const [sections, setSections] = useState<SectionOpt[]>([]);
+  const [pacingUnits, setPacingUnits] = useState<PacingUnitOpt[]>([]);
   const [selectedSubjectId, setSelectedSubjectId] = useState<string>("all");
   const [name, setName] = useState("");
   const [assignedDate, setAssignedDate] = useState(() => new Date().toISOString().slice(0, 10));
@@ -41,6 +55,10 @@ export default function AssignmentsPage() {
   const [gradingType, setGradingType] = useState("completion");
   const [maxPoints, setMaxPoints] = useState("100");
   const [latePenalty, setLatePenalty] = useState("");
+  const [newSectionIds, setNewSectionIds] = useState<string[]>([]);
+  const [newHandedOut, setNewHandedOut] = useState(true);
+  const [newPacingUnitId, setNewPacingUnitId] = useState("");
+  const [newPacingTopicId, setNewPacingTopicId] = useState("");
   const [classroomId, setClassroomId] = useState("");
   const [classroomError, setClassroomError] = useState(false);
   const [classroomLoading, setClassroomLoading] = useState(true);
@@ -52,6 +70,8 @@ export default function AssignmentsPage() {
     loadClassroom();
     fetch("/api/skill-subjects").then((r) => r.json()).then(setSubjects);
     fetch("/api/grade-categories").then((r) => r.json()).then(setCategories);
+    fetch("/api/sections").then((r) => r.json()).then(setSections);
+    fetch("/api/pacing-units").then((r) => r.json()).then(setPacingUnits);
   }, []);
 
   function loadClassroom() {
@@ -100,11 +120,28 @@ export default function AssignmentsPage() {
         gradingType,
         maxPoints: gradingType === "points" ? maxPoints : null,
         latePenaltyPercentPerDay: latePenalty || null,
+        sectionIds: newSectionIds,
+        handedOut: newHandedOut,
+        pacingUnitId: newPacingUnitId || null,
+        pacingTopicId: newPacingTopicId || null,
       }),
     });
     setName("");
     setDueDate("");
     setLatePenalty("");
+    setNewSectionIds([]);
+    setNewHandedOut(true);
+    setNewPacingUnitId("");
+    setNewPacingTopicId("");
+    load();
+  }
+
+  async function handOut(id: string) {
+    await fetch(`/api/assignments/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ handedOut: true }),
+    });
     load();
   }
 
@@ -136,10 +173,18 @@ export default function AssignmentsPage() {
       .filter((p): p is number => p !== null);
   }
 
-  const visibleAssignments =
-    selectedSubjectId === "all"
-      ? assignments
-      : assignments.filter((a) => a.skillSubjectId === selectedSubjectId);
+  // "No sections" on an assignment = whole classroom, so it's visible from
+  // every Period. Otherwise only show it when it's tagged to the active
+  // Period (or when viewing "All Students").
+  function inActiveSection(a: Assignment) {
+    if (!activeSectionId) return true;
+    if (a.sections.length === 0) return true;
+    return a.sections.some((s) => s.id === activeSectionId);
+  }
+
+  const visibleAssignments = assignments
+    .filter((a) => (selectedSubjectId === "all" ? true : a.skillSubjectId === selectedSubjectId))
+    .filter(inActiveSection);
 
   return (
     <div className="p-4 sm:p-6 max-w-4xl mx-auto">
@@ -260,6 +305,79 @@ export default function AssignmentsPage() {
               <span className="text-xs text-slate-500">% off/day late</span>
             </div>
           </div>
+          <div>
+            <label className="block text-xs text-slate-500">Unit (optional)</label>
+            <select
+              value={newPacingUnitId}
+              onChange={(e) => {
+                setNewPacingUnitId(e.target.value);
+                setNewPacingTopicId("");
+              }}
+              className="border rounded px-2 py-1"
+            >
+              <option value="">No unit</option>
+              {pacingUnits.map((u) => (
+                <option key={u.id} value={u.id}>
+                  {u.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          {newPacingUnitId && (
+            <div>
+              <label className="block text-xs text-slate-500">Topic (optional)</label>
+              <select
+                value={newPacingTopicId}
+                onChange={(e) => setNewPacingTopicId(e.target.value)}
+                className="border rounded px-2 py-1"
+              >
+                <option value="">Whole unit</option>
+                {pacingUnits
+                  .find((u) => u.id === newPacingUnitId)
+                  ?.unitTopics.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.name}
+                    </option>
+                  ))}
+              </select>
+            </div>
+          )}
+          {sections.length > 0 && (
+            <div>
+              <label className="block text-xs text-slate-500">Periods (blank = whole class)</label>
+              <div className="flex flex-wrap gap-2 border rounded px-2 py-1">
+                {sections.map((s) => (
+                  <label key={s.id} className="flex items-center gap-1 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={newSectionIds.includes(s.id)}
+                      onChange={(e) =>
+                        setNewSectionIds((prev) =>
+                          e.target.checked ? [...prev, s.id] : prev.filter((id) => id !== s.id)
+                        )
+                      }
+                    />
+                    {s.name}
+                  </label>
+                ))}
+              </div>
+            </div>
+          )}
+          <div>
+            <label className="flex items-center gap-1 text-sm">
+              <input
+                type="checkbox"
+                checked={newHandedOut}
+                onChange={(e) => setNewHandedOut(e.target.checked)}
+              />
+              Handed out already
+            </label>
+            {!newHandedOut && (
+              <p className="text-xs text-slate-400 max-w-[160px]">
+                Draft - hidden from Gradebook &amp; Student Profile until handed out.
+              </p>
+            )}
+          </div>
           <button
             onClick={createAssignment}
             disabled={!classroomId}
@@ -315,9 +433,18 @@ export default function AssignmentsPage() {
           return (
             <div key={a.id} className="card flex gap-4 items-start justify-between flex-wrap">
               <Link href={`/homework/${a.id}`} className="flex-1 min-w-[220px] hover:opacity-80">
-                <h3 className="font-bold">{a.name}</h3>
+                <h3 className="font-bold">
+                  {a.name}
+                  {!a.handedOut && (
+                    <span className="ml-2 text-xs font-normal bg-amber-100 text-amber-700 px-2 py-0.5 rounded">
+                      Draft
+                    </span>
+                  )}
+                </h3>
                 <p className="text-sm text-slate-500 mb-2">
                   {a.gradeCategory && `${a.gradeCategory.name} · `}
+                  {a.pacingUnit && `${a.pacingUnit.name}${a.pacingTopic ? ` (${a.pacingTopic.name})` : ""} · `}
+                  {a.sections.length > 0 && `${a.sections.map((s) => s.name).join(", ")} · `}
                   Assigned {formatShortDate(a.assignedDate)}
                   {a.dueDate && ` · Due ${formatShortDate(a.dueDate)}`}
                   {" · "}
@@ -357,6 +484,14 @@ export default function AssignmentsPage() {
 
               <div className="shrink-0 flex flex-col items-end gap-2">
                 <div className="flex gap-3">
+                  {!a.handedOut && (
+                    <button
+                      onClick={() => handOut(a.id)}
+                      className="text-emerald-600 text-xs hover:underline"
+                    >
+                      Hand out now
+                    </button>
+                  )}
                   <button
                     onClick={() => setEditingAssignment(a)}
                     className="text-sky-600 text-xs hover:underline"
@@ -388,6 +523,7 @@ export default function AssignmentsPage() {
           assignment={editingAssignment}
           subjects={subjects}
           categories={categories}
+          sections={sections}
           onClose={() => setEditingAssignment(null)}
           onSaved={() => {
             setEditingAssignment(null);
@@ -403,12 +539,14 @@ function EditAssignmentModal({
   assignment,
   subjects,
   categories,
+  sections,
   onClose,
   onSaved,
 }: {
   assignment: Assignment;
   subjects: SkillSubject[];
   categories: GradeCategory[];
+  sections: SectionOpt[];
   onClose: () => void;
   onSaved: () => void;
 }) {
@@ -422,6 +560,8 @@ function EditAssignmentModal({
   const [latePenalty, setLatePenalty] = useState(
     assignment.latePenaltyPercentPerDay != null ? String(assignment.latePenaltyPercentPerDay) : ""
   );
+  const [sectionIds, setSectionIds] = useState<string[]>(assignment.sections.map((s) => s.id));
+  const [handedOut, setHandedOut] = useState(assignment.handedOut);
   const [saving, setSaving] = useState(false);
 
   async function save() {
@@ -439,6 +579,8 @@ function EditAssignmentModal({
         gradingType,
         maxPoints: gradingType === "points" ? maxPoints : null,
         latePenaltyPercentPerDay: latePenalty || null,
+        sectionIds,
+        handedOut,
       }),
     });
     setSaving(false);
@@ -550,6 +692,31 @@ function EditAssignmentModal({
             </div>
           </div>
         </div>
+        {sections.length > 0 && (
+          <div>
+            <label className="block text-xs text-slate-500 mb-1">Periods (blank = whole class)</label>
+            <div className="flex flex-wrap gap-2 border rounded px-2 py-1">
+              {sections.map((s) => (
+                <label key={s.id} className="flex items-center gap-1 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={sectionIds.includes(s.id)}
+                    onChange={(e) =>
+                      setSectionIds((prev) =>
+                        e.target.checked ? [...prev, s.id] : prev.filter((id) => id !== s.id)
+                      )
+                    }
+                  />
+                  {s.name}
+                </label>
+              ))}
+            </div>
+          </div>
+        )}
+        <label className="flex items-center gap-1 text-sm">
+          <input type="checkbox" checked={handedOut} onChange={(e) => setHandedOut(e.target.checked)} />
+          Handed out
+        </label>
         <div className="flex gap-2 justify-end pt-2">
           <button onClick={onClose} className="btn-outline text-sm">
             Cancel
