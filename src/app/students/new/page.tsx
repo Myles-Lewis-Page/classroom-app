@@ -172,7 +172,7 @@ export default function AddStudentPage() {
                 ))}
               </select>
             </div>
-            {sections.length > 0 && (
+            {sections.length > 0 ? (
               <div>
                 <label className="block text-xs text-gray-500">Period</label>
                 <select
@@ -188,6 +188,8 @@ export default function AddStudentPage() {
                   ))}
                 </select>
               </div>
+            ) : (
+              <div aria-hidden="true" />
             )}
             <div>
               <label className="block text-xs text-gray-500">Date of birth</label>
