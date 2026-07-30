@@ -6,7 +6,14 @@ import { UNIT_COLORS } from "@/lib/unitColors";
 import { formatShortDate, toDateInputValue } from "@/lib/dateOnly";
 
 type UnitTopicOpt = { id: string; name: string };
-type PeriodModifiedDate = { sectionId: string; sectionName: string; date: string };
+type PeriodDate = {
+  sectionId: string;
+  sectionName: string;
+  startDate: string;
+  endDate: string;
+  tag: "extra" | "early" | null;
+  extraDays: number;
+};
 type Unit = {
   id: string;
   name: string;
@@ -15,17 +22,9 @@ type Unit = {
   standards: string | null;
   topics: string | null;
   unitTopics: UnitTopicOpt[];
-  periodModifiedDates: PeriodModifiedDate[];
+  periodDates: PeriodDate[];
   days: { id: string; date: string; dayNumber: number }[];
 };
-
-// The unit's actual last instructional day - can run past its set endDate
-// if a topic or a half-completed lesson pushed it out further.
-function actualEndDate(unit: Unit): string {
-  if (unit.days.length === 0) return unit.endDate;
-  const sorted = [...unit.days].sort((a, b) => a.dayNumber - b.dayNumber);
-  return sorted[sorted.length - 1].date;
-}
 
 export default function PacingGuidePage() {
   const [units, setUnits] = useState<Unit[]>([]);
@@ -179,13 +178,9 @@ export default function PacingGuidePage() {
                   <Link href={`/pacing-guide/${unit.id}`} className="flex-1">
                     <h3 className="font-bold hover:underline">{unit.name}</h3>
                     <p className="text-sm text-slate-700">
-                      {formatShortDate(unit.startDate)} -{" "}
-                      {toDateInputValue(actualEndDate(unit)) !== toDateInputValue(unit.endDate) ? (
-                        <span className="text-rose-700 font-medium">{formatShortDate(actualEndDate(unit))}</span>
-                      ) : (
-                        formatShortDate(unit.endDate)
-                      )}{" "}
-                      · {unit.days.length} days
+                      Targeted: {formatShortDate(unit.startDate)} - {formatShortDate(unit.endDate)}
+                      {" · "}
+                      {unit.days.length} days
                     </p>
                   </Link>
                   <div className="flex gap-2 shrink-0">
@@ -200,16 +195,28 @@ export default function PacingGuidePage() {
                     </button>
                   </div>
                 </div>
-                {unit.periodModifiedDates.length > 0 && (
-                  <div className="mt-2 flex flex-wrap gap-1">
-                    {unit.periodModifiedDates.map((p) => (
-                      <span
+                {unit.periodDates.length > 0 && (
+                  <div className="mt-2 space-y-1">
+                    {unit.periodDates.map((p) => (
+                      <div
                         key={p.sectionId}
-                        className="text-[11px] bg-white/70 rounded px-2 py-0.5 font-medium text-slate-700"
-                        title={`${p.sectionName} needed extra time and now actually ends on this date`}
+                        className="text-[11px] bg-white/70 rounded px-2 py-1 flex justify-between items-center"
                       >
-                        {p.sectionName}: ends {formatShortDate(p.date)}
-                      </span>
+                        <span className="font-medium text-slate-700">{p.sectionName}</span>
+                        <span className="text-slate-600">
+                          {formatShortDate(p.startDate)} - {formatShortDate(p.endDate)}
+                          {p.tag === "extra" && (
+                            <span className="ml-1 text-amber-700 font-semibold">
+                              +{p.extraDays} day{p.extraDays === 1 ? "" : "s"}
+                            </span>
+                          )}
+                          {p.tag === "early" && (
+                            <span className="ml-1 text-emerald-700 font-semibold">
+                              {Math.abs(p.extraDays)} day{Math.abs(p.extraDays) === 1 ? "" : "s"} early
+                            </span>
+                          )}
+                        </span>
+                      </div>
                     ))}
                   </div>
                 )}

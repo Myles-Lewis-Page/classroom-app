@@ -527,6 +527,44 @@ export async function getPeriodModifiedEndDate(
   return addInstructionalDays(sharedLastDate, offset.extraDays, holidays);
 }
 
+/**
+ * Per-Period "mark done early": unlike the shared finishUnitEarly, this
+ * never touches the shared PacingUnitDay rows or cascades other units - it
+ * only affects how far ahead/behind THIS Period is tracked as being.
+ * Scans backward from this Period's own last-touched day (falling back to
+ * the shared baseline status wherever this Period hasn't diverged) and
+ * records however many days it's finishing ahead of schedule as a negative
+ * offset - the mirror image of the positive offset half_completed builds up.
+ */
+export async function finishUnitEarlyForSection(
+  unitId: string,
+  sectionId: string
+): Promise<{ savedDays: number }> {
+  const days = await prisma.pacingUnitDay.findMany({
+    where: { pacingUnitId: unitId },
+    orderBy: { dayNumber: "desc" },
+    include: { periodStatuses: { where: { sectionId } } },
+  });
+
+  let savedDays = 0;
+  for (const day of days) {
+    const effectiveStatus = day.periodStatuses[0]?.status ?? day.status;
+    if (effectiveStatus !== "not_started") break;
+    if (day.dayNumber === 1) break;
+    savedDays++;
+  }
+
+  if (savedDays > 0) {
+    await prisma.periodPacingOffset.upsert({
+      where: { pacingUnitId_sectionId: { pacingUnitId: unitId, sectionId } },
+      update: { extraDays: { decrement: savedDays } },
+      create: { pacingUnitId: unitId, sectionId, extraDays: -savedDays },
+    });
+  }
+
+  return { savedDays };
+}
+
 
 export async function removeExtraDay(dayId: string) {
   const day = await prisma.pacingUnitDay.findUnique({ where: { id: dayId } });

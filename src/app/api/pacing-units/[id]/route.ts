@@ -19,6 +19,7 @@ export async function GET(
     where: { id },
     include: {
       days: { orderBy: { dayNumber: "asc" }, include: { periodStatuses: true } },
+      periodOffsets: true,
       unitSummatives: { orderBy: { date: "asc" } },
       unitTopics: { orderBy: { order: "asc" } },
     },

@@ -45,6 +45,7 @@ type UnitTopic = {
   standards: string | null;
   support: string | null;
 };
+type PeriodOffset = { sectionId: string; extraDays: number };
 type Unit = {
   id: string;
   name: string;
@@ -54,6 +55,7 @@ type Unit = {
   days: Day[];
   unitSummatives: UnitSummative[];
   unitTopics: UnitTopic[];
+  periodOffsets: PeriodOffset[];
 };
 type CalEvent = { id: string; name: string; startDate: string; endDate: string; type: string };
 
@@ -435,20 +437,29 @@ export default function UnitDetailPage({ params }: { params: Promise<{ id: strin
   // later unit up to fill the freed school days.
   async function finishEarly() {
     if (!unit) return;
-    if (
-      !confirm(
-        "Mark this unit done early? Any trailing days that haven't been started yet get dropped, and every later unit shifts up to fill the freed days. This can't be undone."
-      )
-    )
-      return;
-    const res = await fetch(`/api/pacing-units/${id}/finish-early`, { method: "POST" });
+    const periodName = sections.find((s) => s.id === activeSectionId)?.name;
+    const confirmMsg = activeSectionId
+      ? `Mark this unit done early for ${periodName} only? This just updates how far ahead ${periodName} is tracked as being - the shared schedule, other Periods, and later units are untouched.`
+      : "Mark this unit done early for the whole class? Any trailing days that haven't been started yet get dropped, and every later unit shifts up to fill the freed days. This can't be undone.";
+    if (!confirm(confirmMsg)) return;
+    const res = await fetch(`/api/pacing-units/${id}/finish-early`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sectionId: activeSectionId || undefined }),
+    });
     if (!res.ok) {
       const data = await res.json().catch(() => ({}));
       alert(data.error || "Couldn't finish this unit early.");
       return;
     }
     const data = await res.json();
-    if (data.removedDays === 0) {
+    if (activeSectionId) {
+      alert(
+        data.savedDays > 0
+          ? `${periodName} is now tracked as finishing ${data.savedDays} day${data.savedDays === 1 ? "" : "s"} early.`
+          : `Nothing to save - ${periodName} already has progress on every remaining day.`
+      );
+    } else if (data.removedDays === 0) {
       alert("Nothing to trim - every remaining day already has progress on it.");
     }
     load();
@@ -557,9 +568,13 @@ export default function UnitDetailPage({ params }: { params: Promise<{ id: strin
             <button
               onClick={finishEarly}
               className="text-xs text-emerald-700 hover:underline"
-              title="Trim unstarted trailing days and pull later units up to fill the freed time"
+              title={
+                activeSectionId
+                  ? "Marks just the active Period as finishing early - doesn't touch the shared schedule"
+                  : "Trim unstarted trailing days and pull later units up to fill the freed time"
+              }
             >
-              Mark Done Early
+              {activeSectionId ? "Mark Done Early (this Period)" : "Mark Done Early"}
             </button>
             <button
               onClick={recalculateDays}
@@ -606,6 +621,21 @@ export default function UnitDetailPage({ params }: { params: Promise<{ id: strin
               {completedDays} of {totalDays} days used
             </p>
             {paceMessage && <p className="text-xs text-slate-600">{paceMessage}</p>}
+            {activeSectionId &&
+              (() => {
+                const offset = unit.periodOffsets.find((o) => o.sectionId === activeSectionId);
+                if (!offset || offset.extraDays === 0) return null;
+                const periodName = sections.find((s) => s.id === activeSectionId)?.name;
+                return offset.extraDays > 0 ? (
+                  <p className="text-xs text-amber-600 font-medium">
+                    {periodName} is tracking {offset.extraDays} extra day{offset.extraDays === 1 ? "" : "s"} on this unit.
+                  </p>
+                ) : (
+                  <p className="text-xs text-emerald-600 font-medium">
+                    {periodName} is tracking {Math.abs(offset.extraDays)} day{Math.abs(offset.extraDays) === 1 ? "" : "s"} ahead on this unit.
+                  </p>
+                );
+              })()}
           </div>
         </div>
       </div>

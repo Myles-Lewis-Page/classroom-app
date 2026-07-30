@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
 import { getCurrentClassroomId } from "@/lib/classroomScope";
 import { parseDateOnly, formatShortDate } from "@/lib/dateOnly";
-import { generateInstructionalDates, getHolidayRanges, findOverlappingUnit, getPeriodModifiedEndDate } from "@/lib/pacing";
+import { generateInstructionalDates, getHolidayRanges, findOverlappingUnit, getPeriodModifiedEndDate, getUnitLastDayDate } from "@/lib/pacing";
 
 export async function GET() {
   const session = await auth();
@@ -12,29 +12,41 @@ export async function GET() {
   const classroomId = await getCurrentClassroomId();
   if (!classroomId) return NextResponse.json([]);
 
-  const units = await prisma.pacingUnit.findMany({
-    where: { classroomId },
-    include: {
-      days: { orderBy: { dayNumber: "asc" } },
-      unitTopics: { orderBy: { order: "asc" } },
-      periodOffsets: { where: { extraDays: { gt: 0 } }, include: { section: { select: { id: true, name: true } } } },
-    },
-    orderBy: [{ order: "asc" }, { startDate: "asc" }],
-  });
+  const [units, allSections] = await Promise.all([
+    prisma.pacingUnit.findMany({
+      where: { classroomId },
+      include: {
+        days: { orderBy: { dayNumber: "asc" } },
+        unitTopics: { orderBy: { order: "asc" } },
+        periodOffsets: { where: { extraDays: { not: 0 } } },
+      },
+      orderBy: [{ order: "asc" }, { startDate: "asc" }],
+    }),
+    prisma.section.findMany({ where: { classroomId }, orderBy: { order: "asc" }, select: { id: true, name: true } }),
+  ]);
 
-  // Precompute each Period's own "actually ends" date wherever it's drifted
-  // from the shared schedule - only Periods with extra days show up here at
-  // all, so the client can just check for a non-empty array.
+  // Every Period's own start/end for this unit - start is always the shared
+  // unit start (Periods all begin a unit together), end is the shared
+  // baseline end unless that Period has its own tracked offset (extra days
+  // from a half-completed spillover, or fewer from finishing early).
   const withPeriodDates = await Promise.all(
     units.map(async (u) => {
-      const periodModifiedDates = await Promise.all(
-        u.periodOffsets.map(async (o) => ({
-          sectionId: o.sectionId,
-          sectionName: o.section.name,
-          date: await getPeriodModifiedEndDate(u.id, o.sectionId, classroomId),
-        }))
+      const sharedEnd = await getUnitLastDayDate(u.id);
+      const periodDates = await Promise.all(
+        allSections.map(async (s) => {
+          const offset = u.periodOffsets.find((o) => o.sectionId === s.id);
+          const modified = offset ? await getPeriodModifiedEndDate(u.id, s.id, classroomId) : null;
+          return {
+            sectionId: s.id,
+            sectionName: s.name,
+            startDate: u.startDate,
+            endDate: modified ?? sharedEnd ?? u.endDate,
+            tag: !offset || offset.extraDays === 0 ? null : offset.extraDays > 0 ? "extra" : "early",
+            extraDays: offset?.extraDays ?? 0,
+          };
+        })
       );
-      return { ...u, periodModifiedDates: periodModifiedDates.filter((p) => p.date !== null) };
+      return { ...u, periodDates };
     })
   );
 
