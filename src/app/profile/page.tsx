@@ -28,6 +28,7 @@ export default function ProfilePage() {
   const [currentClassroom, setCurrentClassroom] = useState<Classroom | null>(null);
   const [allClassrooms, setAllClassrooms] = useState<Classroom[]>([]);
   const [teacherEmail, setTeacherEmail] = useState("");
+  const [isPrincipalManaged, setIsPrincipalManaged] = useState(false);
   const [saving, setSaving] = useState(false);
   const [savedName, setSavedName] = useState<string | null>(null);
   const [archiving, setArchiving] = useState(false);
@@ -72,17 +73,20 @@ export default function ProfilePage() {
           classroom,
           skillSubjects,
           allClassrooms,
+          isPrincipalManaged,
         }: {
           teacher: Teacher;
           classroom: Classroom | null;
           skillSubjects: SkillSubject[];
           allClassrooms: Classroom[];
+          isPrincipalManaged: boolean;
         }) => {
           if (teacher?.name) {
             const parts = teacher.name.split(" ");
             setFirstName(parts[0] ?? "");
             setLastName(parts.slice(1).join(" ") ?? "");
           }
+          setIsPrincipalManaged(!!isPrincipalManaged);
           setTeacherEmail(teacher?.email ?? "");
           setNewEmail(teacher?.email ?? "");
           setCurrentClassroom(classroom);
@@ -218,8 +222,13 @@ export default function ProfilePage() {
       setAccountError("New password and confirmation don't match.");
       return;
     }
-    if (!newEmail.trim() && !newPassword) {
-      setAccountError("Change the email or enter a new password to update something.");
+    const emailChanged = !isPrincipalManaged && newEmail.trim() && newEmail.trim() !== teacherEmail;
+    if (!emailChanged && !newPassword) {
+      setAccountError(
+        isPrincipalManaged
+          ? "Enter a new password to update something."
+          : "Change the email or enter a new password to update something."
+      );
       return;
     }
 
@@ -445,22 +454,31 @@ export default function ProfilePage() {
       {showSetupForm && (
         <form onSubmit={handleSubmit} className="card space-y-3">
           <h2 className="font-semibold">Your Info</h2>
-          <div className="grid grid-cols-2 gap-3">
-            <input
-              placeholder="First name"
-              value={firstName}
-            onChange={(e) => setFirstName(e.target.value)}
-            className="border rounded px-2 py-1"
-            required
-          />
-          <input
-            placeholder="Last name"
-            value={lastName}
-            onChange={(e) => setLastName(e.target.value)}
-            className="border rounded px-2 py-1"
-            required
-          />
-        </div>
+          {isPrincipalManaged ? (
+            <p className="text-sm text-slate-600">
+              <span className="font-medium">{firstName} {lastName}</span>
+              <span className="text-xs text-slate-400 block">
+                Your principal manages your name - contact them to change it.
+              </span>
+            </p>
+          ) : (
+            <div className="grid grid-cols-2 gap-3">
+              <input
+                placeholder="First name"
+                value={firstName}
+                onChange={(e) => setFirstName(e.target.value)}
+                className="border rounded px-2 py-1"
+                required
+              />
+              <input
+                placeholder="Last name"
+                value={lastName}
+                onChange={(e) => setLastName(e.target.value)}
+                className="border rounded px-2 py-1"
+                required
+              />
+            </div>
+          )}
         <div>
           <label className="block text-xs text-slate-500 mb-1">Class name (e.g. "3rd Grade", "Homeroom", "Math Block")</label>
           <input
@@ -620,15 +638,25 @@ export default function ProfilePage() {
       <form onSubmit={handleAccountSubmit} className="card space-y-3 mt-6">
         <h2 className="font-semibold">Account Settings</h2>
 
-        <div>
-          <label className="block text-xs text-slate-500 mb-1">Email (used to log in)</label>
-          <input
-            type="email"
-            value={newEmail}
-            onChange={(e) => setNewEmail(e.target.value)}
-            className="border rounded px-2 py-1 w-full"
-          />
-        </div>
+        {isPrincipalManaged ? (
+          <p className="text-sm text-slate-600">
+            Email: <span className="font-medium">{teacherEmail}</span>
+            <span className="text-xs text-slate-400 block">
+              Your principal manages your name and email - contact them to change either. You can
+              still change your own password below.
+            </span>
+          </p>
+        ) : (
+          <div>
+            <label className="block text-xs text-slate-500 mb-1">Email (used to log in)</label>
+            <input
+              type="email"
+              value={newEmail}
+              onChange={(e) => setNewEmail(e.target.value)}
+              className="border rounded px-2 py-1 w-full"
+            />
+          </div>
+        )}
 
         <div>
           <label className="block text-xs text-slate-500 mb-1">New password (optional)</label>

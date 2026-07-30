@@ -27,6 +27,53 @@ model Teacher {
   activeClassroom   Classroom?  @relation("ActiveClassroom", fields: [activeClassroomId], references: [id], onDelete: SetNull)
   resetTokens       PasswordResetToken[]
   scheduleBlocks    ScheduleBlock[]
+  // Nullable so existing pre-Principal-system Teacher accounts keep working
+  // unassigned - only newly-provisioned Teachers are required to have one.
+  schoolId          String?
+  school            School?     @relation(fields: [schoolId], references: [id], onDelete: SetNull)
+  principalId       String?
+  principal         Principal?  @relation(fields: [principalId], references: [id], onDelete: SetNull)
+  // Only the Principal can change a Teacher's name/email - the Teacher can
+  // only change their own password. Set true when a Principal generates a
+  // random password for a newly-added Teacher, so the app can nudge them to
+  // pick their own on first login; cleared once they do.
+  mustChangePassword Boolean    @default(false)
+}
+
+// A school, owned by Anthropic's customer (the Principal) who runs it. The
+// Admin role only ever sees School name + which Principal(s) run it - never
+// any Teacher, classroom, or student data underneath.
+model School {
+  id         String      @id @default(cuid())
+  name       String      @unique
+  createdAt  DateTime    @default(now())
+  principals Principal[]
+  teachers   Teacher[]
+}
+
+// Sees and manages everything at their one School - adds Teachers (who then
+// run their own classrooms independently), can edit a Teacher's name/email
+// (the Teacher themselves cannot). Does NOT see other Schools.
+model Principal {
+  id           String   @id @default(cuid())
+  name         String
+  email        String   @unique
+  passwordHash String
+  schoolId     String
+  school       School   @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  createdAt    DateTime @default(now())
+  teachers     Teacher[]
+}
+
+// Sees only the list of Schools and Principals (name/email/school) - never
+// any Teacher, classroom, or student data. Created directly in the database
+// (no self-serve signup), since it's the root of trust for the whole app.
+model Admin {
+  id           String   @id @default(cuid())
+  name         String
+  email        String   @unique
+  passwordHash String
+  createdAt    DateTime @default(now())
 }
 
 // A teacher's daily bell schedule - deliberately scoped to the TEACHER, not

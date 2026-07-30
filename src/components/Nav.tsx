@@ -25,6 +25,8 @@ const links = [
 export default async function Nav() {
   const session = await auth();
   if (!session?.user) return null; // hide nav entirely on the login page / when logged out
+  const role = (session.user as { role?: string })?.role;
+  if (role !== "teacher") return null; // Admin/Principal pages have their own header
 
   const teacherId = (session.user as { id?: string })?.id;
   const classroomId = await getCurrentClassroomId();

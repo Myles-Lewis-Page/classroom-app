@@ -5,7 +5,8 @@ import { getCurrentClassroomId } from "@/lib/classroomScope";
 
 export async function GET() {
   const session = await auth();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const role = (session?.user as { role?: string } | undefined)?.role;
+  if (!session || role !== "teacher") return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const teacherId = (session.user as { id?: string })?.id;
 
@@ -31,7 +32,13 @@ export async function GET() {
       })
     : [];
 
-  return NextResponse.json({ teacher, classroom, skillSubjects, allClassrooms });
+  return NextResponse.json({
+    teacher,
+    classroom,
+    skillSubjects,
+    allClassrooms,
+    isPrincipalManaged: !!teacher?.principalId,
+  });
 }
 
 // POST { firstName, lastName, className, subjects: string[], schoolName? }
@@ -41,14 +48,29 @@ export async function GET() {
 // taught subjects (generic + custom) to match exactly what was submitted.
 export async function POST(req: NextRequest) {
   const session = await auth();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const role = (session?.user as { role?: string } | undefined)?.role;
+  if (!session || role !== "teacher") return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const teacherId = (session.user as { id?: string })?.id;
   if (!teacherId) return NextResponse.json({ error: "No teacher on session" }, { status: 400 });
 
+  const existingTeacher = await prisma.teacher.findUnique({ where: { id: teacherId } });
+  if (!existingTeacher) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  const isPrincipalManaged = !!existingTeacher.principalId;
+
   const body = await req.json();
-  const firstName = (body.firstName ?? "").trim();
-  const lastName = (body.lastName ?? "").trim();
+  // A Principal-managed Teacher can't rename themselves via this form even
+  // if the client sent a name - the client already hides those fields, but
+  // this is the actual enforcement point. Fall back to their real stored
+  // name (split back into parts) so the classroom-naming convention below
+  // still works without the Teacher having to re-type it.
+  const storedParts = existingTeacher.name.trim().split(" ");
+  const firstName = isPrincipalManaged
+    ? storedParts[0] ?? ""
+    : (body.firstName ?? "").trim();
+  const lastName = isPrincipalManaged
+    ? storedParts.slice(1).join(" ") || storedParts[0] || ""
+    : (body.lastName ?? "").trim();
   const className = (body.className ?? "").trim();
   const schoolName = (body.schoolName ?? "").trim();
   const subjects: string[] = Array.isArray(body.subjects)
@@ -64,10 +86,12 @@ export async function POST(req: NextRequest) {
 
   const classroomName = `${firstName[0].toUpperCase()}${lastName}-${className}`;
 
-  await prisma.teacher.update({
-    where: { id: teacherId },
-    data: { name: `${firstName} ${lastName}` },
-  });
+  if (!isPrincipalManaged) {
+    await prisma.teacher.update({
+      where: { id: teacherId },
+      data: { name: `${firstName} ${lastName}` },
+    });
+  }
 
   const existingId = await getCurrentClassroomId();
   const existing = existingId ? await prisma.classroom.findUnique({ where: { id: existingId } }) : null;

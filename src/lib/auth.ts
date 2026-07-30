@@ -28,19 +28,29 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       async authorize(credentials) {
         try {
           if (!credentials?.email || !credentials?.password) return null;
+          const email = (credentials.email as string).trim();
+          const password = credentials.password as string;
 
-          const teacher = await prisma.teacher.findUnique({
-            where: { email: (credentials.email as string).trim() },
-          });
-          if (!teacher) return null;
+          // Checked in this order since it's rarest-to-most-common - an
+          // Admin or Principal email will never collide with a Teacher's
+          // (email is unique per table, but nothing stops the SAME email
+          // being used across tables, so order matters for which wins).
+          const admin = await prisma.admin.findUnique({ where: { email } });
+          if (admin && (await bcrypt.compare(password, admin.passwordHash))) {
+            return { id: admin.id, name: admin.name, email: admin.email, role: "admin" };
+          }
 
-          const valid = await bcrypt.compare(
-            credentials.password as string,
-            teacher.passwordHash
-          );
-          if (!valid) return null;
+          const principal = await prisma.principal.findUnique({ where: { email } });
+          if (principal && (await bcrypt.compare(password, principal.passwordHash))) {
+            return { id: principal.id, name: principal.name, email: principal.email, role: "principal" };
+          }
 
-          return { id: teacher.id, name: teacher.name, email: teacher.email };
+          const teacher = await prisma.teacher.findUnique({ where: { email } });
+          if (teacher && (await bcrypt.compare(password, teacher.passwordHash))) {
+            return { id: teacher.id, name: teacher.name, email: teacher.email, role: "teacher" };
+          }
+
+          return null;
         } catch (err) {
           // Never let authorize() throw - an unhandled error here causes
           // NextAuth to force-redirect to the (broken) default error page
@@ -59,11 +69,17 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       return !!auth?.user;
     },
     async jwt({ token, user }) {
-      if (user) token.id = user.id;
+      if (user) {
+        token.id = user.id;
+        token.role = (user as { role?: string }).role;
+      }
       return token;
     },
     async session({ session, token }) {
-      if (session.user) (session.user as { id?: string }).id = token.id as string;
+      if (session.user) {
+        (session.user as { id?: string; role?: string }).id = token.id as string;
+        (session.user as { id?: string; role?: string }).role = token.role as string;
+      }
       return session;
     },
   },
