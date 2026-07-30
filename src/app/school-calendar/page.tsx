@@ -308,91 +308,12 @@ export default function SchoolCalendarPage() {
         </div>
       </div>
 
-      <div className="panel mb-6 space-y-2">
-        <h2 className="font-semibold text-sm">Add a Holiday, Teacher Work Day, or Half Day</h2>
-        <input
-          placeholder="Name (e.g. Winter Break, Grading Day, Early Release)"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          className="border rounded px-2 py-1 w-full"
-        />
-        <div className="flex gap-2 flex-wrap items-end">
-          <div>
-            <label className="block text-xs text-slate-500">Start date</label>
-            <input
-              type="date"
-              value={startDate}
-              onChange={(e) => setStartDate(e.target.value)}
-              className="border rounded px-2 py-1"
-            />
-          </div>
-          <div>
-            <label className="block text-xs text-slate-500">End date (optional)</label>
-            <input
-              type="date"
-              value={endDate}
-              onChange={(e) => setEndDate(e.target.value)}
-              className="border rounded px-2 py-1"
-            />
-          </div>
-          <div>
-            <label className="block text-xs text-slate-500">Type</label>
-            <select
-              value={type}
-              onChange={(e) => setType(e.target.value as EventType)}
-              className="border rounded px-2 py-1"
-            >
-              <option value="holiday">Holiday (no school)</option>
-              <option value="teacher_work_day">Teacher Work Day (no students)</option>
-              <option value="half_day">Half Day</option>
-              <option value="other">Reminder only (doesn't affect pacing)</option>
-            </select>
-          </div>
-          <button onClick={addEvent} disabled={saving} className="btn-primary">
-            {saving ? "Adding..." : "Add"}
-          </button>
-        </div>
-        <p className="text-xs text-slate-400">
-          Holidays and Teacher Work Days are both skipped entirely when the Pacing Guide schedules
-          unit days - students aren't in class either way. Half Days still count as an
-          instructional day, just flagged. Reminders don't change pacing at all.
+      <div className="panel mb-6 bg-slate-50 border-slate-200">
+        <p className="text-sm text-slate-600">
+          Holidays, teacher work days, and half days are set by your principal for the whole
+          school - you&apos;ll see everything they add below, but only they can add or remove
+          entries.
         </p>
-      </div>
-
-      <div className="panel mb-6 space-y-2">
-        <h2 className="font-semibold text-sm">Import from a File</h2>
-        <p className="text-sm text-slate-500">
-          Have a lot of dates to enter at once - a district calendar, a full year of half days?
-          Download the template below, fill it in (in Excel, Google Sheets, or a plain text
-          editor), and upload it here instead of adding entries one at a time.
-        </p>
-        <ul className="text-xs text-slate-500 list-disc list-inside">
-          <li>
-            <strong>name</strong> and <strong>startDate</strong> (YYYY-MM-DD) are required
-          </li>
-          <li>
-            <strong>endDate</strong> is optional - leave it blank for a single-day entry and it'll
-            match startDate
-          </li>
-          <li>
-            <strong>type</strong> must be exactly one of: holiday, teacher_work_day, half_day, or
-            other - anything else (or left blank) is treated as "other"
-          </li>
-        </ul>
-        <div className="flex gap-2 flex-wrap items-center">
-          <button onClick={downloadTemplate} className="btn-outline text-sm">
-            Download Template
-          </button>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept=".csv,.txt"
-            onChange={handleImportFile}
-            disabled={importing}
-            className="text-sm"
-          />
-          {importing && <span className="text-sm text-slate-500">Importing...</span>}
-        </div>
       </div>
 
       <div className="flex flex-wrap gap-4 mb-4 text-xs items-center">
