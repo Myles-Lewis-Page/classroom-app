@@ -20,6 +20,13 @@ export default function AdminPage() {
   const [principalError, setPrincipalError] = useState("");
   const [justCreated, setJustCreated] = useState<{ email: string; tempPassword: string } | null>(null);
 
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [pwSaving, setPwSaving] = useState(false);
+  const [pwError, setPwError] = useState("");
+  const [pwSuccess, setPwSuccess] = useState("");
+
   useEffect(() => {
     load();
   }, []);
@@ -69,6 +76,35 @@ export default function AdminPage() {
     setPEmail("");
     setPSchoolId("");
     load();
+  }
+
+  async function changePassword() {
+    setPwError("");
+    setPwSuccess("");
+    if (!currentPassword || !newPassword) {
+      setPwError("Enter your current and new password.");
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setPwError("New password and confirmation don't match.");
+      return;
+    }
+    setPwSaving(true);
+    const res = await fetch("/api/admin/account", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ currentPassword, newPassword }),
+    });
+    setPwSaving(false);
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      setPwError(data.error || "Couldn't change password.");
+      return;
+    }
+    setCurrentPassword("");
+    setNewPassword("");
+    setConfirmPassword("");
+    setPwSuccess("Password updated.");
   }
 
   return (
@@ -167,6 +203,38 @@ export default function AdminPage() {
           </button>
         </div>
         {principalError && <p className="text-rose-600 text-sm mt-1">{principalError}</p>}
+      </div>
+
+      <div className="panel mt-6">
+        <h2 className="font-semibold mb-2">Change Your Password</h2>
+        <div className="space-y-2 max-w-xs">
+          <input
+            type="password"
+            placeholder="Current password"
+            value={currentPassword}
+            onChange={(e) => setCurrentPassword(e.target.value)}
+            className="border rounded px-2 py-1 w-full"
+          />
+          <input
+            type="password"
+            placeholder="New password"
+            value={newPassword}
+            onChange={(e) => setNewPassword(e.target.value)}
+            className="border rounded px-2 py-1 w-full"
+          />
+          <input
+            type="password"
+            placeholder="Confirm new password"
+            value={confirmPassword}
+            onChange={(e) => setConfirmPassword(e.target.value)}
+            className="border rounded px-2 py-1 w-full"
+          />
+          {pwError && <p className="text-rose-600 text-sm">{pwError}</p>}
+          {pwSuccess && <p className="text-emerald-700 text-sm">✅ {pwSuccess}</p>}
+          <button onClick={changePassword} disabled={pwSaving} className="btn-primary text-sm">
+            {pwSaving ? "Saving..." : "Update Password"}
+          </button>
+        </div>
       </div>
     </div>
   );
