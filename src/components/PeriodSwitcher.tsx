@@ -45,7 +45,6 @@ export default function PeriodSwitcher({
         <option key={c.id} value={c.id}>
           {c.name}
           {c.isArchived ? " (archived)" : ""}
-          {c.sections && c.sections.length > 0 ? ` — ${c.sections.map((s) => s.name).join(", ")}` : ""}
         </option>
       ))}
     </select>
