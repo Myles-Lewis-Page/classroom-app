@@ -16,6 +16,7 @@ export default function AddStudentPage() {
   const [sectionId, setSectionId] = useState("");
   const [tags, setTags] = useState<Tag[]>([]);
   const [saving, setSaving] = useState(false);
+  const [formError, setFormError] = useState("");
 
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
@@ -75,14 +76,41 @@ export default function AddStudentPage() {
   }
 
   function toggleTag(id: string) {
-    setSelectedTagIds((prev) => (prev.includes(id) ? prev.filter((t) => t !== id) : [...prev, id]));
+    setSelectedTagIds((prev) => {
+      const next = prev.includes(id) ? prev.filter((t) => t !== id) : [...prev, id];
+      // Auto-populate the IEP/504 dropdown from whichever of those tags is
+      // selected, instead of making the teacher pick it twice - manual
+      // changes to the dropdown afterward still work fine.
+      const tag = tags.find((t) => t.id === id);
+      if (tag && ["IEP", "504"].includes(tag.name)) {
+        const stillHasThisType = next.some(
+          (tid) => tags.find((t) => t.id === tid)?.name === tag.name
+        );
+        if (stillHasThisType) {
+          setIepType(tag.name);
+        } else {
+          const otherIepTag = next
+            .map((tid) => tags.find((t) => t.id === tid))
+            .find((t) => t && ["IEP", "504"].includes(t.name));
+          setIepType(otherIepTag?.name ?? "");
+        }
+      }
+      return next;
+    });
   }
 
   const hasIepTag = tags.some((t) => selectedTagIds.includes(t.id) && ["IEP", "504"].includes(t.name));
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    setFormError("");
     if (!firstName || !lastName || !classroomId) return;
+    if (hasIepTag && (!iepType || !accommodations.trim())) {
+      setFormError(
+        "The IEP/504 tag is selected, so type and accommodations are required in that section below."
+      );
+      return;
+    }
     setSaving(true);
 
     const payload = {
@@ -118,6 +146,9 @@ export default function AddStudentPage() {
     setSaving(false);
     if (res.ok) {
       router.push("/roster");
+    } else {
+      const data = await res.json().catch(() => ({}));
+      setFormError(data.error || "Couldn't add this student. Please try again.");
     }
   }
 
@@ -254,14 +285,15 @@ export default function AddStudentPage() {
         </section>
 
         {hasIepTag && (
-        <section className="card">
-          <h2 className="font-semibold mb-3">IEP / 504 (optional)</h2>
+        <section className="card border-2 border-amber-200">
+          <h2 className="font-semibold mb-3">IEP / 504 <span className="text-amber-600 font-normal text-sm">(required - tag selected)</span></h2>
           <select
             value={iepType}
             onChange={(e) => setIepType(e.target.value)}
             className="border rounded px-2 py-1 mb-2 w-full"
+            required
           >
-            <option value="">None</option>
+            <option value="">Select type</option>
             <option value="IEP">IEP</option>
             <option value="504">504</option>
           </select>
@@ -272,6 +304,7 @@ export default function AddStudentPage() {
                 value={accommodations}
                 onChange={(e) => setAccommodations(e.target.value)}
                 className="border rounded px-2 py-1 w-full mb-2"
+                required
               />
               <div className="grid grid-cols-2 gap-3">
                 <input
@@ -329,6 +362,8 @@ export default function AddStudentPage() {
             Emergency contact
           </label>
         </section>
+
+        {formError && <p className="text-rose-600 text-sm">{formError}</p>}
 
         <button
           type="submit"
