@@ -10,6 +10,19 @@ function run(command) {
 }
 
 console.log("Running database migrations...");
+
+// Self-serve fix for a migration that got marked "failed" in the DB's
+// _prisma_migrations table (e.g. it errored partway through, or - as
+// happened once - a stray non-SQL line ended up in the migration file).
+// `migrate deploy` refuses to run anything else until that's cleared.
+// Set RESOLVE_FAILED_MIGRATION to the migration's folder name, redeploy,
+// then unset it - same one-shot pattern as SEED_ON_BOOT below.
+if (process.env.RESOLVE_FAILED_MIGRATION) {
+  console.log(`RESOLVE_FAILED_MIGRATION is set — marking "${process.env.RESOLVE_FAILED_MIGRATION}" as rolled back...`);
+  run(`npx prisma migrate resolve --rolled-back "${process.env.RESOLVE_FAILED_MIGRATION}"`);
+  console.log("Failed migration cleared.");
+}
+
 run("npx prisma migrate deploy");
 
 if (process.env.SEED_ON_BOOT === "true") {
