@@ -31,10 +31,12 @@ export default function ProfilePage() {
   const [isPrincipalManaged, setIsPrincipalManaged] = useState(false);
   const [saving, setSaving] = useState(false);
   const [savedName, setSavedName] = useState<string | null>(null);
+  const [setupError, setSetupError] = useState("");
   const [archiving, setArchiving] = useState(false);
   const [showSetupForm, setShowSetupForm] = useState(false);
   const [showAddPeriod, setShowAddPeriod] = useState(false);
   const [periodLabel, setPeriodLabel] = useState("");
+  const [addPeriodError, setAddPeriodError] = useState("");
   const [newClassroomSchoolName, setNewClassroomSchoolName] = useState("");
   const [newClassroomHasSubgroups, setNewClassroomHasSubgroups] = useState(false);
   const [newClassroomPeriodNames, setNewClassroomPeriodNames] = useState<string[]>(["Period 1", "Period 2"]);
@@ -118,22 +120,30 @@ export default function ProfilePage() {
   }
 
   async function addPeriod() {
-    if (!periodLabel.trim()) return;
+    setAddPeriodError("");
+    if (!periodLabel.trim()) {
+      setAddPeriodError("Enter a class name before creating the classroom.");
+      return;
+    }
     setAddingPeriod(true);
     const names = newClassroomHasSubgroups
       ? newClassroomPeriodNames.map((n) => n.trim()).filter(Boolean)
       : [];
-    const res = await fetch("/api/profile/add-classroom", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        className: periodLabel.trim(),
-        schoolName: newClassroomSchoolName.trim(),
-        periodNames: names,
-      }),
-    });
-    setAddingPeriod(false);
-    if (res.ok) {
+    try {
+      const res = await fetch("/api/profile/add-classroom", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          className: periodLabel.trim(),
+          schoolName: newClassroomSchoolName.trim(),
+          periodNames: names,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setAddPeriodError(data.error || "Couldn't create the classroom. Please try again.");
+        return;
+      }
       setPeriodLabel("");
       setNewClassroomSchoolName("");
       setNewClassroomHasSubgroups(false);
@@ -142,6 +152,10 @@ export default function ProfilePage() {
       loadProfile();
       refreshSections();
       router.refresh();
+    } catch {
+      setAddPeriodError("Couldn't reach the server - check your connection and try again.");
+    } finally {
+      setAddingPeriod(false);
     }
   }
 
@@ -176,17 +190,24 @@ export default function ProfilePage() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!firstName.trim() || !lastName.trim() || !className.trim()) return;
+    setSetupError("");
+    if (!firstName.trim() || !lastName.trim() || !className.trim()) {
+      setSetupError("Please fill in your name and a class name above before creating the classroom.");
+      return;
+    }
     const isNewClassroom = !currentClassroom;
     setSaving(true);
-    const res = await fetch("/api/profile", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ firstName, lastName, className, subjects: selectedSubjects, schoolName }),
-    });
-    const data = await res.json();
-    setSaving(false);
-    if (res.ok) {
+    try {
+      const res = await fetch("/api/profile", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ firstName, lastName, className, subjects: selectedSubjects, schoolName }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setSetupError(data.error || "Couldn't save the classroom. Please try again.");
+        return;
+      }
       setCurrentClassroom(data.classroom);
       setSavedName(data.classroom.name);
       setExistingSubjects(data.skillSubjects ?? []);
@@ -196,16 +217,25 @@ export default function ProfilePage() {
       if (isNewClassroom && hasSubgroups) {
         const names = initialPeriodNames.map((n) => n.trim()).filter(Boolean);
         for (const name of names) {
-          await fetch("/api/sections", {
+          const periodRes = await fetch("/api/sections", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ name }),
           });
+          if (!periodRes.ok) {
+            setSetupError(
+              `Classroom was created, but "${name}" couldn't be added as a Period - add it from the Periods panel below instead.`
+            );
+          }
         }
       }
       loadProfile();
       refreshSections();
       router.refresh();
+    } catch {
+      setSetupError("Couldn't reach the server - check your connection and try again.");
+    } finally {
+      setSaving(false);
     }
   }
 
@@ -416,6 +446,8 @@ export default function ProfilePage() {
               )}
             </div>
 
+            {addPeriodError && <p className="text-rose-600 text-sm">{addPeriodError}</p>}
+
             <div className="flex gap-2">
               <button onClick={addPeriod} disabled={addingPeriod || !periodLabel.trim()} className="btn-primary">
                 {addingPeriod ? "Creating..." : "Create Classroom"}
@@ -621,6 +653,8 @@ export default function ProfilePage() {
             )}
           </div>
         )}
+
+        {setupError && <p className="text-rose-600 text-sm">{setupError}</p>}
 
         <button type="submit" disabled={saving} className="btn-primary w-full py-2">
           {saving ? "Saving..." : currentClassroom ? "Update" : "Create Classroom"}
