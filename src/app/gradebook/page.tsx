@@ -31,7 +31,7 @@ type Assignment = {
 };
 
 export default function GradebookPage() {
-  const { activeSectionId } = useSectionContext();
+  const { activeSectionId, sections } = useSectionContext();
   const [students, setStudents] = useState<Student[]>([]);
   const [subjects, setSubjects] = useState<SkillSubject[]>([]);
   const [categories, setCategories] = useState<GradeCategory[]>([]);
@@ -41,10 +41,15 @@ export default function GradebookPage() {
   const [weightInputs, setWeightInputs] = useState<Record<string, string>>({});
   const [newCategoryName, setNewCategoryName] = useState("");
   const [newCategoryWeight, setNewCategoryWeight] = useState("0");
+  // Independent of the top-nav Period switcher: "combined" always shows every
+  // student in one table regardless of which Period is active up top; "byPeriod"
+  // renders one table per Period. The nav switcher still narrows things like
+  // Roster/Behavior elsewhere - this is just for how the Gradebook itself reads.
+  const [viewMode, setViewMode] = useState<"combined" | "byPeriod">("combined");
 
   const visibleStudents = useMemo(
-    () => filterBySection(students, activeSectionId),
-    [students, activeSectionId]
+    () => (viewMode === "combined" ? students : filterBySection(students, activeSectionId)),
+    [students, activeSectionId, viewMode]
   );
 
   useEffect(() => {
@@ -96,7 +101,19 @@ export default function GradebookPage() {
 
   const visibleAssignments = assignments
     .filter((a) => (selectedSubjectId === "all" ? true : a.skillSubjectId === selectedSubjectId))
-    .filter((a) => !activeSectionId || a.sections.length === 0 || a.sections.some((s) => s.id === activeSectionId));
+    .filter(
+      (a) =>
+        viewMode === "combined" ||
+        !activeSectionId ||
+        a.sections.length === 0 ||
+        a.sections.some((s) => s.id === activeSectionId)
+    );
+
+  function assignmentsForSection(sectionId: string) {
+    return assignments
+      .filter((a) => (selectedSubjectId === "all" ? true : a.skillSubjectId === selectedSubjectId))
+      .filter((a) => a.sections.length === 0 || a.sections.some((s) => s.id === sectionId));
+  }
 
   function entryFor(assignment: Assignment, studentId: string) {
     return assignment.entries.find((e) => e.student.id === studentId);
@@ -144,12 +161,12 @@ export default function GradebookPage() {
   // Weighted overall grade: average % within each category, then combine
   // using that category's weight, normalized against only the categories
   // that actually have graded work (so missing categories don't distort it).
-  function studentWeightedAverage(studentId: string): number | null {
+  function studentWeightedAverage(studentId: string, forAssignments: Assignment[] = visibleAssignments): number | null {
     let weightedSum = 0;
     let weightUsed = 0;
 
     categories.forEach((cat) => {
-      const catAssignments = visibleAssignments.filter((a) => a.gradeCategoryId === cat.id);
+      const catAssignments = forAssignments.filter((a) => a.gradeCategoryId === cat.id);
       const percents = catAssignments
         .map((a) => entryPercent(a, entryFor(a, studentId)))
         .filter((p): p is number => p !== null);
@@ -160,7 +177,7 @@ export default function GradebookPage() {
     });
 
     // Uncategorized assignments count as their own equal-weight bucket
-    const uncategorized = visibleAssignments.filter((a) => !a.gradeCategoryId);
+    const uncategorized = forAssignments.filter((a) => !a.gradeCategoryId);
     if (uncategorized.length > 0) {
       const percents = uncategorized
         .map((a) => entryPercent(a, entryFor(a, studentId)))
@@ -244,6 +261,23 @@ export default function GradebookPage() {
         </div>
       )}
 
+      {sections.length > 0 && (
+        <div className="flex gap-2 mb-2">
+          <button
+            onClick={() => setViewMode("combined")}
+            className={`px-3 py-1 rounded text-sm ${viewMode === "combined" ? "btn-primary" : "bg-white border"}`}
+          >
+            Whole Class (combined)
+          </button>
+          <button
+            onClick={() => setViewMode("byPeriod")}
+            className={`px-3 py-1 rounded text-sm ${viewMode === "byPeriod" ? "btn-primary" : "bg-white border"}`}
+          >
+            By Period
+          </button>
+        </div>
+      )}
+
       <div className="flex gap-2 mb-4 flex-wrap">
         <button
           onClick={() => setSelectedSubjectId("all")}
@@ -266,7 +300,7 @@ export default function GradebookPage() {
         ))}
       </div>
 
-      {visibleAssignments.length === 0 ? (
+      {(viewMode === "combined" ? visibleAssignments : assignments).length === 0 ? (
         <p className="text-slate-500">
           No assignments yet.{" "}
           <Link href="/homework" className="underline text-sky-600">
@@ -274,73 +308,96 @@ export default function GradebookPage() {
           </Link>{" "}
           to see it here.
         </p>
+      ) : viewMode === "combined" ? (
+        renderTable(visibleStudents, visibleAssignments)
       ) : (
-        <table className="border-collapse text-sm">
-          <thead>
-            <tr>
-              <th className="border p-2 bg-white sticky left-0">Student</th>
-              {visibleAssignments.map((a) => (
-                <th key={a.id} className="border p-2 bg-white whitespace-nowrap">
-                  <Link href={`/homework/${a.id}`} className="text-sky-600 hover:underline">
-                    {a.name}
-                  </Link>
-                  <br />
-                  <span className="text-xs text-slate-400">
-                    Assigned {formatShortDate(a.assignedDate)}
-                    {a.dueDate && (
-                      <>
-                        <br />
-                        Due {formatShortDate(a.dueDate)}
-                      </>
-                    )}
-                  </span>
-                </th>
-              ))}
-              <th className="border p-2 bg-white whitespace-nowrap">Overall Grade</th>
-            </tr>
-          </thead>
-          <tbody>
-            {visibleStudents.map((student) => {
-              const avg = studentWeightedAverage(student.id);
-              return (
-                <tr key={student.id}>
-                  <td className="border p-2 font-medium sticky left-0 bg-white whitespace-nowrap">
-                    <Link href={`/students/${student.id}`} className="hover:underline">
-                      {student.lastName}, {student.firstName}
-                    </Link>
-                  </td>
-                  {visibleAssignments.map((a) => {
-                    const entry = entryFor(a, student.id);
-                    const { text, color } = cellDisplay(a, entry);
-                    const tag = submissionTag(a, entry);
-                    return (
-                      <td key={a.id} className="border p-1 text-center">
-                        <span
-                          className="inline-block px-2 py-1 rounded text-xs whitespace-nowrap"
-                          style={{ backgroundColor: color }}
-                        >
-                          {text}
-                        </span>
-                        {tag && (
-                          <span
-                            className="block text-[10px] mt-0.5 font-medium"
-                            style={{ color: tag === "Missing" ? "#b91c1c" : "#b45309" }}
-                          >
-                            {tag}
-                          </span>
-                        )}
-                      </td>
-                    );
-                  })}
-                  <td className="border p-2 text-center font-medium">
-                    {avg !== null ? `${avg}%` : "—"}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+        <div className="space-y-6">
+          {sections.map((s) => {
+            const sStudents = filterBySection(students, s.id);
+            const sAssignments = assignmentsForSection(s.id);
+            return (
+              <div key={s.id}>
+                <h2 className="font-semibold mb-2">{s.name}</h2>
+                {sAssignments.length === 0 ? (
+                  <p className="text-slate-400 text-sm">No assignments for this Period yet.</p>
+                ) : (
+                  renderTable(sStudents, sAssignments)
+                )}
+              </div>
+            );
+          })}
+        </div>
       )}
     </div>
   );
+
+  function renderTable(rowStudents: Student[], colAssignments: Assignment[]) {
+    return (
+      <table className="border-collapse text-sm">
+        <thead>
+          <tr>
+            <th className="border p-2 bg-white sticky left-0">Student</th>
+            {colAssignments.map((a) => (
+              <th key={a.id} className="border p-2 bg-white whitespace-nowrap">
+                <Link href={`/homework/${a.id}`} className="text-sky-600 hover:underline">
+                  {a.name}
+                </Link>
+                <br />
+                <span className="text-xs text-slate-400">
+                  Assigned {formatShortDate(a.assignedDate)}
+                  {a.dueDate && (
+                    <>
+                      <br />
+                      Due {formatShortDate(a.dueDate)}
+                    </>
+                  )}
+                </span>
+              </th>
+            ))}
+            <th className="border p-2 bg-white whitespace-nowrap">Overall Grade</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rowStudents.map((student) => {
+            const avg = studentWeightedAverage(student.id, colAssignments);
+            return (
+              <tr key={student.id}>
+                <td className="border p-2 font-medium sticky left-0 bg-white whitespace-nowrap">
+                  <Link href={`/students/${student.id}`} className="hover:underline">
+                    {student.lastName}, {student.firstName}
+                  </Link>
+                </td>
+                {colAssignments.map((a) => {
+                  const entry = entryFor(a, student.id);
+                  const { text, color } = cellDisplay(a, entry);
+                  const tag = submissionTag(a, entry);
+                  return (
+                    <td key={a.id} className="border p-1 text-center">
+                      <span
+                        className="inline-block px-2 py-1 rounded text-xs whitespace-nowrap"
+                        style={{ backgroundColor: color }}
+                      >
+                        {text}
+                      </span>
+                      {tag && (
+                        <span
+                          className="block text-[10px] mt-0.5 font-medium"
+                          style={{ color: tag === "Missing" ? "#b91c1c" : "#b45309" }}
+                        >
+                          {tag}
+                        </span>
+                      )}
+                    </td>
+                  );
+                })}
+                <td className="border p-2 text-center font-medium">
+                  {avg !== null ? `${avg}%` : "—"}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    );
+  }
 }

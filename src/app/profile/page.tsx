@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import SectionManager from "@/components/SectionManager";
 
 const GRADE_OPTIONS = ["1st", "2nd", "3rd", "4th", "5th"];
 const GENERIC_SUBJECTS = ["Math", "Reading", "Writing", "Science", "Social Studies", "Spelling"];
@@ -25,6 +26,12 @@ export default function ProfilePage() {
   const [periodLabel, setPeriodLabel] = useState("");
   const [periodGrade, setPeriodGrade] = useState("3rd");
   const [addingPeriod, setAddingPeriod] = useState(false);
+  // First-time setup question: will this classroom have Periods? If yes,
+  // collect the initial Period names right here so the teacher doesn't have
+  // to go find the (separate) Periods panel afterward - more can always be
+  // added later from that panel regardless.
+  const [hasSubgroups, setHasSubgroups] = useState(false);
+  const [initialPeriodNames, setInitialPeriodNames] = useState<string[]>(["Period 1", "Period 2"]);
 
   // Subjects taught (generic + custom)
   const [selectedSubjects, setSelectedSubjects] = useState<string[]>([]);
@@ -131,6 +138,7 @@ export default function ProfilePage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!firstName.trim() || !lastName.trim() || !grade) return;
+    const isNewClassroom = !currentClassroom;
     setSaving(true);
     const res = await fetch("/api/profile", {
       method: "POST",
@@ -143,6 +151,19 @@ export default function ProfilePage() {
       setCurrentClassroom(data.classroom);
       setSavedName(data.classroom.name);
       setExistingSubjects(data.skillSubjects ?? []);
+      // Only create the initial Periods on first-time setup of a brand new
+      // classroom - if this was just an edit to an existing one, Periods
+      // are managed from the panel below instead, to avoid duplicating them.
+      if (isNewClassroom && hasSubgroups) {
+        const names = initialPeriodNames.map((n) => n.trim()).filter(Boolean);
+        for (const name of names) {
+          await fetch("/api/sections", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ name }),
+          });
+        }
+      }
       loadProfile();
     }
   }
@@ -233,23 +254,38 @@ export default function ProfilePage() {
         </div>
       )}
 
+      {currentClassroom && (
+        <div className="panel mb-4">
+          <p className="text-sm font-semibold mb-1">Subgroups within this classroom?</p>
+          <p className="text-xs text-slate-500 mb-2">
+            Periods (e.g. "Period 1" / "Period 2") live <em>inside</em> this one classroom -
+            same roster pool, same subjects/grading setup, same seating layout. They only split
+            the Roster, Pacing Guide day-by-day speed, and Gradebook by group; everything else
+            (Behavior Log, Skills, Events, Seating, Sub Mode, Homework grading) still scopes by
+            whichever Period is active up top. You can add more at any time - not just now.
+          </p>
+          <SectionManager />
+        </div>
+      )}
+
       <div className="panel mb-4">
-        <p className="text-sm font-semibold mb-1">Track a second group separately?</p>
+        <p className="text-sm font-semibold mb-1">A genuinely separate class?</p>
         <p className="text-xs text-slate-500 mb-2">
-          If you teach two groups (e.g. "Group A" / "Group B", or two periods), add each as its
-          own classroom here - students, attendance, grades, everything stays completely separate
-          per group, and you switch between them any time using the buttons above.
+          This is different from a Period above - use this only if you teach an entirely
+          separate class (different roster, different subjects/prep). It gets its own
+          classroom from scratch - students, attendance, grades, everything - and shows up in
+          the classroom switcher above, completely independent of "{currentClassroom?.name ?? "this classroom"}".
         </p>
         {!showAddPeriod ? (
           <button onClick={() => setShowAddPeriod(true)} className="btn-outline text-sm">
-            + Add Another Classroom/Period
+            + Add a Separate Classroom
           </button>
         ) : (
           <div className="flex gap-2 flex-wrap items-end">
             <div>
-              <label className="block text-xs text-slate-500">Group/Period label</label>
+              <label className="block text-xs text-slate-500">Label (e.g. "Homeroom", "Reading Pullout")</label>
               <input
-                placeholder="e.g. Group A"
+                placeholder="e.g. Homeroom"
                 value={periodLabel}
                 onChange={(e) => setPeriodLabel(e.target.value)}
                 className="border rounded px-2 py-1"
@@ -409,6 +445,64 @@ export default function ProfilePage() {
             </p>
           )}
         </div>
+
+        {!currentClassroom && (
+          <div>
+            <label className="block text-xs text-slate-500 mb-1">
+              Will this classroom have subgroups (Periods)?
+            </label>
+            <div className="flex gap-2 mb-2">
+              <button
+                type="button"
+                onClick={() => setHasSubgroups(false)}
+                className={`text-sm px-3 py-1 rounded border ${!hasSubgroups ? "btn-primary" : "bg-white"}`}
+              >
+                No, just one class
+              </button>
+              <button
+                type="button"
+                onClick={() => setHasSubgroups(true)}
+                className={`text-sm px-3 py-1 rounded border ${hasSubgroups ? "btn-primary" : "bg-white"}`}
+              >
+                Yes, add Periods
+              </button>
+            </div>
+            {hasSubgroups && (
+              <div className="space-y-1">
+                {initialPeriodNames.map((name, i) => (
+                  <div key={i} className="flex gap-2">
+                    <input
+                      value={name}
+                      onChange={(e) =>
+                        setInitialPeriodNames((prev) =>
+                          prev.map((n, ni) => (ni === i ? e.target.value : n))
+                        )
+                      }
+                      className="border rounded px-2 py-1 text-sm flex-1"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setInitialPeriodNames((prev) => prev.filter((_, ni) => ni !== i))}
+                      className="text-rose-600 text-xs"
+                    >
+                      Remove
+                    </button>
+                  </div>
+                ))}
+                <button
+                  type="button"
+                  onClick={() => setInitialPeriodNames((prev) => [...prev, `Period ${prev.length + 1}`])}
+                  className="btn-outline text-xs"
+                >
+                  + Add another Period
+                </button>
+                <p className="text-xs text-slate-400">
+                  You can rename these or add more any time later from the Periods panel below.
+                </p>
+              </div>
+            )}
+          </div>
+        )}
 
         <button type="submit" disabled={saving} className="btn-primary w-full py-2">
           {saving ? "Saving..." : currentClassroom ? "Update" : "Create Classroom"}
