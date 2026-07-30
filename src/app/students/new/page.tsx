@@ -28,10 +28,9 @@ export default function AddStudentPage() {
   const [reaction, setReaction] = useState("");
   const [dietary, setDietary] = useState("");
 
-  const [iepType, setIepType] = useState("");
-  const [accommodations, setAccommodations] = useState("");
-  const [caseManager, setCaseManager] = useState("");
-  const [reviewDate, setReviewDate] = useState("");
+  const [iepFields, setIepFields] = useState<
+    Record<string, { accommodations: string; caseManager: string; reviewDate: string }>
+  >({});
 
   const [parentName, setParentName] = useState("");
   const [parentRelationship, setParentRelationship] = useState("Parent/Guardian");
@@ -76,38 +75,33 @@ export default function AddStudentPage() {
   }
 
   function toggleTag(id: string) {
-    setSelectedTagIds((prev) => {
-      const next = prev.includes(id) ? prev.filter((t) => t !== id) : [...prev, id];
-      // Auto-populate the IEP/504 dropdown from whichever of those tags is
-      // selected, instead of making the teacher pick it twice - manual
-      // changes to the dropdown afterward still work fine.
-      const tag = tags.find((t) => t.id === id);
-      if (tag && ["IEP", "504"].includes(tag.name)) {
-        const stillHasThisType = next.some(
-          (tid) => tags.find((t) => t.id === tid)?.name === tag.name
-        );
-        if (stillHasThisType) {
-          setIepType(tag.name);
-        } else {
-          const otherIepTag = next
-            .map((tid) => tags.find((t) => t.id === tid))
-            .find((t) => t && ["IEP", "504"].includes(t.name));
-          setIepType(otherIepTag?.name ?? "");
-        }
-      }
-      return next;
-    });
+    setSelectedTagIds((prev) => (prev.includes(id) ? prev.filter((t) => t !== id) : [...prev, id]));
   }
 
-  const hasIepTag = tags.some((t) => selectedTagIds.includes(t.id) && ["IEP", "504"].includes(t.name));
+  const activeIepTypes = Array.from(
+    new Set(
+      tags
+        .filter((t) => selectedTagIds.includes(t.id) && ["IEP", "504"].includes(t.name))
+        .map((t) => t.name)
+    )
+  );
+
+  function setIepField(type: string, field: "accommodations" | "caseManager" | "reviewDate", value: string) {
+    setIepFields((prev) => {
+      const existing = prev[type] ?? { accommodations: "", caseManager: "", reviewDate: "" };
+      return { ...prev, [type]: { ...existing, [field]: value } };
+    });
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setFormError("");
     if (!firstName || !lastName || !classroomId) return;
-    if (hasIepTag && (!iepType || !accommodations.trim())) {
+    if (
+      activeIepTypes.some((type) => !iepFields[type]?.accommodations?.trim())
+    ) {
       setFormError(
-        "The IEP/504 tag is selected, so type and accommodations are required in that section below."
+        `The ${activeIepTypes.join(" and ")} tag${activeIepTypes.length > 1 ? "s are" : " is"} selected, so accommodations ${activeIepTypes.length > 1 ? "are" : "is"} required in ${activeIepTypes.length > 1 ? "each of those sections" : "that section"} below.`
       );
       return;
     }
@@ -122,7 +116,12 @@ export default function AddStudentPage() {
       tagIds: selectedTagIds,
       allergies: allergen ? [{ allergen, severity, reaction }] : [],
       dietaryRestrictions: dietary ? [{ restriction: dietary }] : [],
-      ieps: hasIepTag && iepType ? [{ type: iepType, accommodations, caseManager, reviewDate }] : [],
+      ieps: activeIepTypes.map((type) => ({
+        type,
+        accommodations: iepFields[type]?.accommodations ?? "",
+        caseManager: iepFields[type]?.caseManager ?? "",
+        reviewDate: iepFields[type]?.reviewDate ?? "",
+      })),
       parents: parentName
         ? [
             {
@@ -284,46 +283,34 @@ export default function AddStudentPage() {
           />
         </section>
 
-        {hasIepTag && (
-        <section className="card border-2 border-amber-200">
-          <h2 className="font-semibold mb-3">IEP / 504 <span className="text-amber-600 font-normal text-sm">(required - tag selected)</span></h2>
-          <select
-            value={iepType}
-            onChange={(e) => setIepType(e.target.value)}
-            className="border rounded px-2 py-1 mb-2 w-full"
-            required
-          >
-            <option value="">Select type</option>
-            <option value="IEP">IEP</option>
-            <option value="504">504</option>
-          </select>
-          {iepType && (
-            <>
-              <textarea
-                placeholder="Accommodations"
-                value={accommodations}
-                onChange={(e) => setAccommodations(e.target.value)}
-                className="border rounded px-2 py-1 w-full mb-2"
-                required
+        {activeIepTypes.map((type) => (
+          <section key={type} className="card border-2 border-amber-200">
+            <h2 className="font-semibold mb-3">
+              {type} <span className="text-amber-600 font-normal text-sm">(required - tag selected)</span>
+            </h2>
+            <textarea
+              placeholder="Accommodations"
+              value={iepFields[type]?.accommodations ?? ""}
+              onChange={(e) => setIepField(type, "accommodations", e.target.value)}
+              className="border rounded px-2 py-1 w-full mb-2"
+              required
+            />
+            <div className="grid grid-cols-2 gap-3">
+              <input
+                placeholder="Case manager"
+                value={iepFields[type]?.caseManager ?? ""}
+                onChange={(e) => setIepField(type, "caseManager", e.target.value)}
+                className="border rounded px-2 py-1"
               />
-              <div className="grid grid-cols-2 gap-3">
-                <input
-                  placeholder="Case manager"
-                  value={caseManager}
-                  onChange={(e) => setCaseManager(e.target.value)}
-                  className="border rounded px-2 py-1"
-                />
-                <input
-                  type="date"
-                  value={reviewDate}
-                  onChange={(e) => setReviewDate(e.target.value)}
-                  className="border rounded px-2 py-1"
-                />
-              </div>
-            </>
-          )}
-        </section>
-        )}
+              <input
+                type="date"
+                value={iepFields[type]?.reviewDate ?? ""}
+                onChange={(e) => setIepField(type, "reviewDate", e.target.value)}
+                className="border rounded px-2 py-1"
+              />
+            </div>
+          </section>
+        ))}
 
         <section className="card">
           <h2 className="font-semibold mb-3">Parent / Guardian (optional)</h2>
