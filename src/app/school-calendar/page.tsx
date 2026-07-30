@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   parseDateOnly,
   toDateInputValue,
@@ -160,6 +160,8 @@ export default function SchoolCalendarPage() {
   const [endDate, setEndDate] = useState("");
   const [type, setType] = useState<EventType>("holiday");
   const [saving, setSaving] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     loadClassroom();
@@ -207,6 +209,47 @@ export default function SchoolCalendarPage() {
     setEndDate("");
     setSaving(false);
     loadEvents();
+  }
+
+  function downloadTemplate() {
+    const csv = [
+      "name,startDate,endDate,type",
+      "Winter Break,2026-12-21,2027-01-02,holiday",
+      "Teacher Grading Day,2026-10-09,2026-10-09,teacher_work_day",
+      "Early Release,2026-11-25,2026-11-25,half_day",
+      "Picture Day,2026-09-15,2026-09-15,other",
+    ].join("\n");
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "school-calendar-template.csv";
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  async function handleImportFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setImporting(true);
+    const text = await file.text();
+    const res = await fetch("/api/calendar-events/import", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ csvText: text }),
+    });
+    const result = await res.json().catch(() => ({}));
+    setImporting(false);
+    if (res.ok) {
+      alert(
+        `Imported ${result.imported ?? 0} entr${result.imported === 1 ? "y" : "ies"}.` +
+          (result.skipped ? ` Skipped ${result.skipped} row(s) missing a name or date.` : "")
+      );
+      loadEvents();
+    } else {
+      alert(result.error || "Import failed. Check the file matches the template format.");
+    }
+    if (fileInputRef.current) fileInputRef.current.value = "";
   }
 
   async function removeEvent(id: string, eventName: string) {
@@ -313,6 +356,42 @@ export default function SchoolCalendarPage() {
           unit days - students aren't in class either way. Half Days still count as an
           instructional day, just flagged. Reminders don't change pacing at all.
         </p>
+      </div>
+
+      <div className="panel mb-6 space-y-2">
+        <h2 className="font-semibold text-sm">Import from a File</h2>
+        <p className="text-sm text-slate-500">
+          Have a lot of dates to enter at once - a district calendar, a full year of half days?
+          Download the template below, fill it in (in Excel, Google Sheets, or a plain text
+          editor), and upload it here instead of adding entries one at a time.
+        </p>
+        <ul className="text-xs text-slate-500 list-disc list-inside">
+          <li>
+            <strong>name</strong> and <strong>startDate</strong> (YYYY-MM-DD) are required
+          </li>
+          <li>
+            <strong>endDate</strong> is optional - leave it blank for a single-day entry and it'll
+            match startDate
+          </li>
+          <li>
+            <strong>type</strong> must be exactly one of: holiday, teacher_work_day, half_day, or
+            other - anything else (or left blank) is treated as "other"
+          </li>
+        </ul>
+        <div className="flex gap-2 flex-wrap items-center">
+          <button onClick={downloadTemplate} className="btn-outline text-sm">
+            Download Template
+          </button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".csv,.txt"
+            onChange={handleImportFile}
+            disabled={importing}
+            className="text-sm"
+          />
+          {importing && <span className="text-sm text-slate-500">Importing...</span>}
+        </div>
       </div>
 
       <div className="flex flex-wrap gap-4 mb-4 text-xs items-center">

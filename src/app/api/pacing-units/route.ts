@@ -2,8 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
 import { getCurrentClassroomId } from "@/lib/classroomScope";
-import { parseDateOnly } from "@/lib/dateOnly";
-import { generateInstructionalDates, getHolidayRanges } from "@/lib/pacing";
+import { parseDateOnly, formatShortDate } from "@/lib/dateOnly";
+import { generateInstructionalDates, getHolidayRanges, findOverlappingUnit } from "@/lib/pacing";
 
 export async function GET() {
   const session = await auth();
@@ -39,6 +39,18 @@ export async function POST(req: NextRequest) {
   const endDate = parseDateOnly(body.endDate);
   if (isNaN(startDate.getTime()) || isNaN(endDate.getTime()) || endDate < startDate) {
     return NextResponse.json({ error: "Valid start and end dates are required" }, { status: 400 });
+  }
+
+  const overlap = await findOverlappingUnit(classroomId, startDate, endDate);
+  if (overlap) {
+    return NextResponse.json(
+      {
+        error: `That overlaps "${overlap.name}" (${formatShortDate(overlap.startDate)} - ${formatShortDate(
+          overlap.endDate
+        )}). Units can't overlap - adjust the dates or edit that unit first.`,
+      },
+      { status: 409 }
+    );
   }
 
   const count = await prisma.pacingUnit.count({ where: { classroomId } });

@@ -27,6 +27,8 @@ export default function PacingGuidePage() {
   const [standards, setStandards] = useState("");
   const [topics, setTopics] = useState("");
   const [saving, setSaving] = useState(false);
+  const [createError, setCreateError] = useState("");
+  const [editErrors, setEditErrors] = useState<Record<string, string>>({});
 
   useEffect(() => {
     load();
@@ -39,12 +41,18 @@ export default function PacingGuidePage() {
   async function addUnit() {
     if (!name.trim() || !startDate || !endDate) return;
     setSaving(true);
-    await fetch("/api/pacing-units", {
+    setCreateError("");
+    const res = await fetch("/api/pacing-units", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ name: name.trim(), startDate, endDate, standards, topics }),
     });
     setSaving(false);
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      setCreateError(data.error || "Couldn't create the unit.");
+      return;
+    }
     setName("");
     setStartDate("");
     setEndDate("");
@@ -61,11 +69,17 @@ export default function PacingGuidePage() {
   }
 
   async function saveUnitEdits(unit: Unit, updates: Partial<Unit>) {
-    await fetch(`/api/pacing-units/${unit.id}`, {
+    const res = await fetch(`/api/pacing-units/${unit.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(updates),
     });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      setEditErrors((prev) => ({ ...prev, [unit.id]: data.error || "Couldn't save changes." }));
+      return;
+    }
+    setEditErrors((prev) => ({ ...prev, [unit.id]: "" }));
     setEditingId("");
     load();
   }
@@ -145,6 +159,7 @@ export default function PacingGuidePage() {
             className="border rounded px-2 py-1 w-full"
             rows={3}
           />
+          {createError && <p className="text-sm text-rose-600">{createError}</p>}
           <div className="flex gap-2">
             <button onClick={addUnit} disabled={saving} className="btn-primary">
               {saving ? "Creating..." : "Create Unit"}
@@ -192,7 +207,11 @@ export default function PacingGuidePage() {
               </div>
 
               {isEditing && (
-                <UnitEditForm unit={unit} onSave={(updates) => saveUnitEdits(unit, updates)} />
+                <UnitEditForm
+                  unit={unit}
+                  error={editErrors[unit.id]}
+                  onSave={(updates) => saveUnitEdits(unit, updates)}
+                />
               )}
             </div>
           );
@@ -205,7 +224,15 @@ export default function PacingGuidePage() {
   );
 }
 
-function UnitEditForm({ unit, onSave }: { unit: Unit; onSave: (u: Partial<Unit>) => void }) {
+function UnitEditForm({
+  unit,
+  error,
+  onSave,
+}: {
+  unit: Unit;
+  error?: string;
+  onSave: (u: Partial<Unit>) => void;
+}) {
   const [name, setName] = useState(unit.name);
   const [startDate, setStartDate] = useState(unit.startDate.slice(0, 10));
   const [endDate, setEndDate] = useState(unit.endDate.slice(0, 10));
@@ -251,6 +278,7 @@ function UnitEditForm({ unit, onSave }: { unit: Unit; onSave: (u: Partial<Unit>)
         rows={3}
         placeholder="Topics (one per line)"
       />
+      {error && <p className="text-sm text-rose-600">{error}</p>}
       <button
         onClick={() => onSave({ name, startDate, endDate, standards, topics })}
         className="btn-primary text-sm"

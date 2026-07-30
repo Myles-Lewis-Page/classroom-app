@@ -68,6 +68,153 @@ export async function recomputeUnitDayDates(unitId: string) {
   );
 }
 
+/** How many instructional dates fall in [start, end] inclusive - what a unit's day count would be from its set start/end alone. */
+export function countInstructionalDaysInRange(
+  start: Date,
+  end: Date,
+  holidayRanges: { startDate: Date; endDate: Date }[]
+): number {
+  let count = 0;
+  let cursor = new Date(start);
+  const isHoliday = (d: Date) => holidayRanges.some((h) => d >= h.startDate && d <= h.endDate);
+  while (cursor <= end) {
+    if (!isWeekend(cursor) && !isHoliday(cursor)) count++;
+    cursor = addUtcDays(cursor, 1);
+  }
+  return count;
+}
+
+/** The date of a unit's last (highest dayNumber) day row, or null if it has none. */
+export async function getUnitLastDayDate(unitId: string): Promise<Date | null> {
+  const lastDay = await prisma.pacingUnitDay.findFirst({
+    where: { pacingUnitId: unitId },
+    orderBy: { dayNumber: "desc" },
+  });
+  return lastDay ? lastDay.date : null;
+}
+
+/**
+ * Only one unit runs at a time: shifts every OTHER unit in the classroom
+ * that starts later than `anchorUnitId` by the same number of calendar days
+ * - e.g. if a unit runs 4 days long, whatever comes next moves down 4 days
+ * to avoid overlapping it. A flat shift (not a recursive per-unit cascade)
+ * is correct here: every later unit's own day *count* is untouched, only
+ * its position moves, so they all need to move by exactly the same amount.
+ */
+export async function shiftSubsequentUnits(classroomId: string, anchorUnitId: string, deltaDays: number) {
+  if (!deltaDays) return;
+  const anchor = await prisma.pacingUnit.findUnique({ where: { id: anchorUnitId } });
+  if (!anchor) return;
+
+  const laterUnits = await prisma.pacingUnit.findMany({
+    where: { classroomId, id: { not: anchorUnitId }, startDate: { gt: anchor.startDate } },
+  });
+
+  for (const u of laterUnits) {
+    await prisma.pacingUnit.update({
+      where: { id: u.id },
+      data: {
+        startDate: addUtcDays(u.startDate, deltaDays),
+        endDate: addUtcDays(u.endDate, deltaDays),
+      },
+    });
+    await recomputeUnitDayDates(u.id);
+  }
+}
+
+/**
+ * Call after any change that might have moved a unit's last day (topic
+ * added/removed, a day marked half-completed, an extra day removed, or its
+ * dates edited directly) - compares to the last day date from before the
+ * change and, if it moved, shifts every later unit by the same amount so
+ * nothing ends up overlapping.
+ */
+export async function cascadeAfterDayCountChange(unitId: string, beforeLastDate: Date | null) {
+  const unit = await prisma.pacingUnit.findUnique({ where: { id: unitId } });
+  if (!unit) return;
+  const afterLastDate = await getUnitLastDayDate(unitId);
+  if (!beforeLastDate || !afterLastDate) return;
+
+  const deltaDays = Math.round((afterLastDate.getTime() - beforeLastDate.getTime()) / 86400000);
+  if (deltaDays === 0) return;
+  await shiftSubsequentUnits(unit.classroomId, unitId, deltaDays);
+}
+
+/**
+ * After a topic is removed, trims blank trailing days back down to whichever
+ * is longer: the unit's originally-set length, or however many days the
+ * topics that are left still need. Only ever removes days that are both
+ * past that target AND completely untouched (no status progress, no
+ * manually-typed content, not an isExtraDay from a half-completed lesson) -
+ * stops at the first day with anything real on it, so nothing real is ever
+ * silently lost.
+ */
+export async function shrinkUnitDaysIfPossible(unitId: string) {
+  const unit = await prisma.pacingUnit.findUnique({ where: { id: unitId } });
+  if (!unit) return;
+
+  const [topics, holidays, days] = await Promise.all([
+    prisma.unitTopic.findMany({ where: { unitId } }),
+    getHolidayRanges(unit.classroomId),
+    prisma.pacingUnitDay.findMany({ where: { pacingUnitId: unitId }, orderBy: { dayNumber: "desc" } }),
+  ]);
+
+  const topicDaysSum = topics.reduce((sum, t) => sum + t.days, 0);
+  const originalSetDays = countInstructionalDaysInRange(unit.startDate, unit.endDate, holidays);
+  const targetDayCount = Math.max(originalSetDays, topicDaysSum);
+
+  if (days.length <= targetDayCount) return;
+
+  const toDelete: string[] = [];
+  for (const day of days) {
+    if (day.dayNumber <= targetDayCount) break;
+    const isBlank =
+      day.status === "not_started" &&
+      !day.isExtraDay &&
+      !day.topic &&
+      !day.learningTarget &&
+      !day.standards &&
+      !day.supports &&
+      !day.lessonActivities &&
+      !day.warmUp &&
+      !day.materialsNeeded;
+    if (!isBlank) break;
+    toDelete.push(day.id);
+  }
+  if (toDelete.length === 0) return;
+
+  await prisma.pacingUnitDay.deleteMany({ where: { id: { in: toDelete } } });
+  await recomputeUnitDayDates(unitId);
+}
+
+/**
+ * Finds the first OTHER unit in the classroom whose actual occupied range
+ * (its real first-day-to-last-day span if it has generated days, else its
+ * plain start/end) overlaps the given [start, end] - used to hard-block
+ * creating or editing a unit into a date range another unit already
+ * occupies, rather than silently cascading around it.
+ */
+export async function findOverlappingUnit(
+  classroomId: string,
+  start: Date,
+  end: Date,
+  excludeUnitId?: string
+) {
+  const units = await prisma.pacingUnit.findMany({
+    where: { classroomId, ...(excludeUnitId ? { id: { not: excludeUnitId } } : {}) },
+    include: { days: { orderBy: { dayNumber: "asc" } } },
+  });
+
+  for (const u of units) {
+    const occupiedStart = u.startDate;
+    const occupiedEnd = u.days.length > 0 ? u.days[u.days.length - 1].date : u.endDate;
+    if (start <= occupiedEnd && occupiedStart <= end) {
+      return { id: u.id, name: u.name, startDate: occupiedStart, endDate: occupiedEnd };
+    }
+  }
+  return null;
+}
+
 /** Extends a unit's day rows (appending fresh, blank dayNumbers) so it has at least `targetCount` days. */
 export async function ensureDayCount(unitId: string, targetCount: number) {
   const currentCount = await prisma.pacingUnitDay.count({ where: { pacingUnitId: unitId } });
@@ -158,6 +305,8 @@ export async function setDayStatus(dayId: string, status: "not_started" | "compl
   await prisma.pacingUnitDay.update({ where: { id: dayId }, data: { status } });
 
   if (status === "half_completed" && !wasHalfCompleted) {
+    const beforeLastDate = await getUnitLastDayDate(day.pacingUnitId);
+
     // Shift every later day up by one dayNumber, highest first, so no two
     // rows ever collide on the unique (pacingUnitId, dayNumber) constraint
     // mid-transaction.
@@ -185,6 +334,7 @@ export async function setDayStatus(dayId: string, status: "not_started" | "compl
       },
     });
     await recomputeUnitDayDates(day.pacingUnitId);
+    await cascadeAfterDayCountChange(day.pacingUnitId, beforeLastDate);
   }
 
   return prisma.pacingUnitDay.findUnique({ where: { id: dayId } });
@@ -194,6 +344,8 @@ export async function setDayStatus(dayId: string, status: "not_started" | "compl
 export async function removeExtraDay(dayId: string) {
   const day = await prisma.pacingUnitDay.findUnique({ where: { id: dayId } });
   if (!day || !day.isExtraDay) return false;
+
+  const beforeLastDate = await getUnitLastDayDate(day.pacingUnitId);
 
   await prisma.pacingUnitDay.delete({ where: { id: dayId } });
   const laterDays = await prisma.pacingUnitDay.findMany({
@@ -207,5 +359,6 @@ export async function removeExtraDay(dayId: string) {
     });
   }
   await recomputeUnitDayDates(day.pacingUnitId);
+  await cascadeAfterDayCountChange(day.pacingUnitId, beforeLastDate);
   return true;
 }

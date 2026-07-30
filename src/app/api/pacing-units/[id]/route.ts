@@ -2,8 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
 import { getCurrentClassroomId } from "@/lib/classroomScope";
-import { parseDateOnly } from "@/lib/dateOnly";
-import { generateInstructionalDates, getHolidayRanges } from "@/lib/pacing";
+import { parseDateOnly, formatShortDate } from "@/lib/dateOnly";
+import { generateInstructionalDates, getHolidayRanges, getUnitLastDayDate, cascadeAfterDayCountChange, findOverlappingUnit } from "@/lib/pacing";
 
 // GET - single unit with its day rows, topics, and summatives
 export async function GET(
@@ -76,9 +76,28 @@ export async function PATCH(
     datesChanged = true;
   }
 
+  if (datesChanged) {
+    if (newEnd < newStart) {
+      return NextResponse.json({ error: "End date can't be before start date" }, { status: 400 });
+    }
+    const overlap = await findOverlappingUnit(classroomId, newStart, newEnd, id);
+    if (overlap) {
+      return NextResponse.json(
+        {
+          error: `That overlaps "${overlap.name}" (${formatShortDate(overlap.startDate)} - ${formatShortDate(
+            overlap.endDate
+          )}). Units can't overlap - adjust the dates or edit that unit first.`,
+        },
+        { status: 409 }
+      );
+    }
+  }
+
   await prisma.pacingUnit.update({ where: { id }, data });
 
   if (datesChanged) {
+    const beforeLastDate = await getUnitLastDayDate(id);
+
     await prisma.pacingUnitDay.deleteMany({ where: { pacingUnitId: id } });
     const holidays = await getHolidayRanges(classroomId);
     const roughDates = generateInstructionalDates(
@@ -96,6 +115,8 @@ export async function PATCH(
     for (const t of topics) {
       await applyTopicToDays(id, t.id);
     }
+
+    await cascadeAfterDayCountChange(id, beforeLastDate);
   }
 
   const withDays = await prisma.pacingUnit.findUnique({
