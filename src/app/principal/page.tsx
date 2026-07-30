@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { signOut } from "next-auth/react";
+import { formatShortDate } from "@/lib/dateOnly";
 
 type Teacher = {
   id: string;
@@ -10,36 +11,79 @@ type Teacher = {
   createdAt: string;
   mustChangePassword: boolean;
 };
+type CalEvent = { id: string; name: string; startDate: string; endDate: string; type: string };
 
 export default function PrincipalPage() {
   const [teachers, setTeachers] = useState<Teacher[]>([]);
-  const [name, setName] = useState("");
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [justCreated, setJustCreated] = useState<{ email: string; tempPassword: string } | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [editName, setEditName] = useState("");
+  const [editFirstName, setEditFirstName] = useState("");
+  const [editLastName, setEditLastName] = useState("");
   const [editEmail, setEditEmail] = useState("");
   const [resetFor, setResetFor] = useState<{ email: string; tempPassword: string } | null>(null);
 
+  const [calEvents, setCalEvents] = useState<CalEvent[]>([]);
+  const [calName, setCalName] = useState("");
+  const [calStart, setCalStart] = useState("");
+  const [calEnd, setCalEnd] = useState("");
+  const [calType, setCalType] = useState("holiday");
+  const [calSaving, setCalSaving] = useState(false);
+  const [calError, setCalError] = useState("");
+
   useEffect(() => {
     load();
+    loadCalendar();
   }, []);
+
+  function loadCalendar() {
+    fetch("/api/principal/calendar-events").then((r) => r.json()).then(setCalEvents);
+  }
+
+  async function addCalEvent() {
+    if (!calName.trim() || !calStart) return;
+    setCalSaving(true);
+    setCalError("");
+    const res = await fetch("/api/principal/calendar-events", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: calName.trim(), startDate: calStart, endDate: calEnd || calStart, type: calType }),
+    });
+    setCalSaving(false);
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      setCalError(data.error || "Couldn't add that.");
+      return;
+    }
+    setCalName("");
+    setCalStart("");
+    setCalEnd("");
+    loadCalendar();
+  }
+
+  async function removeCalEvent(id: string, name: string) {
+    if (!confirm(`Remove "${name}" from the school calendar? Every classroom at this school will see it disappear.`)) return;
+    await fetch(`/api/principal/calendar-events/${id}`, { method: "DELETE" });
+    loadCalendar();
+  }
 
   function load() {
     fetch("/api/principal/teachers").then((r) => r.json()).then(setTeachers);
   }
 
   async function addTeacher() {
-    if (!name.trim() || !email.trim()) return;
+    if (!firstName.trim() || !lastName.trim() || !email.trim()) return;
     setSaving(true);
     setError("");
     setJustCreated(null);
     const res = await fetch("/api/principal/teachers", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: name.trim(), email: email.trim() }),
+      body: JSON.stringify({ firstName: firstName.trim(), lastName: lastName.trim(), email: email.trim() }),
     });
     setSaving(false);
     const data = await res.json().catch(() => ({}));
@@ -48,14 +92,17 @@ export default function PrincipalPage() {
       return;
     }
     setJustCreated({ email: data.teacher.email, tempPassword: data.tempPassword });
-    setName("");
+    setFirstName("");
+    setLastName("");
     setEmail("");
     load();
   }
 
   function startEdit(t: Teacher) {
     setEditingId(t.id);
-    setEditName(t.name);
+    const parts = t.name.trim().split(" ");
+    setEditFirstName(parts[0] ?? "");
+    setEditLastName(parts.slice(1).join(" "));
     setEditEmail(t.email);
     setResetFor(null);
   }
@@ -64,7 +111,11 @@ export default function PrincipalPage() {
     await fetch(`/api/principal/teachers/${id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: editName.trim(), email: editEmail.trim() }),
+      body: JSON.stringify({
+        firstName: editFirstName.trim(),
+        lastName: editLastName.trim(),
+        email: editEmail.trim(),
+      }),
     });
     setEditingId(null);
     load();
@@ -107,9 +158,15 @@ export default function PrincipalPage() {
         )}
         <div className="flex gap-2 flex-wrap items-end">
           <input
-            placeholder="Name"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
+            placeholder="First name"
+            value={firstName}
+            onChange={(e) => setFirstName(e.target.value)}
+            className="border rounded px-2 py-1"
+          />
+          <input
+            placeholder="Last name"
+            value={lastName}
+            onChange={(e) => setLastName(e.target.value)}
             className="border rounded px-2 py-1"
           />
           <input
@@ -134,8 +191,15 @@ export default function PrincipalPage() {
               {editingId === t.id ? (
                 <div className="flex gap-2 flex-wrap items-end">
                   <input
-                    value={editName}
-                    onChange={(e) => setEditName(e.target.value)}
+                    placeholder="First name"
+                    value={editFirstName}
+                    onChange={(e) => setEditFirstName(e.target.value)}
+                    className="border rounded px-2 py-1"
+                  />
+                  <input
+                    placeholder="Last name"
+                    value={editLastName}
+                    onChange={(e) => setEditLastName(e.target.value)}
                     className="border rounded px-2 py-1"
                   />
                   <input
@@ -178,6 +242,57 @@ export default function PrincipalPage() {
           ))}
           {teachers.length === 0 && <p className="text-slate-400 text-sm">No teachers yet.</p>}
         </ul>
+      </div>
+
+      <div className="panel mt-6">
+        <h2 className="font-semibold mb-2">School Calendar</h2>
+        <p className="text-sm text-slate-500 mb-3">
+          Days off, teacher work days, half days, and reminders here apply to every classroom at
+          this school - Teachers see them but can&apos;t edit or delete them. Teachers can still add
+          their own local calendar entries that only affect their own classroom.
+        </p>
+        <ul className="space-y-1 mb-3">
+          {calEvents.map((e) => (
+            <li key={e.id} className="text-sm border rounded px-2 py-1 flex justify-between items-center">
+              <span>
+                <span className="font-medium">{e.name}</span> ·{" "}
+                {formatShortDate(e.startDate)}
+                {e.endDate !== e.startDate && ` - ${formatShortDate(e.endDate)}`} ·{" "}
+                <span className="text-slate-500">{e.type.replace("_", " ")}</span>
+              </span>
+              <button onClick={() => removeCalEvent(e.id, e.name)} className="text-rose-600 text-xs hover:underline">
+                Remove
+              </button>
+            </li>
+          ))}
+          {calEvents.length === 0 && <p className="text-slate-400 text-sm">No school-wide calendar entries yet.</p>}
+        </ul>
+        <div className="flex gap-2 flex-wrap items-end">
+          <input
+            placeholder="Name (e.g. Winter Break)"
+            value={calName}
+            onChange={(e) => setCalName(e.target.value)}
+            className="border rounded px-2 py-1"
+          />
+          <div>
+            <label className="block text-xs text-slate-500">Start</label>
+            <input type="date" value={calStart} onChange={(e) => setCalStart(e.target.value)} className="border rounded px-2 py-1" />
+          </div>
+          <div>
+            <label className="block text-xs text-slate-500">End (optional)</label>
+            <input type="date" value={calEnd} onChange={(e) => setCalEnd(e.target.value)} className="border rounded px-2 py-1" />
+          </div>
+          <select value={calType} onChange={(e) => setCalType(e.target.value)} className="border rounded px-2 py-1">
+            <option value="holiday">Holiday (no school)</option>
+            <option value="teacher_work_day">Teacher Work Day</option>
+            <option value="half_day">Half Day</option>
+            <option value="other">Other / Reminder</option>
+          </select>
+          <button onClick={addCalEvent} disabled={calSaving} className="btn-primary text-sm">
+            {calSaving ? "Adding..." : "Add"}
+          </button>
+        </div>
+        {calError && <p className="text-rose-600 text-sm mt-1">{calError}</p>}
       </div>
     </div>
   );

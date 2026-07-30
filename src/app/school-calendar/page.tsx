@@ -17,6 +17,7 @@ type CalendarEvent = {
   startDate: string;
   endDate: string;
   type: EventType;
+  isSchoolWide?: boolean;
 };
 type Classroom = {
   id: string;
@@ -452,16 +453,27 @@ export default function SchoolCalendarPage() {
               >
                 {TYPE_LABEL[ev.type]}
               </span>
+              {ev.isSchoolWide && (
+                <span className="inline-block text-xs font-semibold px-2 py-0.5 rounded-full mr-2 bg-slate-700 text-white">
+                  School-wide
+                </span>
+              )}
               {ev.name} — {formatShortDate(ev.startDate)}
               {toDateInputValue(ev.endDate) !== toDateInputValue(ev.startDate) &&
                 ` to ${formatShortDate(ev.endDate)}`}
             </span>
-            <button
-              onClick={() => removeEvent(ev.id, ev.name)}
-              className="text-rose-600 text-xs hover:underline"
-            >
-              Remove
-            </button>
+            {ev.isSchoolWide ? (
+              <span className="text-xs text-slate-500" title="Set by your principal - only they can change it">
+                Set by principal
+              </span>
+            ) : (
+              <button
+                onClick={() => removeEvent(ev.id, ev.name)}
+                className="text-rose-600 text-xs hover:underline"
+              >
+                Remove
+              </button>
+            )}
           </div>
         ))}
         {sorted.length === 0 && (
