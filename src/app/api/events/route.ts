@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
 import { getCurrentClassroomId } from "@/lib/classroomScope";
+import { parseDateOnly } from "@/lib/dateOnly";
 
 export async function GET() {
   const session = await auth();
@@ -20,6 +21,13 @@ export async function GET() {
 
 // POST { name, date, dueDate, requiresPayment, description }
 // classroomId is derived from the session, never trusted from the client.
+//
+// Also syncs a linked entry into the School Calendar (type "other" -
+// reminder only, doesn't skip instructional days on its own, since an event
+// doesn't necessarily mean the whole class misses the whole day) so it
+// shows up there and in the Pacing Guide's "Dates to Remember" for any unit
+// whose range covers it - e.g. so a unit's plan makes it visible that
+// students will be out on a field trip that week.
 export async function POST(req: NextRequest) {
   const session = await auth();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -30,15 +38,21 @@ export async function POST(req: NextRequest) {
   }
 
   const body = await req.json();
+  const date = parseDateOnly(body.date);
+
+  const calendarEvent = await prisma.calendarEvent.create({
+    data: { classroomId, name: body.name, startDate: date, endDate: date, type: "other" },
+  });
 
   const event = await prisma.event.create({
     data: {
       classroomId,
       name: body.name,
-      date: new Date(body.date),
-      dueDate: body.dueDate ? new Date(body.dueDate) : null,
+      date,
+      dueDate: body.dueDate ? parseDateOnly(body.dueDate) : null,
       requiresPayment: !!body.requiresPayment,
       description: body.description ?? null,
+      calendarEventId: calendarEvent.id,
     },
   });
 

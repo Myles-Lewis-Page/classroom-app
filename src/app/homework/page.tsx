@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import LineChart from "@/components/LineChart";
+import GradeHistogram from "@/components/GradeHistogram";
 import { effectiveGradePercent } from "@/lib/grading";
 import { formatShortDate } from "@/lib/dateOnly";
 
@@ -127,26 +127,13 @@ export default function AssignmentsPage() {
     return counts;
   }
 
-  // Grade distribution line chart: buckets every graded entry's effective
-  // percent (late penalty already applied) into standard grade bands, so it
-  // reads the same way regardless of whether the assignment is points- or
-  // completion-graded.
-  const GRADE_BANDS: { label: string; min: number; max: number }[] = [
-    { label: "Below 60", min: 0, max: 59 },
-    { label: "60-69", min: 60, max: 69 },
-    { label: "70-79", min: 70, max: 79 },
-    { label: "80-89", min: 80, max: 89 },
-    { label: "90-100", min: 90, max: 100 },
-  ];
-  function gradeDistributionPoints(a: Assignment) {
-    const percents = a.entries
+  // Every graded entry's effective percent (late penalty already applied),
+  // for the histogram + bell curve - works the same whether the assignment
+  // is points- or completion-graded, since both reduce to a 0-100 percent.
+  function gradePercents(a: Assignment): number[] {
+    return a.entries
       .map((e) => effectiveGradePercent(a, e))
       .filter((p): p is number => p !== null);
-    if (percents.length === 0) return [];
-    return GRADE_BANDS.map((band) => ({
-      label: band.label,
-      value: percents.filter((p) => p >= band.min && p <= band.max).length,
-    }));
   }
 
   const visibleAssignments =
@@ -385,7 +372,7 @@ export default function AssignmentsPage() {
                 </div>
                 <div>
                   <p className="text-xs text-slate-400 text-center mb-1">Grade Distribution</p>
-                  <LineChart points={gradeDistributionPoints(a)} width={180} height={70} color="#7dd3fc" />
+                  <GradeHistogram values={gradePercents(a)} width={200} height={100} />
                 </div>
               </div>
             </div>

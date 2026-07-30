@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useSectionContext } from "@/components/SectionContext";
+import { formatShortDate } from "@/lib/dateOnly";
 
 type EventStatus = {
   id: string;
@@ -61,6 +62,12 @@ export default function EventsPage() {
 
   function load() {
     fetch("/api/events").then((r) => r.json()).then(setEvents);
+  }
+
+  async function removeEvent(eventId: string, name: string) {
+    if (!confirm(`Remove "${name}"? This also removes its reminder on the School Calendar.`)) return;
+    await fetch(`/api/events/${eventId}`, { method: "DELETE" });
+    load();
   }
 
   async function createEvent() {
@@ -156,6 +163,14 @@ export default function EventsPage() {
             Create
           </button>
         </div>
+        <p className="text-xs text-slate-400 mt-2">
+          Every event also shows up on the{" "}
+          <Link href="/school-calendar" className="underline">
+            School Calendar
+          </Link>{" "}
+          as a reminder, and in the Pacing Guide's "Dates to Remember" for any unit it falls
+          within.
+        </p>
       </div>
 
       <label className="flex items-center gap-2 text-sm mb-4">
@@ -176,9 +191,17 @@ export default function EventsPage() {
           : sectionStatuses;
         return (
           <div key={event.id} className="border rounded p-4 mb-4">
-            <h3 className="font-bold mb-1">
-              {event.name} — {new Date(event.date).toLocaleDateString()}
-            </h3>
+            <div className="flex justify-between items-start">
+              <h3 className="font-bold mb-1">
+                {event.name} — {formatShortDate(event.date)}
+              </h3>
+              <button
+                onClick={() => removeEvent(event.id, event.name)}
+                className="text-rose-600 text-xs hover:underline shrink-0"
+              >
+                Remove
+              </button>
+            </div>
             <p className="text-sm text-gray-500 mb-2">
               {sectionStatuses.filter((s) => s.slipStatus === "missing").length} missing of{" "}
               {sectionStatuses.length}

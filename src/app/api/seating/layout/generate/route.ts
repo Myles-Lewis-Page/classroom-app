@@ -72,8 +72,48 @@ export async function POST(req: NextRequest) {
         }
       }
     }
+  } else if (body.mode === "circle") {
+    // A ring of seats around a center point, e.g. for morning meeting/circle
+    // time - not a discrete grid template like rows/pods, so seats are
+    // placed parametrically around the circle and nudged to the nearest
+    // free grid cell if two would otherwise land on top of each other.
+    const seatCount = Math.max(3, Math.min(40, Number(body.seatCount) || 12));
+    const radius = Math.max(3, Math.min(15, Number(body.radius) || 6));
+    const taken = new Set<string>();
+    const nudges: [number, number][] = [
+      [0, 0],
+      [0, 1],
+      [0, -1],
+      [1, 0],
+      [-1, 0],
+      [1, 1],
+      [-1, -1],
+      [1, -1],
+      [-1, 1],
+      [0, 2],
+      [0, -2],
+      [2, 0],
+      [-2, 0],
+    ];
+    for (let i = 0; i < seatCount; i++) {
+      const angle = (2 * Math.PI * i) / seatCount - Math.PI / 2; // start at the top, go clockwise
+      const baseRow = Math.round(radius + radius * Math.sin(angle));
+      const baseCol = Math.round(radius + radius * Math.cos(angle));
+      let placedRow = baseRow;
+      let placedCol = baseCol;
+      for (const [dr, dc] of nudges) {
+        const key = `${baseRow + dr}:${baseCol + dc}`;
+        if (!taken.has(key)) {
+          placedRow = baseRow + dr;
+          placedCol = baseCol + dc;
+          break;
+        }
+      }
+      taken.add(`${placedRow}:${placedCol}`);
+      cells.push({ row: placedRow, col: placedCol });
+    }
   } else {
-    return NextResponse.json({ error: "mode must be 'rows' or 'groups'" }, { status: 400 });
+    return NextResponse.json({ error: "mode must be 'rows', 'groups', or 'circle'" }, { status: 400 });
   }
 
   // Dedup (shouldn't happen, but just in case)

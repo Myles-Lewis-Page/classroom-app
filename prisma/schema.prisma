@@ -123,6 +123,9 @@ model CalendarEvent {
   endDate     DateTime
   type        String    // "holiday" | "teacher_work_day" | "half_day" | "other"
   createdAt   DateTime  @default(now())
+
+  // Set when this entry was auto-created from an Events Tracker item.
+  sourceEvent Event?
 }
 
 // Self-serve password reset. Since no outbound email service is configured
@@ -472,6 +475,14 @@ model Event {
   requiresPayment Boolean   @default(false)
   description     String?
   createdAt       DateTime  @default(now())
+
+  // Auto-synced into the School Calendar as a "Reminder" entry (see
+  // /api/events) so the Pacing Guide's "Dates to Remember" and the calendar
+  // itself both show when students will be out on this event/field trip -
+  // it's reminder-only (doesn't skip instructional days), since an event
+  // doesn't necessarily mean the whole class misses the whole day.
+  calendarEventId String?        @unique
+  calendarEvent   CalendarEvent? @relation(fields: [calendarEventId], references: [id], onDelete: SetNull)
 
   statuses EventStatus[]
 }

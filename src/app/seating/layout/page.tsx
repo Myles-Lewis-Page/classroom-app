@@ -23,6 +23,10 @@ export default function SeatingLayoutPage() {
   const [seatsPerGroup, setSeatsPerGroup] = useState("4");
   const [groupsPerRow, setGroupsPerRow] = useState("3");
 
+  // Circle template
+  const [circleSeatCount, setCircleSeatCount] = useState("16");
+  const [circleRadius, setCircleRadius] = useState("6");
+
   useEffect(() => {
     load();
   }, []);
@@ -86,6 +90,20 @@ export default function SeatingLayoutPage() {
     await handleGenerateResponse(res, () => generateGroups(true));
   }
 
+  async function generateCircle(confirm = false) {
+    const res = await fetch("/api/seating/layout/generate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        mode: "circle",
+        seatCount: parseInt(circleSeatCount) || 12,
+        radius: parseInt(circleRadius) || 6,
+        confirm,
+      }),
+    });
+    await handleGenerateResponse(res, () => generateCircle(true));
+  }
+
   async function handleGenerateResponse(res: Response, retryConfirmed: () => void) {
     if (res.status === 409) {
       const data = await res.json();
@@ -131,7 +149,7 @@ export default function SeatingLayoutPage() {
         only places students into whatever seats exist here.
       </p>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
         {/* Rows template */}
         <div className="panel">
           <h2 className="font-semibold mb-2">Rows Template</h2>
@@ -231,6 +249,42 @@ export default function SeatingLayoutPage() {
           </div>
           <button onClick={() => generateGroups()} className="btn-primary w-full">
             Generate Groups Layout
+          </button>
+        </div>
+
+        {/* Circle template */}
+        <div className="panel">
+          <h2 className="font-semibold mb-2">Circle Template</h2>
+          <p className="text-xs text-slate-500 mb-2">
+            A ring of seats for morning meeting/circle time.
+          </p>
+          <div className="flex gap-2 mb-3 flex-wrap">
+            <div>
+              <label className="block text-xs text-slate-500">Number of seats</label>
+              <input
+                type="number"
+                min={3}
+                value={circleSeatCount}
+                onChange={(e) => setCircleSeatCount(e.target.value)}
+                className="border rounded px-2 py-1 w-20"
+              />
+            </div>
+            <div>
+              <label className="block text-xs text-slate-500">Radius</label>
+              <input
+                type="number"
+                min={3}
+                value={circleRadius}
+                onChange={(e) => setCircleRadius(e.target.value)}
+                className="border rounded px-2 py-1 w-20"
+              />
+            </div>
+          </div>
+          <p className="text-xs text-slate-400 mb-3">
+            Bigger radius = bigger circle. If seats look uneven, nudge a couple by hand below.
+          </p>
+          <button onClick={() => generateCircle()} className="btn-primary w-full">
+            Generate Circle Layout
           </button>
         </div>
       </div>
