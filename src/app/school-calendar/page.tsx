@@ -5,7 +5,7 @@ import {
   parseDateOnly,
   toDateInputValue,
   addUtcDays,
-  mondayOfUtc,
+  sundayOfUtc,
   formatShortDate,
   formatMonthYear,
 } from "@/lib/dateOnly";
@@ -84,7 +84,7 @@ function MonthGrid({
   events: CalendarEvent[];
 }) {
   const firstOfMonth = new Date(Date.UTC(year, month, 1));
-  const firstCell = mondayOfUtc(firstOfMonth);
+  const firstCell = sundayOfUtc(firstOfMonth);
   const weeks: Date[][] = [];
   let cursor = new Date(firstCell);
   for (let w = 0; w < 6; w++) {

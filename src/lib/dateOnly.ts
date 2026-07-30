@@ -73,6 +73,11 @@ export function mondayOfUtc(d: Date): Date {
   return addUtcDays(d, diff);
 }
 
+/** The Sunday (UTC) of the calendar week containing d - for rendering a Sun-Sat month grid (mondayOfUtc is for Mon-Fri week grouping, a different use case). */
+export function sundayOfUtc(d: Date): Date {
+  return addUtcDays(d, -utcDayOfWeek(d));
+}
+
 export function isSameUtcDay(a: Date, b: Date): boolean {
   return (
     a.getUTCFullYear() === b.getUTCFullYear() &&
