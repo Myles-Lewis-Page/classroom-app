@@ -13,6 +13,7 @@ import EditSupports from "@/components/EditSupports";
 import EditParents from "@/components/EditParents";
 import PieChart from "@/components/PieChart";
 import LineChart from "@/components/LineChart";
+import { effectiveGradePercent, daysLate } from "@/lib/grading";
 
 type StudentDetail = {
   id: string;
@@ -62,6 +63,7 @@ type StudentDetail = {
       dueDate: string | null;
       gradingType: string;
       maxPoints: number | null;
+      latePenaltyPercentPerDay: number | null;
       gradeCategory: { id: string; name: string } | null;
     };
   }[];
@@ -399,16 +401,7 @@ export default function StudentProfilePage({ params }: { params: Promise<{ id: s
           const uncategorized: number[] = [];
 
           student.homeworkEntries.forEach((h) => {
-            let pct: number | null = null;
-            if (h.assignment.gradingType === "points") {
-              if (h.gradeScore !== null && h.assignment.maxPoints) {
-                pct = (h.gradeScore / h.assignment.maxPoints) * 100;
-              }
-            } else if (h.gradeStatus === "complete") {
-              pct = 100;
-            } else if (h.gradeStatus === "incomplete") {
-              pct = 0;
-            }
+            const pct = effectiveGradePercent(h.assignment, h);
             if (pct === null) return;
             if (h.assignment.gradeCategory) {
               const key = h.assignment.gradeCategory.id;
@@ -456,16 +449,7 @@ export default function StudentProfilePage({ params }: { params: Promise<{ id: s
           const gradePoints = [...student.homeworkEntries]
             .reverse()
             .map((h) => {
-              let pct: number | null = null;
-              if (h.assignment.gradingType === "points") {
-                if (h.gradeScore !== null && h.assignment.maxPoints) {
-                  pct = Math.round((h.gradeScore / h.assignment.maxPoints) * 100);
-                }
-              } else if (h.gradeStatus === "complete") {
-                pct = 100;
-              } else if (h.gradeStatus === "incomplete") {
-                pct = 0;
-              }
+              const pct = effectiveGradePercent(h.assignment, h);
               return pct === null ? null : { label: h.assignment.name, value: pct };
             })
             .filter((p): p is { label: string; value: number } => p !== null);
@@ -515,16 +499,15 @@ export default function StudentProfilePage({ params }: { params: Promise<{ id: s
           </thead>
           <tbody>
             {student.homeworkEntries.map((h) => {
-              const late =
-                h.status === "handed_in" &&
-                h.assignment.dueDate &&
-                h.submittedAt &&
-                new Date(h.submittedAt) > new Date(h.assignment.dueDate);
+              const lateDays = daysLate(h.assignment, h);
+              const late = h.status === "handed_in" && lateDays > 0;
+              const pct = effectiveGradePercent(h.assignment, h);
+              const penaltyApplied = late && !!h.assignment.latePenaltyPercentPerDay;
               const grade =
                 h.gradeScore !== null
-                  ? `${h.gradeScore}/${h.assignment.maxPoints}`
+                  ? `${h.gradeScore}/${h.assignment.maxPoints}${penaltyApplied ? ` (${pct}%)` : ""}`
                   : h.gradeStatus === "complete"
-                  ? "Complete (100%)"
+                  ? `Complete (${penaltyApplied ? pct : 100}%)`
                   : h.gradeStatus === "incomplete"
                   ? "Incomplete (0%)"
                   : "Not graded";

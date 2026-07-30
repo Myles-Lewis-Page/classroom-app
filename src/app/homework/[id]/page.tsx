@@ -3,6 +3,7 @@
 import { useEffect, useState, use, useMemo } from "react";
 import Link from "next/link";
 import { useSectionContext } from "@/components/SectionContext";
+import { effectiveGradePercent, daysLate } from "@/lib/grading";
 
 type Entry = {
   status: string;
@@ -18,6 +19,7 @@ type AssignmentDetail = {
   dueDate: string | null;
   gradingType: string;
   maxPoints: number | null;
+  latePenaltyPercentPerDay: number | null;
   entries: Entry[];
 };
 
@@ -126,6 +128,7 @@ export default function AssignmentDetailPage({ params }: { params: Promise<{ id:
         {assignment.gradingType === "points"
           ? `Graded out of ${assignment.maxPoints}`
           : "Completion graded"}
+        {!!assignment.latePenaltyPercentPerDay && ` · -${assignment.latePenaltyPercentPerDay}%/day late`}
       </p>
 
       <div className="grid grid-cols-[1fr_auto_auto] gap-x-4 gap-y-2 items-center text-sm font-medium text-slate-500 mb-1 px-1">
@@ -166,34 +169,48 @@ export default function AssignmentDetailPage({ params }: { params: Promise<{ id:
               </select>
 
               {assignment.gradingType === "points" ? (
-                <input
-                  type="number"
-                  min={0}
-                  max={assignment.maxPoints ?? undefined}
-                  value={e.gradeScore ?? ""}
-                  onChange={(ev) => setGradeScore(e.student.id, ev.target.value)}
-                  placeholder={`/ ${assignment.maxPoints}`}
-                  className="w-20 px-2 py-1 rounded text-sm border"
-                />
+                <span className="flex items-center gap-2">
+                  <input
+                    type="number"
+                    min={0}
+                    max={assignment.maxPoints ?? undefined}
+                    value={e.gradeScore ?? ""}
+                    onChange={(ev) => setGradeScore(e.student.id, ev.target.value)}
+                    placeholder={`/ ${assignment.maxPoints}`}
+                    className="w-20 px-2 py-1 rounded text-sm border"
+                  />
+                  {late && assignment.latePenaltyPercentPerDay && e.gradeScore !== null && (
+                    <span className="text-xs text-amber-600">
+                      → {effectiveGradePercent(assignment, e)}% ({daysLate(assignment, e)}d late)
+                    </span>
+                  )}
+                </span>
               ) : (
-                <select
-                  value={e.gradeStatus ?? ""}
-                  onChange={(ev) => setGradeStatus(e.student.id, ev.target.value)}
-                  className="px-2 py-1 rounded text-sm border"
-                  style={{
-                    backgroundColor:
-                      e.gradeStatus === "complete"
-                        ? "#a7f3d0"
-                        : e.gradeStatus === "incomplete"
-                        ? "#fecaca"
-                        : "#f5f3ff",
-                    color: "#1e293b",
-                  }}
-                >
-                  <option value="">Not graded</option>
-                  <option value="complete">Complete</option>
-                  <option value="incomplete">Incomplete</option>
-                </select>
+                <span className="flex items-center gap-2">
+                  <select
+                    value={e.gradeStatus ?? ""}
+                    onChange={(ev) => setGradeStatus(e.student.id, ev.target.value)}
+                    className="px-2 py-1 rounded text-sm border"
+                    style={{
+                      backgroundColor:
+                        e.gradeStatus === "complete"
+                          ? "#a7f3d0"
+                          : e.gradeStatus === "incomplete"
+                          ? "#fecaca"
+                          : "#f5f3ff",
+                      color: "#1e293b",
+                    }}
+                  >
+                    <option value="">Not graded</option>
+                    <option value="complete">Complete</option>
+                    <option value="incomplete">Incomplete</option>
+                  </select>
+                  {late && assignment.latePenaltyPercentPerDay && e.gradeStatus === "complete" && (
+                    <span className="text-xs text-amber-600">
+                      → {effectiveGradePercent(assignment, e)}% ({daysLate(assignment, e)}d late)
+                    </span>
+                  )}
+                </span>
               )}
             </li>
           );

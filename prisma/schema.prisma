@@ -416,6 +416,11 @@ model Assignment {
   dueDate      DateTime?
   gradingType  String     @default("completion") // "completion" (Complete/Incomplete) or "points" (score out of maxPoints)
   maxPoints    Int?       // only used when gradingType = "points"
+  // Optional: knock this many percentage points off a student's grade for
+  // each day their submission is late (based on submittedAt vs dueDate).
+  // Null/0 = no penalty. Applies uniformly to both grading types, since
+  // both ultimately reduce to a 0-100 percent grade.
+  latePenaltyPercentPerDay Int?
   createdAt    DateTime   @default(now())
 
   entries HomeworkEntry[]

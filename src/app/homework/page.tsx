@@ -3,9 +3,16 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import LineChart from "@/components/LineChart";
+import { effectiveGradePercent } from "@/lib/grading";
 
 type SkillSubject = { id: string; name: string };
 type GradeCategory = { id: string; name: string; weight: number };
+type Entry = {
+  status: string;
+  submittedAt: string | null;
+  gradeStatus: string | null;
+  gradeScore: number | null;
+};
 type Assignment = {
   id: string;
   name: string;
@@ -16,7 +23,8 @@ type Assignment = {
   gradeCategory: { name: string } | null;
   gradingType: string;
   maxPoints: number | null;
-  entries: { status: string; gradeStatus: string | null; gradeScore: number | null }[];
+  latePenaltyPercentPerDay: number | null;
+  entries: Entry[];
 };
 
 export default function AssignmentsPage() {
@@ -31,10 +39,12 @@ export default function AssignmentsPage() {
   const [newCategoryId, setNewCategoryId] = useState("");
   const [gradingType, setGradingType] = useState("completion");
   const [maxPoints, setMaxPoints] = useState("100");
+  const [latePenalty, setLatePenalty] = useState("");
   const [classroomId, setClassroomId] = useState("");
   const [classroomError, setClassroomError] = useState(false);
   const [classroomLoading, setClassroomLoading] = useState(true);
   const [authIssue, setAuthIssue] = useState(false);
+  const [editingAssignment, setEditingAssignment] = useState<Assignment | null>(null);
 
   useEffect(() => {
     load();
@@ -88,10 +98,12 @@ export default function AssignmentsPage() {
         gradeCategoryId: newCategoryId || null,
         gradingType,
         maxPoints: gradingType === "points" ? maxPoints : null,
+        latePenaltyPercentPerDay: latePenalty || null,
       }),
     });
     setName("");
     setDueDate("");
+    setLatePenalty("");
     load();
   }
 
@@ -114,25 +126,26 @@ export default function AssignmentsPage() {
     return counts;
   }
 
-  // Distribution line chart data: score-by-score counts for points-graded
-  // assignments, or a simple Incomplete/Complete pair for completion-graded.
-  function distributionPoints(a: Assignment) {
-    if (a.gradingType === "points") {
-      const byScore = new Map<number, number>();
-      a.entries.forEach((e) => {
-        if (e.gradeScore !== null) byScore.set(e.gradeScore, (byScore.get(e.gradeScore) ?? 0) + 1);
-      });
-      return Array.from(byScore.entries())
-        .sort((a, b) => a[0] - b[0])
-        .map(([score, count]) => ({ label: `${score}/${a.maxPoints}`, value: count }));
-    }
-    const complete = a.entries.filter((e) => e.gradeStatus === "complete").length;
-    const incomplete = a.entries.filter((e) => e.gradeStatus === "incomplete").length;
-    if (complete === 0 && incomplete === 0) return [];
-    return [
-      { label: "Incomplete (0%)", value: incomplete },
-      { label: "Complete (100%)", value: complete },
-    ];
+  // Grade distribution line chart: buckets every graded entry's effective
+  // percent (late penalty already applied) into standard grade bands, so it
+  // reads the same way regardless of whether the assignment is points- or
+  // completion-graded.
+  const GRADE_BANDS: { label: string; min: number; max: number }[] = [
+    { label: "Below 60", min: 0, max: 59 },
+    { label: "60-69", min: 60, max: 69 },
+    { label: "70-79", min: 70, max: 79 },
+    { label: "80-89", min: 80, max: 89 },
+    { label: "90-100", min: 90, max: 100 },
+  ];
+  function gradeDistributionPoints(a: Assignment) {
+    const percents = a.entries
+      .map((e) => effectiveGradePercent(a, e))
+      .filter((p): p is number => p !== null);
+    if (percents.length === 0) return [];
+    return GRADE_BANDS.map((band) => ({
+      label: band.label,
+      value: percents.filter((p) => p >= band.min && p <= band.max).length,
+    }));
   }
 
   const visibleAssignments =
@@ -244,6 +257,21 @@ export default function AssignmentsPage() {
               />
             </div>
           )}
+          <div>
+            <label className="block text-xs text-slate-500">Late penalty (optional)</label>
+            <div className="flex items-center gap-1">
+              <input
+                type="number"
+                min={0}
+                max={100}
+                value={latePenalty}
+                onChange={(e) => setLatePenalty(e.target.value)}
+                placeholder="0"
+                className="border rounded px-2 py-1 w-16"
+              />
+              <span className="text-xs text-slate-500">% off/day late</span>
+            </div>
+          </div>
           <button
             onClick={createAssignment}
             disabled={!classroomId}
@@ -288,10 +316,12 @@ export default function AssignmentsPage() {
 
           const gradeComplete = a.entries.filter((e) => e.gradeStatus === "complete").length;
           const gradeIncomplete = a.entries.filter((e) => e.gradeStatus === "incomplete").length;
-          const scored = a.entries.filter((e) => e.gradeScore !== null);
-          const avgScore =
-            scored.length > 0
-              ? Math.round(scored.reduce((sum, e) => sum + (e.gradeScore ?? 0), 0) / scored.length)
+          const gradedPercents = a.entries
+            .map((e) => effectiveGradePercent(a, e))
+            .filter((p): p is number => p !== null);
+          const avgGrade =
+            gradedPercents.length > 0
+              ? Math.round(gradedPercents.reduce((sum, p) => sum + p, 0) / gradedPercents.length)
               : null;
 
           return (
@@ -304,6 +334,7 @@ export default function AssignmentsPage() {
                   {a.dueDate && ` · Due ${new Date(a.dueDate).toLocaleDateString()}`}
                   {" · "}
                   {a.gradingType === "points" ? `Graded out of ${a.maxPoints}` : "Completion graded"}
+                  {!!a.latePenaltyPercentPerDay && ` · -${a.latePenaltyPercentPerDay}%/day late`}
                 </p>
 
                 <p className="text-xs text-slate-500 mb-1">Submitted</p>
@@ -326,11 +357,8 @@ export default function AssignmentsPage() {
 
                 <p className="text-xs text-slate-500 mb-1">Grading</p>
                 <div className="flex gap-3 flex-wrap text-xs text-slate-600">
-                  {a.gradingType === "points" ? (
-                    <span>
-                      Class average: {avgScore !== null ? `${avgScore}/${a.maxPoints}` : "not graded yet"}
-                    </span>
-                  ) : (
+                  <span>Class average grade: {avgGrade !== null ? `${avgGrade}%` : "not graded yet"}</span>
+                  {a.gradingType === "completion" && (
                     <>
                       <span>{gradeComplete} complete</span>
                       <span>{gradeIncomplete} incomplete</span>
@@ -340,20 +368,23 @@ export default function AssignmentsPage() {
               </Link>
 
               <div className="shrink-0 flex flex-col items-end gap-2">
-                <button
-                  onClick={() => removeAssignment(a.id, a.name)}
-                  className="text-rose-600 text-xs hover:underline"
-                >
-                  Remove
-                </button>
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => setEditingAssignment(a)}
+                    className="text-sky-600 text-xs hover:underline"
+                  >
+                    Edit
+                  </button>
+                  <button
+                    onClick={() => removeAssignment(a.id, a.name)}
+                    className="text-rose-600 text-xs hover:underline"
+                  >
+                    Remove
+                  </button>
+                </div>
                 <div>
-                  <p className="text-xs text-slate-400 text-center mb-1">Distribution</p>
-                  <LineChart
-                    points={distributionPoints(a)}
-                    width={180}
-                    height={70}
-                    color={a.gradingType === "points" ? "#7dd3fc" : "#a7f3d0"}
-                  />
+                  <p className="text-xs text-slate-400 text-center mb-1">Grade Distribution</p>
+                  <LineChart points={gradeDistributionPoints(a)} width={180} height={70} color="#7dd3fc" />
                 </div>
               </div>
             </div>
@@ -362,6 +393,183 @@ export default function AssignmentsPage() {
         {visibleAssignments.length === 0 && (
           <p className="text-slate-500">No assignments yet — create one above to get started.</p>
         )}
+      </div>
+
+      {editingAssignment && (
+        <EditAssignmentModal
+          assignment={editingAssignment}
+          subjects={subjects}
+          categories={categories}
+          onClose={() => setEditingAssignment(null)}
+          onSaved={() => {
+            setEditingAssignment(null);
+            load();
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+function EditAssignmentModal({
+  assignment,
+  subjects,
+  categories,
+  onClose,
+  onSaved,
+}: {
+  assignment: Assignment;
+  subjects: SkillSubject[];
+  categories: GradeCategory[];
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const [name, setName] = useState(assignment.name);
+  const [subjectId, setSubjectId] = useState(assignment.skillSubjectId ?? "");
+  const [categoryId, setCategoryId] = useState(assignment.gradeCategoryId ?? "");
+  const [assignedDate, setAssignedDate] = useState(assignment.assignedDate.slice(0, 10));
+  const [dueDate, setDueDate] = useState(assignment.dueDate ? assignment.dueDate.slice(0, 10) : "");
+  const [gradingType, setGradingType] = useState(assignment.gradingType);
+  const [maxPoints, setMaxPoints] = useState(String(assignment.maxPoints ?? 100));
+  const [latePenalty, setLatePenalty] = useState(
+    assignment.latePenaltyPercentPerDay != null ? String(assignment.latePenaltyPercentPerDay) : ""
+  );
+  const [saving, setSaving] = useState(false);
+
+  async function save() {
+    if (!name.trim() || !assignedDate) return;
+    setSaving(true);
+    await fetch(`/api/assignments/${assignment.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: name.trim(),
+        assignedDate,
+        dueDate: dueDate || null,
+        subjectId: subjectId || null,
+        gradeCategoryId: categoryId || null,
+        gradingType,
+        maxPoints: gradingType === "points" ? maxPoints : null,
+        latePenaltyPercentPerDay: latePenalty || null,
+      }),
+    });
+    setSaving(false);
+    onSaved();
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-lg p-4 w-full max-w-md space-y-3">
+        <h3 className="font-semibold">Edit Assignment</h3>
+        <div>
+          <label className="block text-xs text-slate-500 mb-1">Name</label>
+          <input
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            className="border rounded px-2 py-1 w-full"
+            autoFocus
+          />
+        </div>
+        <div className="flex gap-2 flex-wrap">
+          <div>
+            <label className="block text-xs text-slate-500 mb-1">Subject</label>
+            <select
+              value={subjectId}
+              onChange={(e) => setSubjectId(e.target.value)}
+              className="border rounded px-2 py-1"
+            >
+              <option value="">No subject</option>
+              {subjects.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs text-slate-500 mb-1">Type</label>
+            <select
+              value={categoryId}
+              onChange={(e) => setCategoryId(e.target.value)}
+              className="border rounded px-2 py-1"
+            >
+              <option value="">No type</option>
+              {categories.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name} ({c.weight}%)
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+        <div className="flex gap-2 flex-wrap">
+          <div>
+            <label className="block text-xs text-slate-500 mb-1">Assigned</label>
+            <input
+              type="date"
+              value={assignedDate}
+              onChange={(e) => setAssignedDate(e.target.value)}
+              className="border rounded px-2 py-1"
+            />
+          </div>
+          <div>
+            <label className="block text-xs text-slate-500 mb-1">Due (optional)</label>
+            <input
+              type="date"
+              value={dueDate}
+              onChange={(e) => setDueDate(e.target.value)}
+              className="border rounded px-2 py-1"
+            />
+          </div>
+        </div>
+        <div className="flex gap-2 flex-wrap items-end">
+          <div>
+            <label className="block text-xs text-slate-500 mb-1">Grading</label>
+            <select
+              value={gradingType}
+              onChange={(e) => setGradingType(e.target.value)}
+              className="border rounded px-2 py-1"
+            >
+              <option value="completion">Completion (Complete/Incomplete)</option>
+              <option value="points">Points (grade out of X)</option>
+            </select>
+          </div>
+          {gradingType === "points" && (
+            <div>
+              <label className="block text-xs text-slate-500 mb-1">Out of</label>
+              <input
+                type="number"
+                min={1}
+                value={maxPoints}
+                onChange={(e) => setMaxPoints(e.target.value)}
+                className="border rounded px-2 py-1 w-20"
+              />
+            </div>
+          )}
+          <div>
+            <label className="block text-xs text-slate-500 mb-1">Late penalty</label>
+            <div className="flex items-center gap-1">
+              <input
+                type="number"
+                min={0}
+                max={100}
+                value={latePenalty}
+                onChange={(e) => setLatePenalty(e.target.value)}
+                placeholder="0"
+                className="border rounded px-2 py-1 w-16"
+              />
+              <span className="text-xs text-slate-500">%/day late</span>
+            </div>
+          </div>
+        </div>
+        <div className="flex gap-2 justify-end pt-2">
+          <button onClick={onClose} className="btn-outline text-sm">
+            Cancel
+          </button>
+          <button onClick={save} disabled={saving} className="btn-primary text-sm">
+            {saving ? "Saving..." : "Save Changes"}
+          </button>
+        </div>
       </div>
     </div>
   );

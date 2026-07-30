@@ -3,6 +3,7 @@
 import { useEffect, useState, useMemo } from "react";
 import Link from "next/link";
 import { useSectionContext, filterBySection } from "@/components/SectionContext";
+import { effectiveGradePercent, daysLate } from "@/lib/grading";
 
 type Student = { id: string; firstName: string; lastName: string; sectionId: string | null };
 type SkillSubject = { id: string; name: string };
@@ -21,6 +22,7 @@ type Assignment = {
   dueDate: string | null;
   gradingType: string;
   maxPoints: number | null;
+  latePenaltyPercentPerDay: number | null;
   skillSubjectId: string | null;
   gradeCategoryId: string | null;
   entries: Entry[];
@@ -112,27 +114,29 @@ export default function GradebookPage() {
 
   function cellDisplay(assignment: Assignment, entry: Entry | undefined) {
     if (!entry) return { text: "—", color: "#f5f3ff" };
+    const late = daysLate(assignment, entry);
+    const pct = effectiveGradePercent(assignment, entry);
+
     if (assignment.gradingType === "points") {
       if (entry.gradeScore === null) return { text: "—", color: "#f5f3ff" };
-      const pct = assignment.maxPoints ? entry.gradeScore / assignment.maxPoints : 0;
-      const color = pct >= 0.9 ? "#a7f3d0" : pct >= 0.7 ? "#fde68a" : "#fecaca";
-      return { text: `${entry.gradeScore}/${assignment.maxPoints}`, color };
+      const color = pct !== null && pct >= 90 ? "#a7f3d0" : pct !== null && pct >= 70 ? "#fde68a" : "#fecaca";
+      const penaltyNote = late > 0 && assignment.latePenaltyPercentPerDay ? ` (${pct}% after late penalty)` : "";
+      return { text: `${entry.gradeScore}/${assignment.maxPoints}${penaltyNote}`, color };
     }
-    if (entry.gradeStatus === "complete") return { text: "Complete (100%)", color: "#a7f3d0" };
+    if (entry.gradeStatus === "complete") {
+      const label = late > 0 && assignment.latePenaltyPercentPerDay ? `Complete (${pct}%)` : "Complete (100%)";
+      return { text: label, color: pct !== null && pct < 100 ? "#fde68a" : "#a7f3d0" };
+    }
     if (entry.gradeStatus === "incomplete") return { text: "Incomplete (0%)", color: "#fecaca" };
     return { text: "Not graded", color: "#f5f3ff" };
   }
 
-  // Percent earned (0-100) for one assignment/student, or null if ungraded.
+  // Percent earned (0-100) for one assignment/student, late penalty already
+  // applied - or null if ungraded. Thin wrapper so the rest of this file's
+  // weighted-average logic doesn't need to change.
   function entryPercent(assignment: Assignment, entry: Entry | undefined): number | null {
     if (!entry) return null;
-    if (assignment.gradingType === "points") {
-      if (entry.gradeScore === null || !assignment.maxPoints) return null;
-      return (entry.gradeScore / assignment.maxPoints) * 100;
-    }
-    if (entry.gradeStatus === "complete") return 100;
-    if (entry.gradeStatus === "incomplete") return 0;
-    return null;
+    return effectiveGradePercent(assignment, entry);
   }
 
   // Weighted overall grade: average % within each category, then combine

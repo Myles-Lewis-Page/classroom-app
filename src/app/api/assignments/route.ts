@@ -26,7 +26,7 @@ export async function GET(req: NextRequest) {
   return NextResponse.json(assignments);
 }
 
-// POST { name, assignedDate, dueDate?, subjectId?, gradingType?, maxPoints? }
+// POST { name, assignedDate, dueDate?, subjectId?, gradingType?, maxPoints?, latePenaltyPercentPerDay? }
 // classroomId derived from session. Creates the assignment and
 // auto-creates a "missing" entry for every active student IN THIS
 // CLASSROOM ONLY, matching the same pattern as Event Tracker.
@@ -52,6 +52,10 @@ export async function POST(req: NextRequest) {
       gradeCategoryId: body.gradeCategoryId || null,
       gradingType,
       maxPoints: gradingType === "points" ? Number(body.maxPoints) || 100 : null,
+      latePenaltyPercentPerDay:
+        body.latePenaltyPercentPerDay !== undefined && body.latePenaltyPercentPerDay !== ""
+          ? Number(body.latePenaltyPercentPerDay) || null
+          : null,
     },
   });
 
