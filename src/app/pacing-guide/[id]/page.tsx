@@ -52,6 +52,25 @@ type Unit = {
 };
 type CalEvent = { id: string; name: string; startDate: string; endDate: string; type: string };
 
+// How many instructional (non-weekend, non-holiday/teacher-work-day) dates
+// fall between start and end, inclusive - i.e. what the unit's day count
+// would have been from its originally-set start/end dates alone, before any
+// topic overflow or half-completed insertions extended it further.
+function countInstructionalDays(start: Date, end: Date, holidayEvents: CalEvent[]): number {
+  let count = 0;
+  let cursor = new Date(start);
+  while (cursor <= end) {
+    if (!isWeekend(cursor)) {
+      const onHoliday = holidayEvents.some(
+        (h) => cursor >= parseDateOnly(h.startDate) && cursor <= parseDateOnly(h.endDate)
+      );
+      if (!onHoliday) count++;
+    }
+    cursor = addUtcDays(cursor, 1);
+  }
+  return count;
+}
+
 function monthsBetween(start: Date, end: Date): { year: number; month: number }[] {
   const months: { year: number; month: number }[] = [];
   const cur = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth(), 1));
@@ -297,6 +316,7 @@ export default function UnitDetailPage({ params }: { params: Promise<{ id: strin
   const [colorIndex, setColorIndex] = useState(0);
   const [showSummativeModal, setShowSummativeModal] = useState(false);
   const [showTopicModal, setShowTopicModal] = useState(false);
+  const [overDaysNotice, setOverDaysNotice] = useState<number | null>(null);
 
   useEffect(() => {
     load();
@@ -354,6 +374,10 @@ export default function UnitDetailPage({ params }: { params: Promise<{ id: strin
   }
 
   async function addTopic(t: { name: string; days: number; learningTarget: string; standards: string; support: string }) {
+    const priorTotalDays = unit?.days.length ?? 0;
+    const priorTopicDaysSum = unit?.unitTopics.reduce((sum, x) => sum + x.days, 0) ?? 0;
+    const overBy = priorTopicDaysSum + t.days - priorTotalDays;
+
     await fetch(`/api/pacing-units/${id}/topics`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -361,6 +385,8 @@ export default function UnitDetailPage({ params }: { params: Promise<{ id: strin
     });
     setShowTopicModal(false);
     load();
+
+    if (overBy > 0) setOverDaysNotice(overBy);
   }
 
   async function removeTopic(topicId: string) {
@@ -431,6 +457,10 @@ export default function UnitDetailPage({ params }: { params: Promise<{ id: strin
 
   const totalDays = unit.days.length;
   const completedDays = unit.days.filter((d) => d.status === "completed" || d.status === "half_completed").length;
+  const topicDaysSum = unit.unitTopics.reduce((sum, t) => sum + t.days, 0);
+  const topicDaysPlanned = Math.min(topicDaysSum, totalDays);
+  const originalPlannedDays = countInstructionalDays(startDate, parseDateOnly(unit.endDate), holidayEvents);
+  const extraDays = Math.max(0, totalDays - originalPlannedDays);
   const todayStr = new Date().toISOString().slice(0, 10);
   const today = parseDateOnly(todayStr);
   const expectedByToday = unit.days.filter((d) => parseDateOnly(d.date) <= today).length;
@@ -465,6 +495,20 @@ export default function UnitDetailPage({ params }: { params: Promise<{ id: strin
           <div>
             <span className="text-slate-600">Days in Unit</span>
             <p className="font-semibold">{totalDays}</p>
+            {extraDays > 0 && (
+              <p className="text-xs text-amber-600">+{extraDays} extra day{extraDays === 1 ? "" : "s"} added</p>
+            )}
+          </div>
+          <div>
+            <span className="text-slate-600">Topic Days</span>
+            <p className="font-semibold">
+              {topicDaysPlanned} of {totalDays} planned
+            </p>
+            {topicDaysSum > totalDays && (
+              <p className="text-xs text-amber-600">
+                {topicDaysSum - totalDays} day{topicDaysSum - totalDays === 1 ? "" : "s"} over
+              </p>
+            )}
           </div>
           <div>
             <span className="text-slate-600">Pacing</span>
@@ -645,6 +689,23 @@ export default function UnitDetailPage({ params }: { params: Promise<{ id: strin
         <SummativeModal onClose={() => setShowSummativeModal(false)} onSave={addSummative} />
       )}
       {showTopicModal && <TopicModal onClose={() => setShowTopicModal(false)} onSave={addTopic} />}
+      {overDaysNotice !== null && (
+        <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg p-4 w-full max-w-sm space-y-3 text-center">
+            <p className="font-semibold text-amber-700">
+              Over by {overDaysNotice} day{overDaysNotice === 1 ? "" : "s"}
+            </p>
+            <p className="text-sm text-slate-600">
+              That topic pushes the unit past its originally-set length. Extra day(s) were added
+              automatically at the end of the schedule so nothing was lost - just know the unit
+              now runs longer than planned.
+            </p>
+            <button onClick={() => setOverDaysNotice(null)} className="btn-primary text-sm">
+              OK
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

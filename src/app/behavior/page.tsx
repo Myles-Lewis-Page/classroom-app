@@ -247,7 +247,7 @@ export default function BehaviorLogPage() {
   const filteredHistory = contactLogs.filter((l) => !historyFollowUpOnly || l.followUp);
 
   return (
-    <div className="p-4 sm:p-6 max-w-5xl mx-auto">
+    <div className="p-4 sm:p-6 max-w-6xl mx-auto">
       <h1 className="text-2xl font-bold mb-1">Behavior & Parent Contact Log</h1>
       <p className="text-sm text-slate-500 mb-4">
         Log a quick good or bad behavior note as it happens, then circle back and log the call
@@ -280,8 +280,11 @@ export default function BehaviorLogPage() {
       )}
 
       {/* Quick-add behavior note */}
-      <div className="panel mb-6 space-y-2">
-        <h2 className="font-semibold text-sm">Log a Behavior</h2>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {/* Left column: behavior notes */}
+        <div>
+          <div className="panel mb-6 space-y-2">
+            <h2 className="font-semibold text-sm">Log a Behavior</h2>
         <div className="flex gap-2 flex-wrap items-end">
           <div>
             <label className="block text-xs text-slate-500">Student</label>
@@ -508,7 +511,10 @@ export default function BehaviorLogPage() {
         ))}
         {filteredNotes.length === 0 && <p className="text-slate-500 text-sm">No behavior notes yet.</p>}
       </div>
+        </div>
 
+        {/* Right column: general contact log */}
+        <div>
       {/* General (non-behavior) contact log */}
       <h2 className="font-semibold mb-2">Log a Contact for Another Reason</h2>
       <div className="overflow-x-auto mb-8">
@@ -663,6 +669,8 @@ export default function BehaviorLogPage() {
           </tbody>
         </table>
         {contactLogs.length === 0 && <p className="text-slate-500 mt-2">No contacts logged yet.</p>}
+      </div>
+        </div>
       </div>
     </div>
   );
