@@ -34,11 +34,11 @@ export async function GET() {
   return NextResponse.json({ teacher, classroom, skillSubjects, allClassrooms });
 }
 
-// POST { firstName, lastName, grade, subjects: string[], schoolName? }
+// POST { firstName, lastName, className, subjects: string[], schoolName? }
 // Updates the teacher's name, creates (or renames) their ACTIVE classroom
-// using the format first-initial + last name + "-" + grade (e.g.
-// "MPage-4th"), and syncs the classroom's list of taught subjects (generic +
-// custom) to match exactly what was submitted.
+// using the format first-initial + last name + "-" + class name (e.g.
+// "MPage-Homeroom", "MPage-Math Block"), and syncs the classroom's list of
+// taught subjects (generic + custom) to match exactly what was submitted.
 export async function POST(req: NextRequest) {
   const session = await auth();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -49,20 +49,20 @@ export async function POST(req: NextRequest) {
   const body = await req.json();
   const firstName = (body.firstName ?? "").trim();
   const lastName = (body.lastName ?? "").trim();
-  const grade = (body.grade ?? "").trim();
+  const className = (body.className ?? "").trim();
   const schoolName = (body.schoolName ?? "").trim();
   const subjects: string[] = Array.isArray(body.subjects)
     ? body.subjects.map((s: string) => s.trim()).filter(Boolean)
     : [];
 
-  if (!firstName || !lastName || !grade) {
+  if (!firstName || !lastName || !className) {
     return NextResponse.json(
-      { error: "firstName, lastName, and grade are all required" },
+      { error: "firstName, lastName, and className are all required" },
       { status: 400 }
     );
   }
 
-  const classroomName = `${firstName[0].toUpperCase()}${lastName}-${grade}`;
+  const classroomName = `${firstName[0].toUpperCase()}${lastName}-${className}`;
 
   await prisma.teacher.update({
     where: { id: teacherId },

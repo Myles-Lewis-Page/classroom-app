@@ -2,13 +2,14 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
 
-// POST { grade, label, schoolName?, periodNames?: string[] } - creates an
+// POST { className, schoolName?, periodNames?: string[] } - creates an
 // ADDITIONAL, genuinely separate classroom for the teacher (its own roster,
 // subjects, grading setup - not a Period) without touching or archiving the
-// current one. `label` disambiguates it from the teacher's other classrooms
-// in the naming convention, e.g. "MPage-4th (Homeroom)". Optionally seeds
-// initial Periods (Sections) under the new classroom, same as first-time
-// setup. Makes the new classroom active.
+// current one. `className` becomes this classroom's own name in the same
+// first-initial + last name + "-" + class name convention as the primary
+// setup, e.g. "MPage-Homeroom" alongside "MPage-Math Block". Optionally
+// seeds initial Periods (Sections) under the new classroom, same as
+// first-time setup. Makes the new classroom active.
 export async function POST(req: NextRequest) {
   const session = await auth();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -17,15 +18,14 @@ export async function POST(req: NextRequest) {
   if (!teacherId) return NextResponse.json({ error: "No teacher on session" }, { status: 400 });
 
   const body = await req.json();
-  const grade = (body.grade ?? "").trim();
-  const label = (body.label ?? "").trim();
+  const className = (body.className ?? "").trim();
   const schoolName = (body.schoolName ?? "").trim();
   const periodNames: string[] = Array.isArray(body.periodNames)
     ? body.periodNames.map((n: string) => n.trim()).filter(Boolean)
     : [];
 
-  if (!grade || !label) {
-    return NextResponse.json({ error: "grade and label are required" }, { status: 400 });
+  if (!className) {
+    return NextResponse.json({ error: "className is required" }, { status: 400 });
   }
 
   const teacher = await prisma.teacher.findUnique({ where: { id: teacherId } });
@@ -34,7 +34,7 @@ export async function POST(req: NextRequest) {
   const nameParts = teacher.name.trim().split(" ");
   const firstInitial = (nameParts[0]?.[0] ?? "T").toUpperCase();
   const lastName = nameParts.slice(1).join(" ") || nameParts[0] || "Teacher";
-  const classroomName = `${firstInitial}${lastName}-${grade} (${label})`;
+  const classroomName = `${firstInitial}${lastName}-${className}`;
 
   const now = new Date();
   const schoolYear =

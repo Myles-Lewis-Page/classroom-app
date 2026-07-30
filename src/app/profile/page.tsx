@@ -2,9 +2,9 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useSectionContext } from "@/components/SectionContext";
 import SectionManager from "@/components/SectionManager";
 
-const GRADE_OPTIONS = ["1st", "2nd", "3rd", "4th", "5th"];
 const GENERIC_SUBJECTS = ["Math", "Reading", "Writing", "Science", "Social Studies", "Spelling"];
 
 type Teacher = { name: string; email: string };
@@ -20,9 +20,10 @@ type SkillSubject = { id: string; name: string; isActive: boolean };
 
 export default function ProfilePage() {
   const router = useRouter();
+  const { refreshSections } = useSectionContext();
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
-  const [grade, setGrade] = useState("3rd");
+  const [className, setClassName] = useState("");
   const [schoolName, setSchoolName] = useState("");
   const [currentClassroom, setCurrentClassroom] = useState<Classroom | null>(null);
   const [allClassrooms, setAllClassrooms] = useState<Classroom[]>([]);
@@ -33,7 +34,6 @@ export default function ProfilePage() {
   const [showSetupForm, setShowSetupForm] = useState(false);
   const [showAddPeriod, setShowAddPeriod] = useState(false);
   const [periodLabel, setPeriodLabel] = useState("");
-  const [periodGrade, setPeriodGrade] = useState("3rd");
   const [newClassroomSchoolName, setNewClassroomSchoolName] = useState("");
   const [newClassroomHasSubgroups, setNewClassroomHasSubgroups] = useState(false);
   const [newClassroomPeriodNames, setNewClassroomPeriodNames] = useState<string[]>(["Period 1", "Period 2"]);
@@ -88,6 +88,13 @@ export default function ProfilePage() {
           setCurrentClassroom(classroom);
           setShowSetupForm(!classroom);
           setSchoolName(classroom?.schoolName ?? "");
+          if (classroom && teacher?.name) {
+            const parts = teacher.name.trim().split(" ");
+            const prefix = `${(parts[0]?.[0] ?? "").toUpperCase()}${parts.slice(1).join(" ") || parts[0] || ""}-`;
+            setClassName(
+              classroom.name.startsWith(prefix) ? classroom.name.slice(prefix.length) : classroom.name
+            );
+          }
           setAllClassrooms(allClassrooms ?? []);
           setExistingSubjects(skillSubjects ?? []);
           setSelectedSubjects((skillSubjects ?? []).filter((s) => s.isActive).map((s) => s.name));
@@ -102,6 +109,7 @@ export default function ProfilePage() {
       body: JSON.stringify({ classroomId }),
     });
     loadProfile();
+    refreshSections();
     router.refresh();
   }
 
@@ -115,8 +123,7 @@ export default function ProfilePage() {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        grade: periodGrade,
-        label: periodLabel.trim(),
+        className: periodLabel.trim(),
         schoolName: newClassroomSchoolName.trim(),
         periodNames: names,
       }),
@@ -129,6 +136,7 @@ export default function ProfilePage() {
       setNewClassroomPeriodNames(["Period 1", "Period 2"]);
       setShowAddPeriod(false);
       loadProfile();
+      refreshSections();
       router.refresh();
     }
   }
@@ -145,6 +153,7 @@ export default function ProfilePage() {
     setArchiving(false);
     setSavedName(null);
     loadProfile();
+    refreshSections();
     router.refresh();
   }
 
@@ -163,13 +172,13 @@ export default function ProfilePage() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!firstName.trim() || !lastName.trim() || !grade) return;
+    if (!firstName.trim() || !lastName.trim() || !className.trim()) return;
     const isNewClassroom = !currentClassroom;
     setSaving(true);
     const res = await fetch("/api/profile", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ firstName, lastName, grade, subjects: selectedSubjects, schoolName }),
+      body: JSON.stringify({ firstName, lastName, className, subjects: selectedSubjects, schoolName }),
     });
     const data = await res.json();
     setSaving(false);
@@ -191,6 +200,7 @@ export default function ProfilePage() {
         }
       }
       loadProfile();
+      refreshSections();
       router.refresh();
     }
   }
@@ -317,27 +327,13 @@ export default function ProfilePage() {
           <div className="space-y-3">
             <div className="flex gap-2 flex-wrap items-end">
               <div>
-                <label className="block text-xs text-slate-500">Label (e.g. "Homeroom", "Reading Pullout")</label>
+                <label className="block text-xs text-slate-500">Class name (e.g. "Homeroom", "Math Block")</label>
                 <input
                   placeholder="e.g. Homeroom"
                   value={periodLabel}
                   onChange={(e) => setPeriodLabel(e.target.value)}
                   className="border rounded px-2 py-1"
                 />
-              </div>
-              <div>
-                <label className="block text-xs text-slate-500">Grade</label>
-                <select
-                  value={periodGrade}
-                  onChange={(e) => setPeriodGrade(e.target.value)}
-                  className="border rounded px-2 py-1"
-                >
-                  {GRADE_OPTIONS.map((g) => (
-                    <option key={g} value={g}>
-                      {g} grade
-                    </option>
-                  ))}
-                </select>
               </div>
               <div>
                 <label className="block text-xs text-slate-500">School name (optional)</label>
@@ -466,18 +462,14 @@ export default function ProfilePage() {
           />
         </div>
         <div>
-          <label className="block text-xs text-slate-500 mb-1">Grade you teach</label>
-          <select
-            value={grade}
-            onChange={(e) => setGrade(e.target.value)}
+          <label className="block text-xs text-slate-500 mb-1">Class name (e.g. "3rd Grade", "Homeroom", "Math Block")</label>
+          <input
+            placeholder="e.g. 3rd Grade"
+            value={className}
+            onChange={(e) => setClassName(e.target.value)}
             className="border rounded px-2 py-1 w-full"
-          >
-            {GRADE_OPTIONS.map((g) => (
-              <option key={g} value={g}>
-                {g} grade
-              </option>
-            ))}
-          </select>
+            required
+          />
         </div>
 
         <div>
@@ -490,12 +482,12 @@ export default function ProfilePage() {
           />
         </div>
 
-        {firstName && lastName && grade && (
+        {firstName && lastName && className && (
           <p className="text-sm text-slate-500">
             Your classroom will be named:{" "}
             <span className="font-mono font-semibold">
               {firstName[0].toUpperCase()}
-              {lastName}-{grade}
+              {lastName}-{className}
             </span>
           </p>
         )}
