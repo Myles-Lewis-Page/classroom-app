@@ -19,10 +19,7 @@ export default function AddStudentPage() {
 
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
-  const [grade, setGrade] = useState("");
-  const [section, setSection] = useState("");
   const [dob, setDob] = useState("");
-  const [understandingLevel, setUnderstandingLevel] = useState("3");
   const [selectedTagIds, setSelectedTagIds] = useState<string[]>([]);
 
   const [allergen, setAllergen] = useState("");
@@ -81,6 +78,8 @@ export default function AddStudentPage() {
     setSelectedTagIds((prev) => (prev.includes(id) ? prev.filter((t) => t !== id) : [...prev, id]));
   }
 
+  const hasIepTag = tags.some((t) => selectedTagIds.includes(t.id) && ["IEP", "504"].includes(t.name));
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!firstName || !lastName || !classroomId) return;
@@ -91,14 +90,11 @@ export default function AddStudentPage() {
       sectionId: sectionId || null,
       firstName,
       lastName,
-      grade: grade || null,
-      section,
       dob: dob || null,
-      understandingLevel,
       tagIds: selectedTagIds,
       allergies: allergen ? [{ allergen, severity, reaction }] : [],
       dietaryRestrictions: dietary ? [{ restriction: dietary }] : [],
-      ieps: iepType ? [{ type: iepType, accommodations, caseManager, reviewDate }] : [],
+      ieps: hasIepTag && iepType ? [{ type: iepType, accommodations, caseManager, reviewDate }] : [],
       parents: parentName
         ? [
             {
@@ -160,12 +156,6 @@ export default function AddStudentPage() {
               className="border rounded px-2 py-1"
               required
             />
-            <input
-              placeholder="Grade (optional)"
-              value={grade}
-              onChange={(e) => setGrade(e.target.value)}
-              className="border rounded px-2 py-1"
-            />
             <div>
               <label className="block text-xs text-gray-500">Class</label>
               <select
@@ -199,29 +189,12 @@ export default function AddStudentPage() {
                 </select>
               </div>
             )}
-            <input
-              placeholder="Section (optional)"
-              value={section}
-              onChange={(e) => setSection(e.target.value)}
-              className="border rounded px-2 py-1"
-            />
             <div>
               <label className="block text-xs text-gray-500">Date of birth</label>
               <input
                 type="date"
                 value={dob}
                 onChange={(e) => setDob(e.target.value)}
-                className="border rounded px-2 py-1 w-full"
-              />
-            </div>
-            <div>
-              <label className="block text-xs text-gray-500">Understanding level (1-5)</label>
-              <input
-                type="number"
-                min={1}
-                max={5}
-                value={understandingLevel}
-                onChange={(e) => setUnderstandingLevel(e.target.value)}
                 className="border rounded px-2 py-1 w-full"
               />
             </div>
@@ -278,6 +251,7 @@ export default function AddStudentPage() {
           />
         </section>
 
+        {hasIepTag && (
         <section className="card">
           <h2 className="font-semibold mb-3">IEP / 504 (optional)</h2>
           <select
@@ -314,6 +288,7 @@ export default function AddStudentPage() {
             </>
           )}
         </section>
+        )}
 
         <section className="card">
           <h2 className="font-semibold mb-3">Parent / Guardian (optional)</h2>
