@@ -2,10 +2,14 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
 import { getCurrentClassroomId } from "@/lib/classroomScope";
-import { reapplyAllTopics } from "@/lib/pacing";
+import { reapplyAllTopics, shrinkUnitDaysIfPossible, getUnitLastDayDate, cascadeAfterDayCountChange } from "@/lib/pacing";
 
-// DELETE - removes a topic and reapplies the remaining topics so they stay
-// contiguous starting at Day 1 (no gap left where the removed one was).
+// DELETE - removes a topic, reapplies the remaining topics so they stay
+// contiguous starting at Day 1 (no gap left where the removed one was), and
+// - if this topic was the reason the unit ran long - trims the now-unused
+// trailing days back down to whichever is longer: the unit's originally-set
+// length, or however many days the remaining topics still need. Whatever
+// comes after this unit then shifts back up to close the gap.
 export async function DELETE(
   req: NextRequest,
   { params }: { params: Promise<{ topicId: string }> }
@@ -21,8 +25,12 @@ export async function DELETE(
   }
 
   const unitId = topic.unitId;
+  const beforeLastDate = await getUnitLastDayDate(unitId);
+
   await prisma.unitTopic.delete({ where: { id: topicId } });
   await reapplyAllTopics(unitId);
+  await shrinkUnitDaysIfPossible(unitId);
+  await cascadeAfterDayCountChange(unitId, beforeLastDate);
 
   return NextResponse.json({ ok: true });
 }

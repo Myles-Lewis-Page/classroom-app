@@ -4,7 +4,7 @@ import { useEffect, useState, use, useMemo } from "react";
 import Link from "next/link";
 import { useSectionContext } from "@/components/SectionContext";
 import { effectiveGradePercent, daysLate } from "@/lib/grading";
-import { formatShortDate, todayLocalDateString, parseDateOnly } from "@/lib/dateOnly";
+import { formatShortDate, todayLocalDateString, parseDateOnly, toDateInputValue } from "@/lib/dateOnly";
 
 type Entry = {
   status: string;
@@ -70,6 +70,31 @@ export default function AssignmentDetailPage({ params }: { params: Promise<{ id:
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ studentId, status, submittedDate }),
+    });
+    load();
+  }
+
+  // Lets the teacher correct the hand-in date directly - e.g. logging a
+  // submission a couple days after the fact shouldn't leave it stamped with
+  // today's date. Reuses the same status endpoint since submittedDate is
+  // already the single source of truth for submittedAt there.
+  async function editSubmittedDate(studentId: string, submittedDate: string) {
+    setAssignment((prev) =>
+      prev
+        ? {
+            ...prev,
+            entries: prev.entries.map((e) =>
+              e.student.id === studentId
+                ? { ...e, submittedAt: parseDateOnly(submittedDate).toISOString() }
+                : e
+            ),
+          }
+        : prev
+    );
+    await fetch(`/api/assignments/${id}/status`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ studentId, status: "handed_in", submittedDate }),
     });
     load();
   }
@@ -158,9 +183,15 @@ export default function AssignmentDetailPage({ params }: { params: Promise<{ id:
               <span>
                 {e.student.lastName}, {e.student.firstName}
                 {e.status === "handed_in" && e.submittedAt && (
-                  <span className="text-xs text-slate-500 block">
-                    {new Date(e.submittedAt).toLocaleDateString()}
-                    {late && <span className="text-rose-600 font-medium"> · Late</span>}
+                  <span className="text-xs text-slate-500 flex items-center gap-1 mt-0.5">
+                    <input
+                      type="date"
+                      value={toDateInputValue(e.submittedAt)}
+                      onChange={(ev) => editSubmittedDate(e.student.id, ev.target.value)}
+                      className="border rounded px-1 py-0.5 text-xs"
+                      title="Edit the date this was actually handed in"
+                    />
+                    {late && <span className="text-rose-600 font-medium">Late</span>}
                   </span>
                 )}
               </span>

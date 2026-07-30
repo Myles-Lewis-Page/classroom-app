@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
 import { getCurrentClassroomId } from "@/lib/classroomScope";
-import { applyTopicToDays } from "@/lib/pacing";
+import { applyTopicToDays, getUnitLastDayDate, cascadeAfterDayCountChange } from "@/lib/pacing";
 
 // POST { name, days, learningTarget?, standards?, support? }
 // Creates a topic block and auto-fills the next `days` consecutive day-rows
@@ -42,7 +42,9 @@ export async function POST(
     },
   });
 
+  const beforeLastDate = await getUnitLastDayDate(id);
   await applyTopicToDays(id, topic.id);
+  await cascadeAfterDayCountChange(id, beforeLastDate);
 
   const withDays = await prisma.pacingUnit.findUnique({
     where: { id },

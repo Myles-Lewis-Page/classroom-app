@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
 import { getCurrentClassroomId } from "@/lib/classroomScope";
 import { parseDateOnly } from "@/lib/dateOnly";
-import { recomputeUnitDayDates } from "@/lib/pacing";
+import { recomputeUnitDayDates, getUnitLastDayDate, cascadeAfterDayCountChange } from "@/lib/pacing";
 
 // GET - every calendar entry (days off, half days, and other reminders) for
 // the active classroom, used by both the standalone School Calendar page
@@ -48,9 +48,15 @@ export async function POST(req: NextRequest) {
   });
 
   if (type === "holiday" || type === "teacher_work_day") {
-    const units = await prisma.pacingUnit.findMany({ where: { classroomId }, select: { id: true } });
+    const units = await prisma.pacingUnit.findMany({
+      where: { classroomId },
+      select: { id: true },
+      orderBy: { startDate: "asc" },
+    });
     for (const u of units) {
+      const beforeLastDate = await getUnitLastDayDate(u.id);
       await recomputeUnitDayDates(u.id);
+      await cascadeAfterDayCountChange(u.id, beforeLastDate);
     }
   }
 
