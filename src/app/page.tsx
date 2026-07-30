@@ -1,7 +1,10 @@
 import { redirect } from "next/navigation";
-import { auth } from "@/lib/auth";
+import { getSessionUser } from "@/lib/roleScope";
 
 export default async function Home() {
-  const session = await auth();
-  redirect(session?.user ? "/dashboard" : "/login");
+  const user = await getSessionUser();
+  if (!user) redirect("/login");
+  if (user.role === "admin") redirect("/admin");
+  if (user.role === "principal") redirect("/principal");
+  redirect("/dashboard");
 }
