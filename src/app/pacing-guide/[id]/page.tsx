@@ -395,6 +395,35 @@ export default function UnitDetailPage({ params }: { params: Promise<{ id: strin
     load();
   }
 
+  // Regenerates this unit's day rows from scratch, from its own set start/end
+  // dates, then reapplies topics - the same thing editing the dates does,
+  // just re-triggered with the dates unchanged. Mainly a self-heal button
+  // for a unit that ended up with a stale day count from testing/edits made
+  // before some of the automatic day-count fixes existed.
+  async function recalculateDays() {
+    if (!unit) return;
+    if (
+      !confirm(
+        "Regenerate this unit's schedule from its set start/end dates? Topics will be reapplied, but any manually-typed content on days that no longer fit will be lost."
+      )
+    )
+      return;
+    const res = await fetch(`/api/pacing-units/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        startDate: toDateInputValue(unit.startDate),
+        endDate: toDateInputValue(unit.endDate),
+      }),
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      alert(data.error || "Couldn't recalculate this unit's days.");
+      return;
+    }
+    load();
+  }
+
   const holidayEvents = useMemo(
     () => calendarEvents.filter((e) => e.type === "holiday" || e.type === "teacher_work_day"),
     [calendarEvents]
@@ -482,7 +511,16 @@ export default function UnitDetailPage({ params }: { params: Promise<{ id: strin
       </Link>
 
       <div className="rounded-lg p-4 sm:p-6 my-4" style={{ backgroundColor: color }}>
-        <h1 className="text-2xl font-bold mb-3">{unit.name} - Lesson Plans</h1>
+        <div className="flex justify-between items-start gap-2 mb-3">
+          <h1 className="text-2xl font-bold">{unit.name} - Lesson Plans</h1>
+          <button
+            onClick={recalculateDays}
+            className="text-xs text-slate-600 hover:underline shrink-0 mt-1"
+            title="Regenerate this unit's days from its set start/end dates and reapply topics"
+          >
+            Recalculate Days
+          </button>
+        </div>
         <div className="flex gap-6 flex-wrap text-sm">
           <div>
             <span className="text-slate-600">Unit Start</span>
@@ -490,7 +528,10 @@ export default function UnitDetailPage({ params }: { params: Promise<{ id: strin
           </div>
           <div>
             <span className="text-slate-600">Unit End</span>
-            <p className="font-semibold">{formatShortDate(lastDayDate)}</p>
+            <p className="font-semibold">{formatShortDate(unit.endDate)}</p>
+            {toDateInputValue(lastDayDate) !== toDateInputValue(unit.endDate) && (
+              <p className="text-xs text-amber-600">Actually ends {formatShortDate(lastDayDate)}</p>
+            )}
           </div>
           <div>
             <span className="text-slate-600">Days in Unit</span>
