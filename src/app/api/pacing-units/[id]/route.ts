@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
 import { getCurrentClassroomId } from "@/lib/classroomScope";
 import { parseDateOnly, formatShortDate } from "@/lib/dateOnly";
-import { generateInstructionalDates, getHolidayRanges, getUnitLastDayDate, cascadeAfterDayCountChange, findOverlappingUnit } from "@/lib/pacing";
+import { generateInstructionalDates, getHolidayRanges, captureUnitDayState, cascadeAfterChange, findOverlappingUnit } from "@/lib/pacing";
 
 // GET - single unit with its day rows, topics, and summatives
 export async function GET(
@@ -96,7 +96,7 @@ export async function PATCH(
   await prisma.pacingUnit.update({ where: { id }, data });
 
   if (datesChanged) {
-    const beforeLastDate = await getUnitLastDayDate(id);
+    const before = await captureUnitDayState(id);
 
     await prisma.pacingUnitDay.deleteMany({ where: { pacingUnitId: id } });
     const holidays = await getHolidayRanges(classroomId);
@@ -116,7 +116,7 @@ export async function PATCH(
       await applyTopicToDays(id, t.id);
     }
 
-    await cascadeAfterDayCountChange(id, beforeLastDate);
+    await cascadeAfterChange(id, before);
   }
 
   const withDays = await prisma.pacingUnit.findUnique({

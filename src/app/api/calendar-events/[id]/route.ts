@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
 import { getCurrentClassroomId } from "@/lib/classroomScope";
-import { recomputeUnitDayDates, getUnitLastDayDate, cascadeAfterDayCountChange } from "@/lib/pacing";
+import { recomputeUnitDayDates, captureUnitDayState, cascadeAfterChange } from "@/lib/pacing";
 
 // DELETE - removes one calendar entry. If it was a "holiday" (full day
 // off), every unit's day dates are recomputed afterward, since removing a
@@ -30,9 +30,9 @@ export async function DELETE(
       orderBy: { startDate: "asc" },
     });
     for (const u of units) {
-      const beforeLastDate = await getUnitLastDayDate(u.id);
+      const before = await captureUnitDayState(u.id);
       await recomputeUnitDayDates(u.id);
-      await cascadeAfterDayCountChange(u.id, beforeLastDate);
+      await cascadeAfterChange(u.id, before);
     }
   }
 

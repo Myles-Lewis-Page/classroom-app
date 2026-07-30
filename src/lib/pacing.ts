@@ -93,16 +93,76 @@ export async function getUnitLastDayDate(unitId: string): Promise<Date | null> {
   return lastDay ? lastDay.date : null;
 }
 
+/** Snapshot of a unit's day state, captured before a change, for cascadeAfterChange to diff against. */
+export async function captureUnitDayState(unitId: string): Promise<{ count: number; lastDate: Date | null }> {
+  const [count, lastDate] = await Promise.all([
+    prisma.pacingUnitDay.count({ where: { pacingUnitId: unitId } }),
+    getUnitLastDayDate(unitId),
+  ]);
+  return { count, lastDate };
+}
+
+/** Walks `n` instructional days forward (or back, if negative) from `date`, skipping weekends/holidays. */
+export function addInstructionalDays(
+  date: Date,
+  n: number,
+  holidayRanges: { startDate: Date; endDate: Date }[]
+): Date {
+  if (n === 0) return date;
+  const isHoliday = (d: Date) => holidayRanges.some((h) => d >= h.startDate && d <= h.endDate);
+  let cursor = date;
+  let remaining = Math.abs(n);
+  const step = n > 0 ? 1 : -1;
+  while (remaining > 0) {
+    cursor = addUtcDays(cursor, step);
+    if (!isWeekend(cursor) && !isHoliday(cursor)) remaining--;
+  }
+  return cursor;
+}
+
 /**
  * Only one unit runs at a time: shifts every OTHER unit in the classroom
- * that starts later than `anchorUnitId` by the same number of calendar days
- * - e.g. if a unit runs 4 days long, whatever comes next moves down 4 days
- * to avoid overlapping it. A flat shift (not a recursive per-unit cascade)
- * is correct here: every later unit's own day *count* is untouched, only
- * its position moves, so they all need to move by exactly the same amount.
+ * that starts later than `anchorUnitId`, so nothing ends up overlapping.
+ * `unit` is a school-day count here (not calendar days) - e.g. a unit that
+ * runs one extra school day pushes what comes next by exactly one school
+ * day, even if that day happens to land right before a weekend and the
+ * calendar gap is really three days. A flat shift (not a recursive
+ * per-unit cascade) is correct: every later unit's own day *count* is
+ * untouched, only its position moves, so they all move by the same amount.
  */
-export async function shiftSubsequentUnits(classroomId: string, anchorUnitId: string, deltaDays: number) {
-  if (!deltaDays) return;
+export async function shiftSubsequentUnitsByInstructionalDays(
+  classroomId: string,
+  anchorUnitId: string,
+  deltaSchoolDays: number
+) {
+  if (!deltaSchoolDays) return;
+  const anchor = await prisma.pacingUnit.findUnique({ where: { id: anchorUnitId } });
+  if (!anchor) return;
+
+  const holidays = await getHolidayRanges(classroomId);
+  const laterUnits = await prisma.pacingUnit.findMany({
+    where: { classroomId, id: { not: anchorUnitId }, startDate: { gt: anchor.startDate } },
+  });
+
+  for (const u of laterUnits) {
+    await prisma.pacingUnit.update({
+      where: { id: u.id },
+      data: {
+        startDate: addInstructionalDays(u.startDate, deltaSchoolDays, holidays),
+        endDate: addInstructionalDays(u.endDate, deltaSchoolDays, holidays),
+      },
+    });
+    await recomputeUnitDayDates(u.id);
+  }
+}
+
+/** Same idea, but for shifts measured in literal calendar days (see cascadeAfterChange for when this applies instead). */
+export async function shiftSubsequentUnitsByCalendarDays(
+  classroomId: string,
+  anchorUnitId: string,
+  deltaCalendarDays: number
+) {
+  if (!deltaCalendarDays) return;
   const anchor = await prisma.pacingUnit.findUnique({ where: { id: anchorUnitId } });
   if (!anchor) return;
 
@@ -114,8 +174,8 @@ export async function shiftSubsequentUnits(classroomId: string, anchorUnitId: st
     await prisma.pacingUnit.update({
       where: { id: u.id },
       data: {
-        startDate: addUtcDays(u.startDate, deltaDays),
-        endDate: addUtcDays(u.endDate, deltaDays),
+        startDate: addUtcDays(u.startDate, deltaCalendarDays),
+        endDate: addUtcDays(u.endDate, deltaCalendarDays),
       },
     });
     await recomputeUnitDayDates(u.id);
@@ -124,20 +184,41 @@ export async function shiftSubsequentUnits(classroomId: string, anchorUnitId: st
 
 /**
  * Call after any change that might have moved a unit's last day (topic
- * added/removed, a day marked half-completed, an extra day removed, or its
- * dates edited directly) - compares to the last day date from before the
- * change and, if it moved, shifts every later unit by the same amount so
- * nothing ends up overlapping.
+ * added/removed, a day marked half-completed, an extra day removed, a
+ * calendar holiday added/removed, or its dates edited directly) - diffs
+ * against a `captureUnitDayState()` snapshot taken before the change and
+ * cascades to later units if needed.
+ *
+ * Two different things can have happened, and they need different units of
+ * measurement to shift correctly:
+ *  - The instructional day COUNT changed (a topic grew/shrank the unit, a
+ *    half-completed day inserted/removed an extra day) - shift later units
+ *    by that many SCHOOL days, so "one extra teaching day" only ever pushes
+ *    things by one school day, never inflated by a weekend it happens to
+ *    land next to.
+ *  - The day count is the same but the last day's actual DATE moved (a
+ *    holiday got inserted or removed mid-unit, so the same number of
+ *    lessons now needs more or fewer calendar days to fit) - shift later
+ *    units by that calendar-day gap instead, since that's what's actually
+ *    needed to keep them from overlapping.
  */
-export async function cascadeAfterDayCountChange(unitId: string, beforeLastDate: Date | null) {
+export async function cascadeAfterChange(unitId: string, before: { count: number; lastDate: Date | null }) {
   const unit = await prisma.pacingUnit.findUnique({ where: { id: unitId } });
   if (!unit) return;
-  const afterLastDate = await getUnitLastDayDate(unitId);
-  if (!beforeLastDate || !afterLastDate) return;
+  const after = await captureUnitDayState(unitId);
 
-  const deltaDays = Math.round((afterLastDate.getTime() - beforeLastDate.getTime()) / 86400000);
-  if (deltaDays === 0) return;
-  await shiftSubsequentUnits(unit.classroomId, unitId, deltaDays);
+  const countDelta = after.count - before.count;
+  if (countDelta !== 0) {
+    await shiftSubsequentUnitsByInstructionalDays(unit.classroomId, unitId, countDelta);
+    return;
+  }
+
+  if (before.lastDate && after.lastDate) {
+    const calendarDelta = Math.round((after.lastDate.getTime() - before.lastDate.getTime()) / 86400000);
+    if (calendarDelta !== 0) {
+      await shiftSubsequentUnitsByCalendarDays(unit.classroomId, unitId, calendarDelta);
+    }
+  }
 }
 
 /**
@@ -305,7 +386,7 @@ export async function setDayStatus(dayId: string, status: "not_started" | "compl
   await prisma.pacingUnitDay.update({ where: { id: dayId }, data: { status } });
 
   if (status === "half_completed" && !wasHalfCompleted) {
-    const beforeLastDate = await getUnitLastDayDate(day.pacingUnitId);
+    const before = await captureUnitDayState(day.pacingUnitId);
 
     // Shift every later day up by one dayNumber, highest first, so no two
     // rows ever collide on the unique (pacingUnitId, dayNumber) constraint
@@ -334,7 +415,7 @@ export async function setDayStatus(dayId: string, status: "not_started" | "compl
       },
     });
     await recomputeUnitDayDates(day.pacingUnitId);
-    await cascadeAfterDayCountChange(day.pacingUnitId, beforeLastDate);
+    await cascadeAfterChange(day.pacingUnitId, before);
   }
 
   return prisma.pacingUnitDay.findUnique({ where: { id: dayId } });
@@ -345,7 +426,7 @@ export async function removeExtraDay(dayId: string) {
   const day = await prisma.pacingUnitDay.findUnique({ where: { id: dayId } });
   if (!day || !day.isExtraDay) return false;
 
-  const beforeLastDate = await getUnitLastDayDate(day.pacingUnitId);
+  const before = await captureUnitDayState(day.pacingUnitId);
 
   await prisma.pacingUnitDay.delete({ where: { id: dayId } });
   const laterDays = await prisma.pacingUnitDay.findMany({
@@ -359,6 +440,6 @@ export async function removeExtraDay(dayId: string) {
     });
   }
   await recomputeUnitDayDates(day.pacingUnitId);
-  await cascadeAfterDayCountChange(day.pacingUnitId, beforeLastDate);
+  await cascadeAfterChange(day.pacingUnitId, before);
   return true;
 }

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
 import { getCurrentClassroomId } from "@/lib/classroomScope";
-import { reapplyAllTopics, shrinkUnitDaysIfPossible, getUnitLastDayDate, cascadeAfterDayCountChange } from "@/lib/pacing";
+import { reapplyAllTopics, shrinkUnitDaysIfPossible, captureUnitDayState, cascadeAfterChange } from "@/lib/pacing";
 
 // DELETE - removes a topic, reapplies the remaining topics so they stay
 // contiguous starting at Day 1 (no gap left where the removed one was), and
@@ -25,12 +25,12 @@ export async function DELETE(
   }
 
   const unitId = topic.unitId;
-  const beforeLastDate = await getUnitLastDayDate(unitId);
+  const before = await captureUnitDayState(unitId);
 
   await prisma.unitTopic.delete({ where: { id: topicId } });
   await reapplyAllTopics(unitId);
   await shrinkUnitDaysIfPossible(unitId);
-  await cascadeAfterDayCountChange(unitId, beforeLastDate);
+  await cascadeAfterChange(unitId, before);
 
   return NextResponse.json({ ok: true });
 }
