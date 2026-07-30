@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
 import { getCurrentClassroomId } from "@/lib/classroomScope";
 import { parseDateOnly, formatShortDate } from "@/lib/dateOnly";
-import { generateInstructionalDates, getHolidayRanges, findOverlappingUnit, getPeriodModifiedEndDate, getUnitLastDayDate } from "@/lib/pacing";
+import { generateInstructionalDates, getHolidayRanges, findOverlappingUnit, getPeriodModifiedEndDate, getUnitLastDayDate, getPeriodDayDelta } from "@/lib/pacing";
 
 export async function GET() {
   const session = await auth();
@@ -18,7 +18,6 @@ export async function GET() {
       include: {
         days: { orderBy: { dayNumber: "asc" } },
         unitTopics: { orderBy: { order: "asc" } },
-        periodOffsets: { where: { extraDays: { not: 0 } } },
       },
       orderBy: [{ order: "asc" }, { startDate: "asc" }],
     }),
@@ -27,22 +26,22 @@ export async function GET() {
 
   // Every Period's own start/end for this unit - start is always the shared
   // unit start (Periods all begin a unit together), end is the shared
-  // baseline end unless that Period has its own tracked offset (extra days
-  // from a half-completed spillover, or fewer from finishing early).
+  // baseline end unless that Period has its own tracked delta (real extra
+  // days from a half-completed spillover, or fewer from finishing early).
   const withPeriodDates = await Promise.all(
     units.map(async (u) => {
       const sharedEnd = await getUnitLastDayDate(u.id);
       const periodDates = await Promise.all(
         allSections.map(async (s) => {
-          const offset = u.periodOffsets.find((o) => o.sectionId === s.id);
-          const modified = offset ? await getPeriodModifiedEndDate(u.id, s.id, classroomId) : null;
+          const extraDays = await getPeriodDayDelta(u.id, s.id);
+          const modified = extraDays !== 0 ? await getPeriodModifiedEndDate(u.id, s.id, classroomId) : null;
           return {
             sectionId: s.id,
             sectionName: s.name,
             startDate: u.startDate,
             endDate: modified ?? sharedEnd ?? u.endDate,
-            tag: !offset || offset.extraDays === 0 ? null : offset.extraDays > 0 ? "extra" : "early",
-            extraDays: offset?.extraDays ?? 0,
+            tag: extraDays === 0 ? null : extraDays > 0 ? "extra" : "early",
+            extraDays,
           };
         })
       );

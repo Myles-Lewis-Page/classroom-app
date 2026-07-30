@@ -20,6 +20,7 @@ export async function GET(
     include: {
       days: { orderBy: { dayNumber: "asc" }, include: { periodStatuses: true } },
       periodOffsets: true,
+      periodExtraDays: { orderBy: { date: "asc" }, include: { section: { select: { id: true, name: true } } } },
       unitSummatives: { orderBy: { date: "asc" } },
       unitTopics: { orderBy: { order: "asc" } },
     },

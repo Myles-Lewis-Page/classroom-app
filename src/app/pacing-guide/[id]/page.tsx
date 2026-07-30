@@ -46,6 +46,20 @@ type UnitTopic = {
   support: string | null;
 };
 type PeriodOffset = { sectionId: string; extraDays: number };
+type PeriodExtraDayType = {
+  id: string;
+  sectionId: string;
+  section: { id: string; name: string };
+  date: string;
+  topic: string | null;
+  learningTarget: string | null;
+  standards: string | null;
+  supports: string | null;
+  lessonActivities: string | null;
+  warmUp: string | null;
+  materialsNeeded: string | null;
+  status: DayStatus;
+};
 type Unit = {
   id: string;
   name: string;
@@ -56,6 +70,7 @@ type Unit = {
   unitSummatives: UnitSummative[];
   unitTopics: UnitTopic[];
   periodOffsets: PeriodOffset[];
+  periodExtraDays: PeriodExtraDayType[];
 };
 type CalEvent = { id: string; name: string; startDate: string; endDate: string; type: string };
 
@@ -314,7 +329,8 @@ const STATUS_COLOR: Record<DayStatus, string> = {
 
 type Row =
   | { kind: "day"; date: Date; day: Day; halfDayLabel: string | null }
-  | { kind: "off"; date: Date; label: string; eventType: string };
+  | { kind: "off"; date: Date; label: string; eventType: string }
+  | { kind: "extra"; date: Date; extraDay: PeriodExtraDayType };
 
 export default function UnitDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -363,6 +379,29 @@ export default function UnitDetailPage({ params }: { params: Promise<{ id: strin
   async function removeExtraDay(dayId: string) {
     if (!confirm("Remove this extra day? Only do this if it ended up unused.")) return;
     await fetch(`/api/pacing-units/days/${dayId}`, { method: "DELETE" });
+    load();
+  }
+
+  async function saveExtraDayField(extraDayId: string, field: string, value: string) {
+    await fetch(`/api/pacing-units/extra-days/${extraDayId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ [field]: value }),
+    });
+  }
+
+  async function setExtraDayStatus(extraDayId: string, status: DayStatus) {
+    await fetch(`/api/pacing-units/extra-days/${extraDayId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status }),
+    });
+    load();
+  }
+
+  async function removeExtraDayRow(extraDayId: string) {
+    if (!confirm("Remove this Period's extra day? Only do this if it ended up unused.")) return;
+    await fetch(`/api/pacing-units/extra-days/${extraDayId}`, { method: "DELETE" });
     load();
   }
 
@@ -497,8 +536,19 @@ export default function UnitDetailPage({ params }: { params: Promise<{ id: strin
       }
       cursor = addUtcDays(cursor, 1);
     }
+    // The active Period's own extra days - these live past the shared
+    // schedule's last day (see PeriodExtraDay), so they show up as their
+    // own rows/weeks right after everything else, only when that Period is
+    // the one being viewed.
+    if (activeSectionId) {
+      unit.periodExtraDays
+        .filter((e) => e.sectionId === activeSectionId)
+        .forEach((e) => {
+          out.push({ kind: "extra", date: parseDateOnly(e.date), extraDay: e });
+        });
+    }
     return out;
-  }, [unit, holidayEvents, halfDayEvents]);
+  }, [unit, holidayEvents, halfDayEvents, activeSectionId]);
 
   const weeks = useMemo(() => {
     const map = new Map<string, Row[]>();
@@ -517,8 +567,19 @@ export default function UnitDetailPage({ params }: { params: Promise<{ id: strin
   const color = UNIT_COLORS[colorIndex % UNIT_COLORS.length];
   const startDate = parseDateOnly(unit.startDate);
   const sortedDays = [...unit.days].sort((a, b) => a.dayNumber - b.dayNumber);
-  const lastDayDate =
+  const sharedLastDayDate =
     sortedDays.length > 0 ? parseDateOnly(sortedDays[sortedDays.length - 1].date) : parseDateOnly(unit.endDate);
+  const activePeriodExtraDays = activeSectionId
+    ? unit.periodExtraDays.filter((e) => e.sectionId === activeSectionId)
+    : [];
+  const latestExtraDate =
+    activePeriodExtraDays.length > 0
+      ? parseDateOnly(activePeriodExtraDays[activePeriodExtraDays.length - 1].date)
+      : null;
+  // The calendar widget's highlighted range extends to cover the active
+  // Period's own extra days too, so they actually show up on it instead of
+  // only in the week table below.
+  const lastDayDate = latestExtraDate && latestExtraDate > sharedLastDayDate ? latestExtraDate : sharedLastDayDate;
   const months = monthsBetween(startDate, lastDayDate);
 
   const datesToRemember = calendarEvents
@@ -789,6 +850,14 @@ export default function UnitDetailPage({ params }: { params: Promise<{ id: strin
                       {row.label} {row.eventType === "teacher_work_day" ? "(no students)" : "(no school)"}
                     </td>
                   </tr>
+                ) : row.kind === "extra" ? (
+                  <ExtraDayRow
+                    key={row.extraDay.id}
+                    extraDay={row.extraDay}
+                    onSaveField={saveExtraDayField}
+                    onSetStatus={setExtraDayStatus}
+                    onRemove={removeExtraDayRow}
+                  />
                 ) : (
                   <DayRow
                     key={row.day.id}
@@ -951,6 +1020,110 @@ function DayRow({
             {activePeriodName} only - plan says {STATUS_LABEL[day.status]}
           </span>
         )}
+      </td>
+    </tr>
+  );
+}
+
+function ExtraDayRow({
+  extraDay,
+  onSaveField,
+  onSetStatus,
+  onRemove,
+}: {
+  extraDay: PeriodExtraDayType;
+  onSaveField: (extraDayId: string, field: string, value: string) => void;
+  onSetStatus: (extraDayId: string, status: DayStatus) => void;
+  onRemove: (extraDayId: string) => void;
+}) {
+  const [fields, setFields] = useState({
+    topic: extraDay.topic ?? "",
+    learningTarget: extraDay.learningTarget ?? "",
+    standards: extraDay.standards ?? "",
+    supports: extraDay.supports ?? "",
+    warmUp: extraDay.warmUp ?? "",
+    lessonActivities: extraDay.lessonActivities ?? "",
+    materialsNeeded: extraDay.materialsNeeded ?? "",
+  });
+
+  useEffect(() => {
+    setFields({
+      topic: extraDay.topic ?? "",
+      learningTarget: extraDay.learningTarget ?? "",
+      standards: extraDay.standards ?? "",
+      supports: extraDay.supports ?? "",
+      warmUp: extraDay.warmUp ?? "",
+      lessonActivities: extraDay.lessonActivities ?? "",
+      materialsNeeded: extraDay.materialsNeeded ?? "",
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    extraDay.id,
+    extraDay.topic,
+    extraDay.learningTarget,
+    extraDay.standards,
+    extraDay.supports,
+    extraDay.warmUp,
+    extraDay.lessonActivities,
+    extraDay.materialsNeeded,
+  ]);
+
+  function update(field: keyof typeof fields, value: string) {
+    setFields((prev) => ({ ...prev, [field]: value }));
+  }
+  function blur(field: keyof typeof fields) {
+    onSaveField(extraDay.id, field, fields[field]);
+  }
+
+  const cellClass = "border p-1";
+  const inputClass = "w-full text-xs border-none focus:outline-none focus:bg-sky-50 bg-transparent";
+
+  return (
+    <tr style={{ backgroundColor: "#fef3c7" }}>
+      <td className={`${cellClass} whitespace-nowrap font-medium`}>
+        {formatShortWeekday(extraDay.date)}
+        <button
+          onClick={() => onRemove(extraDay.id)}
+          className="block text-[10px] text-rose-500 hover:underline"
+          title={`Remove this extra day for ${extraDay.section.name}`}
+        >
+          ({extraDay.section.name} extra day - remove)
+        </button>
+      </td>
+      {(
+        [
+          "topic",
+          "learningTarget",
+          "standards",
+          "supports",
+          "warmUp",
+          "lessonActivities",
+          "materialsNeeded",
+        ] as const
+      ).map((field) => (
+        <td key={field} className={cellClass}>
+          <input
+            value={fields[field]}
+            onChange={(e) => update(field, e.target.value)}
+            onBlur={() => blur(field)}
+            className={inputClass}
+          />
+        </td>
+      ))}
+      <td className={cellClass}>
+        <select
+          value={extraDay.status}
+          onChange={(e) => onSetStatus(extraDay.id, e.target.value as DayStatus)}
+          className="text-xs border-none focus:outline-none rounded px-1"
+          style={{ backgroundColor: STATUS_COLOR[extraDay.status] }}
+        >
+          <option value="not_started">{STATUS_LABEL.not_started}</option>
+          <option value="completed">{STATUS_LABEL.completed}</option>
+          <option value="half_completed">{STATUS_LABEL.half_completed}</option>
+        </select>
+        <span className="block text-[9px] text-amber-700 whitespace-nowrap">
+          {extraDay.section.name} only
+        </span>
       </td>
     </tr>
   );

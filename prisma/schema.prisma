@@ -156,6 +156,7 @@ model Section {
   scheduleBlocks ScheduleBlock[]
   pacingDayStatuses PacingUnitDayPeriod[]
   pacingOffsets PeriodPacingOffset[]
+  periodExtraDays PeriodExtraDay[]
 
   @@unique([classroomId, name])
 }
@@ -645,6 +646,7 @@ model PacingUnit {
   unitTopics     UnitTopic[]
   assignments    Assignment[]
   periodOffsets  PeriodPacingOffset[]
+  periodExtraDays PeriodExtraDay[]
 }
 
 // A single summative assessment tied to a unit - Title + Date, added/removed
@@ -743,6 +745,38 @@ model PeriodPacingOffset {
   updatedAt    DateTime   @updatedAt
 
   @@unique([pacingUnitId, sectionId])
+}
+
+// A real, plannable extra day for ONE Period only - created when that
+// Period (not the whole class) marks a shared day half_completed, meaning
+// its lesson spilled over and it needs one more day than everyone else.
+// Deliberately a completely separate table from PacingUnitDay, not a
+// sectionId-tagged row within it - PacingUnitDay is read/written by ~15
+// different functions that manage the SHARED schedule (topic auto-fill,
+// day insertion/shrinking, cross-unit cascades), and none of them are
+// scoped to exclude Period-specific rows. Keeping this fully isolated means
+// none of that shared logic needs to change or can accidentally touch a
+// Period's own day. The week/calendar view merges these in for display only
+// when that Period is the active one.
+model PeriodExtraDay {
+  id               String     @id @default(cuid())
+  pacingUnitId     String
+  pacingUnit       PacingUnit @relation(fields: [pacingUnitId], references: [id], onDelete: Cascade)
+  sectionId        String
+  section          Section    @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+  // Which real shared day this spilled over from - the extra day inherits
+  // its topic/content as a starting point, same as the shared version does.
+  spilledFromDayId String?
+  date             DateTime
+  topic            String?
+  learningTarget   String?
+  standards        String?
+  supports         String?
+  lessonActivities String?
+  warmUp           String?
+  materialsNeeded  String?
+  status           String     @default("not_started")
+  createdAt        DateTime   @default(now())
 }
 
 model ParentContactLog {

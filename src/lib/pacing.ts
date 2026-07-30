@@ -462,12 +462,15 @@ export async function setDayStatus(dayId: string, status: "not_started" | "compl
 /**
  * Same idea as setDayStatus, but scoped to one Period only - lets a Period
  * progress at its own pace through the SAME shared day/topic sequence, e.g.
- * one Period running behind another. Deliberately does NOT touch the shared
- * PacingUnitDay row, insert an extra day, or cascade later units - the
- * underlying schedule is shared across every Period; only how far each one
- * has actually gotten through it is per-Period. If a Period needs more time
- * than the shared schedule allows for, that shows up as a "behind pace"
- * readout rather than inserting a day only that Period would see.
+ * one Period running behind another. Never touches the shared PacingUnitDay
+ * row itself or cascades later units - but marking half_completed DOES give
+ * this one Period a real, plannable extra day (a PeriodExtraDay row, fully
+ * separate from the shared table - see that model's comment for why),
+ * inheriting the spilled-from day's topic/standards/supports as a starting
+ * point. Symmetric in both directions: un-marking half_completed removes
+ * that same day's own extra day again (tracked via spilledFromDayId, so
+ * marking two different days half_completed and un-marking one never
+ * touches the other's extra day).
  */
 export async function setDayStatusForSection(
   dayId: string,
@@ -485,31 +488,45 @@ export async function setDayStatusForSection(
     create: { pacingUnitDayId: dayId, sectionId, status },
   });
 
-  // Marking half_completed means this Period's lesson spilled over and it
-  // now needs one more day than the shared schedule - same reason the
-  // shared version inserts a real extra day, but here it can't touch the
-  // shared PacingUnitDay sequence (every other Period would see it too), so
-  // it's tracked as a per-Period offset instead. Symmetric in both
-  // directions: un-marking half_completed (e.g. correcting a misclick,
-  // fixing it to "completed" once no spillover was actually needed) gives
-  // the day back, so the counter never gets stuck one-way.
   if (status === "half_completed" && !wasHalfCompleted) {
     const day = await prisma.pacingUnitDay.findUnique({ where: { id: dayId } });
-    if (day) {
-      await prisma.periodPacingOffset.upsert({
-        where: { pacingUnitId_sectionId: { pacingUnitId: day.pacingUnitId, sectionId } },
-        update: { extraDays: { increment: 1 } },
-        create: { pacingUnitId: day.pacingUnitId, sectionId, extraDays: 1 },
+    const unit = day ? await prisma.pacingUnit.findUnique({ where: { id: day.pacingUnitId } }) : null;
+    if (day && unit) {
+      const holidays = await getHolidayRanges(unit.classroomId);
+      // Chain off this Period's own latest extra day if it already has one
+      // queued, otherwise off the shared schedule's real last day - either
+      // way the new day lands right after whatever this Period's calendar
+      // currently ends on.
+      const latestExtra = await prisma.periodExtraDay.findFirst({
+        where: { pacingUnitId: day.pacingUnitId, sectionId },
+        orderBy: { date: "desc" },
+      });
+      const baseDate = latestExtra ? new Date(latestExtra.date) : (await getUnitLastDayDate(day.pacingUnitId)) ?? day.date;
+      const nextDate = addInstructionalDays(baseDate, 1, holidays);
+      await prisma.periodExtraDay.create({
+        data: {
+          pacingUnitId: day.pacingUnitId,
+          sectionId,
+          spilledFromDayId: day.id,
+          date: nextDate,
+          topic: day.topic,
+          learningTarget: day.learningTarget,
+          standards: day.standards,
+          supports: day.supports,
+          materialsNeeded: day.materialsNeeded,
+        },
       });
     }
   } else if (status !== "half_completed" && wasHalfCompleted) {
-    const day = await prisma.pacingUnitDay.findUnique({ where: { id: dayId } });
-    if (day) {
-      await prisma.periodPacingOffset.upsert({
-        where: { pacingUnitId_sectionId: { pacingUnitId: day.pacingUnitId, sectionId } },
-        update: { extraDays: { decrement: 1 } },
-        create: { pacingUnitId: day.pacingUnitId, sectionId, extraDays: -1 },
-      });
+    // Only removes ITS OWN extra day (matched by which shared day spilled
+    // it), and only if still untouched - never silently deletes a day the
+    // teacher has actually started planning on.
+    const toRemove = await prisma.periodExtraDay.findFirst({
+      where: { spilledFromDayId: dayId, sectionId, status: "not_started" },
+      orderBy: { date: "desc" },
+    });
+    if (toRemove) {
+      await prisma.periodExtraDay.delete({ where: { id: toRemove.id } });
     }
   }
 
@@ -517,16 +534,22 @@ export async function setDayStatusForSection(
 }
 
 /**
- * A given Period's own "actually ends" date for a unit, accounting for any
- * extra days it alone has needed beyond the shared schedule (see
- * setDayStatusForSection) - null if that Period has no extra days, meaning
- * it's still exactly on the shared schedule.
+ * A given Period's own "actually ends" date for a unit - the latest of its
+ * real extra days if it has any, otherwise derived from a finish-early
+ * offset if it finished ahead of the shared schedule itself, otherwise null
+ * (still exactly on the shared schedule).
  */
 export async function getPeriodModifiedEndDate(
   unitId: string,
   sectionId: string,
   classroomId: string
 ): Promise<Date | null> {
+  const latestExtra = await prisma.periodExtraDay.findFirst({
+    where: { pacingUnitId: unitId, sectionId },
+    orderBy: { date: "desc" },
+  });
+  if (latestExtra) return latestExtra.date;
+
   const offset = await prisma.periodPacingOffset.findUnique({
     where: { pacingUnitId_sectionId: { pacingUnitId: unitId, sectionId } },
   });
@@ -539,19 +562,43 @@ export async function getPeriodModifiedEndDate(
   return addInstructionalDays(sharedLastDate, offset.extraDays, holidays);
 }
 
+/** How many days ahead (negative) or behind (positive) a Period is tracked as being on a unit - 0 if exactly on the shared schedule. */
+export async function getPeriodDayDelta(unitId: string, sectionId: string): Promise<number> {
+  const extraCount = await prisma.periodExtraDay.count({ where: { pacingUnitId: unitId, sectionId } });
+  if (extraCount > 0) return extraCount;
+  const offset = await prisma.periodPacingOffset.findUnique({
+    where: { pacingUnitId_sectionId: { pacingUnitId: unitId, sectionId } },
+  });
+  return offset?.extraDays ?? 0;
+}
+
 /**
  * Per-Period "mark done early": unlike the shared finishUnitEarly, this
- * never touches the shared PacingUnitDay rows or cascades other units - it
- * only affects how far ahead/behind THIS Period is tracked as being.
- * Scans backward from this Period's own last-touched day (falling back to
- * the shared baseline status wherever this Period hasn't diverged) and
- * records however many days it's finishing ahead of schedule as a negative
- * offset - the mirror image of the positive offset half_completed builds up.
+ * never touches the shared PacingUnitDay rows or cascades other units.
+ * First trims this Period's own trailing, untouched extra days (giving back
+ * days it turned out not to need after all); if it has none to trim, it's
+ * genuinely finishing ahead of the shared schedule itself, so that gets
+ * tracked as a negative offset instead - the mirror image of the days
+ * marking half_completed builds up.
  */
 export async function finishUnitEarlyForSection(
   unitId: string,
   sectionId: string
 ): Promise<{ savedDays: number }> {
+  const extras = await prisma.periodExtraDay.findMany({
+    where: { pacingUnitId: unitId, sectionId },
+    orderBy: { date: "desc" },
+  });
+  const toDelete: string[] = [];
+  for (const e of extras) {
+    if (e.status !== "not_started") break;
+    toDelete.push(e.id);
+  }
+  if (toDelete.length > 0) {
+    await prisma.periodExtraDay.deleteMany({ where: { id: { in: toDelete } } });
+    return { savedDays: toDelete.length };
+  }
+
   const days = await prisma.pacingUnitDay.findMany({
     where: { pacingUnitId: unitId },
     orderBy: { dayNumber: "desc" },
