@@ -5,10 +5,15 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 
 type Tag = { id: string; name: string };
+type ClassroomOpt = { id: string; name: string; isArchived: boolean };
+type SectionOpt = { id: string; name: string };
 
 export default function AddStudentPage() {
   const router = useRouter();
   const [classroomId, setClassroomId] = useState("");
+  const [classrooms, setClassrooms] = useState<ClassroomOpt[]>([]);
+  const [sections, setSections] = useState<SectionOpt[]>([]);
+  const [sectionId, setSectionId] = useState("");
   const [tags, setTags] = useState<Tag[]>([]);
   const [saving, setSaving] = useState(false);
 
@@ -41,7 +46,27 @@ export default function AddStudentPage() {
   useEffect(() => {
     loadClassroom();
     fetch("/api/tags").then((r) => r.json()).then(setTags);
+    fetch("/api/profile")
+      .then((r) => r.json())
+      .then((data: { allClassrooms?: ClassroomOpt[] }) => {
+        setClassrooms((data.allClassrooms || []).filter((c) => !c.isArchived));
+      });
   }, []);
+
+  // Whenever the chosen classroom changes, load that classroom's Periods -
+  // a student can be tagged into any of the teacher's classrooms, so this
+  // can't just rely on "the current classroom"'s Periods.
+  useEffect(() => {
+    if (!classroomId) {
+      setSections([]);
+      return;
+    }
+    fetch(`/api/sections?classroomId=${classroomId}`)
+      .then((r) => r.json())
+      .then(setSections)
+      .catch(() => setSections([]));
+    setSectionId("");
+  }, [classroomId]);
 
   function loadClassroom() {
     setClassroomLoading(true);
@@ -58,14 +83,15 @@ export default function AddStudentPage() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!firstName || !lastName || !grade || !classroomId) return;
+    if (!firstName || !lastName || !classroomId) return;
     setSaving(true);
 
     const payload = {
       classroomId,
+      sectionId: sectionId || null,
       firstName,
       lastName,
-      grade,
+      grade: grade || null,
       section,
       dob: dob || null,
       understandingLevel,
@@ -135,12 +161,44 @@ export default function AddStudentPage() {
               required
             />
             <input
-              placeholder="Grade (e.g. 3rd)"
+              placeholder="Grade (optional)"
               value={grade}
               onChange={(e) => setGrade(e.target.value)}
               className="border rounded px-2 py-1"
-              required
             />
+            <div>
+              <label className="block text-xs text-gray-500">Class</label>
+              <select
+                value={classroomId}
+                onChange={(e) => setClassroomId(e.target.value)}
+                className="border rounded px-2 py-1 w-full"
+                required
+              >
+                <option value="">Select a class</option>
+                {classrooms.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            {sections.length > 0 && (
+              <div>
+                <label className="block text-xs text-gray-500">Period</label>
+                <select
+                  value={sectionId}
+                  onChange={(e) => setSectionId(e.target.value)}
+                  className="border rounded px-2 py-1 w-full"
+                >
+                  <option value="">No Period</option>
+                  {sections.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
             <input
               placeholder="Section (optional)"
               value={section}

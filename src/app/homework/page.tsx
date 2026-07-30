@@ -186,6 +186,114 @@ export default function AssignmentsPage() {
     .filter((a) => (selectedSubjectId === "all" ? true : a.skillSubjectId === selectedSubjectId))
     .filter(inActiveSection);
 
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const isPastDue = (a: Assignment) => !!a.dueDate && a.dueDate.slice(0, 10) < todayStr;
+
+  const unpublished = visibleAssignments.filter((a) => !a.handedOut);
+  const pastDue = visibleAssignments.filter((a) => a.handedOut && isPastDue(a));
+  const published = visibleAssignments.filter((a) => a.handedOut && !isPastDue(a));
+
+  function assignmentCard(a: Assignment) {
+    const counts = statusCounts(a.entries);
+    const total = a.entries.length || 1;
+    const segments = [
+      { key: "handed_in", color: "#bae6fd", count: counts.handed_in },
+      { key: "missing", color: "#e0e7ff", count: counts.missing },
+    ];
+
+    const gradeComplete = a.entries.filter((e) => e.gradeStatus === "complete").length;
+    const gradeIncomplete = a.entries.filter((e) => e.gradeStatus === "incomplete").length;
+    const gradedPercents = a.entries
+      .map((e) => effectiveGradePercent(a, e))
+      .filter((p): p is number => p !== null);
+    const avgGrade =
+      gradedPercents.length > 0
+        ? Math.round(gradedPercents.reduce((sum, p) => sum + p, 0) / gradedPercents.length)
+        : null;
+
+    return (
+      <div key={a.id} className="card flex gap-4 items-start justify-between flex-wrap">
+        <Link href={`/homework/${a.id}`} className="flex-1 min-w-[220px] hover:opacity-80">
+          <h3 className="font-bold">
+            {a.name}
+            {!a.handedOut && (
+              <span className="ml-2 text-xs font-normal bg-amber-100 text-amber-700 px-2 py-0.5 rounded">
+                Draft
+              </span>
+            )}
+            {a.handedOut && isPastDue(a) && (
+              <span className="ml-2 text-xs font-normal bg-slate-200 text-slate-600 px-2 py-0.5 rounded">
+                Past Due
+              </span>
+            )}
+          </h3>
+          <p className="text-sm text-slate-500 mb-2">
+            {a.gradeCategory && `${a.gradeCategory.name} · `}
+            {a.pacingUnit && `${a.pacingUnit.name}${a.pacingTopic ? ` (${a.pacingTopic.name})` : ""} · `}
+            {a.sections.length > 0 && `${a.sections.map((s) => s.name).join(", ")} · `}
+            Assigned {formatShortDate(a.assignedDate)}
+            {a.dueDate && ` · Due ${formatShortDate(a.dueDate)}`}
+            {" · "}
+            {a.gradingType === "points" ? `Graded out of ${a.maxPoints}` : "Completion graded"}
+            {!!a.latePenaltyPercentPerDay && ` · -${a.latePenaltyPercentPerDay}%/day late`}
+          </p>
+
+          <p className="text-xs text-slate-500 mb-1">Submitted</p>
+          <div className="flex h-4 rounded overflow-hidden border mb-2">
+            {segments.map(
+              (seg) =>
+                seg.count > 0 && (
+                  <div
+                    key={seg.key}
+                    style={{ width: `${(seg.count / total) * 100}%`, backgroundColor: seg.color }}
+                    title={`${seg.key}: ${seg.count}`}
+                  />
+                )
+            )}
+          </div>
+          <div className="flex gap-3 flex-wrap text-xs text-slate-600 mb-2">
+            <span>{counts.handed_in} handed in</span>
+            <span>{counts.missing} missing</span>
+          </div>
+
+          <p className="text-xs text-slate-500 mb-1">Grading</p>
+          <div className="flex gap-3 flex-wrap text-xs text-slate-600">
+            <span>Class average grade: {avgGrade !== null ? `${avgGrade}%` : "not graded yet"}</span>
+            {a.gradingType === "completion" && (
+              <>
+                <span>{gradeComplete} complete</span>
+                <span>{gradeIncomplete} incomplete</span>
+              </>
+            )}
+          </div>
+        </Link>
+
+        <div className="shrink-0 flex flex-col items-end gap-2">
+          <div className="flex gap-3">
+            {!a.handedOut && (
+              <button onClick={() => handOut(a.id)} className="text-emerald-600 text-xs hover:underline">
+                Hand out now
+              </button>
+            )}
+            <button onClick={() => setEditingAssignment(a)} className="text-sky-600 text-xs hover:underline">
+              Edit
+            </button>
+            <button
+              onClick={() => removeAssignment(a.id, a.name)}
+              className="text-rose-600 text-xs hover:underline"
+            >
+              Remove
+            </button>
+          </div>
+          <div>
+            <p className="text-xs text-slate-400 text-center mb-1">Grade Distribution</p>
+            <GradeHistogram values={gradePercents(a)} width={200} height={100} />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="p-4 sm:p-6 max-w-4xl mx-auto">
       <h1 className="text-2xl font-bold mb-4">Assignments</h1>
@@ -411,111 +519,37 @@ export default function AssignmentsPage() {
         ))}
       </div>
 
-      <div className="space-y-3">
-        {visibleAssignments.map((a) => {
-          const counts = statusCounts(a.entries);
-          const total = a.entries.length || 1;
-          const segments = [
-            { key: "handed_in", color: "#bae6fd", count: counts.handed_in },
-            { key: "missing", color: "#e0e7ff", count: counts.missing },
-          ];
+      <div className="grid md:grid-cols-2 gap-4 mb-6">
+        <div>
+          <h2 className="font-semibold mb-2 text-amber-700">
+            Unpublished ({unpublished.length})
+          </h2>
+          <div className="space-y-3">
+            {unpublished.map(assignmentCard)}
+            {unpublished.length === 0 && (
+              <p className="text-slate-400 text-sm">No drafts - everything's been handed out.</p>
+            )}
+          </div>
+        </div>
+        <div>
+          <h2 className="font-semibold mb-2 text-emerald-700">
+            Published ({published.length})
+          </h2>
+          <div className="space-y-3">
+            {published.map(assignmentCard)}
+            {published.length === 0 && (
+              <p className="text-slate-400 text-sm">Nothing currently handed out and not yet due.</p>
+            )}
+          </div>
+        </div>
+      </div>
 
-          const gradeComplete = a.entries.filter((e) => e.gradeStatus === "complete").length;
-          const gradeIncomplete = a.entries.filter((e) => e.gradeStatus === "incomplete").length;
-          const gradedPercents = a.entries
-            .map((e) => effectiveGradePercent(a, e))
-            .filter((p): p is number => p !== null);
-          const avgGrade =
-            gradedPercents.length > 0
-              ? Math.round(gradedPercents.reduce((sum, p) => sum + p, 0) / gradedPercents.length)
-              : null;
-
-          return (
-            <div key={a.id} className="card flex gap-4 items-start justify-between flex-wrap">
-              <Link href={`/homework/${a.id}`} className="flex-1 min-w-[220px] hover:opacity-80">
-                <h3 className="font-bold">
-                  {a.name}
-                  {!a.handedOut && (
-                    <span className="ml-2 text-xs font-normal bg-amber-100 text-amber-700 px-2 py-0.5 rounded">
-                      Draft
-                    </span>
-                  )}
-                </h3>
-                <p className="text-sm text-slate-500 mb-2">
-                  {a.gradeCategory && `${a.gradeCategory.name} · `}
-                  {a.pacingUnit && `${a.pacingUnit.name}${a.pacingTopic ? ` (${a.pacingTopic.name})` : ""} · `}
-                  {a.sections.length > 0 && `${a.sections.map((s) => s.name).join(", ")} · `}
-                  Assigned {formatShortDate(a.assignedDate)}
-                  {a.dueDate && ` · Due ${formatShortDate(a.dueDate)}`}
-                  {" · "}
-                  {a.gradingType === "points" ? `Graded out of ${a.maxPoints}` : "Completion graded"}
-                  {!!a.latePenaltyPercentPerDay && ` · -${a.latePenaltyPercentPerDay}%/day late`}
-                </p>
-
-                <p className="text-xs text-slate-500 mb-1">Submitted</p>
-                <div className="flex h-4 rounded overflow-hidden border mb-2">
-                  {segments.map(
-                    (seg) =>
-                      seg.count > 0 && (
-                        <div
-                          key={seg.key}
-                          style={{ width: `${(seg.count / total) * 100}%`, backgroundColor: seg.color }}
-                          title={`${seg.key}: ${seg.count}`}
-                        />
-                      )
-                  )}
-                </div>
-                <div className="flex gap-3 flex-wrap text-xs text-slate-600 mb-2">
-                  <span>{counts.handed_in} handed in</span>
-                  <span>{counts.missing} missing</span>
-                </div>
-
-                <p className="text-xs text-slate-500 mb-1">Grading</p>
-                <div className="flex gap-3 flex-wrap text-xs text-slate-600">
-                  <span>Class average grade: {avgGrade !== null ? `${avgGrade}%` : "not graded yet"}</span>
-                  {a.gradingType === "completion" && (
-                    <>
-                      <span>{gradeComplete} complete</span>
-                      <span>{gradeIncomplete} incomplete</span>
-                    </>
-                  )}
-                </div>
-              </Link>
-
-              <div className="shrink-0 flex flex-col items-end gap-2">
-                <div className="flex gap-3">
-                  {!a.handedOut && (
-                    <button
-                      onClick={() => handOut(a.id)}
-                      className="text-emerald-600 text-xs hover:underline"
-                    >
-                      Hand out now
-                    </button>
-                  )}
-                  <button
-                    onClick={() => setEditingAssignment(a)}
-                    className="text-sky-600 text-xs hover:underline"
-                  >
-                    Edit
-                  </button>
-                  <button
-                    onClick={() => removeAssignment(a.id, a.name)}
-                    className="text-rose-600 text-xs hover:underline"
-                  >
-                    Remove
-                  </button>
-                </div>
-                <div>
-                  <p className="text-xs text-slate-400 text-center mb-1">Grade Distribution</p>
-                  <GradeHistogram values={gradePercents(a)} width={200} height={100} />
-                </div>
-              </div>
-            </div>
-          );
-        })}
-        {visibleAssignments.length === 0 && (
-          <p className="text-slate-500">No assignments yet — create one above to get started.</p>
-        )}
+      <div>
+        <h2 className="font-semibold mb-2 text-slate-600">Past Due ({pastDue.length})</h2>
+        <div className="space-y-3">
+          {pastDue.map(assignmentCard)}
+          {pastDue.length === 0 && <p className="text-slate-400 text-sm">Nothing past its due date.</p>}
+        </div>
       </div>
 
       {editingAssignment && (

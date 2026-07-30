@@ -221,7 +221,7 @@ model Student {
   classroom          Classroom @relation(fields: [classroomId], references: [id], onDelete: Cascade)
   firstName          String
   lastName           String
-  grade              String
+  grade              String?
   section            String?
   sectionId          String?
   sectionGroup       Section?  @relation(fields: [sectionId], references: [id], onDelete: SetNull)

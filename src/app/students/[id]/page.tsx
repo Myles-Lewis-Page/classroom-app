@@ -18,9 +18,10 @@ import { formatShortDate } from "@/lib/dateOnly";
 
 type StudentDetail = {
   id: string;
+  classroomId: string;
   firstName: string;
   lastName: string;
-  grade: string;
+  grade: string | null;
   section: string | null;
   sectionId: string | null;
   dob: string | null;
@@ -195,6 +196,7 @@ export default function StudentProfilePage({ params }: { params: Promise<{ id: s
                 grade: student.grade,
                 section: student.section,
                 sectionId: student.sectionId,
+                classroomId: student.classroomId,
                 dob: student.dob,
                 understandingLevel: student.understandingLevel,
               }}
@@ -456,8 +458,33 @@ export default function StudentProfilePage({ params }: { params: Promise<{ id: s
             })
             .filter((p): p is { label: string; value: number } => p !== null);
 
+          const categoryBreakdown = gradeCategories
+            .map((cat) => {
+              const percents = byCategory.get(cat.id);
+              if (!percents || percents.length === 0) return null;
+              const avg = Math.round(percents.reduce((a, b) => a + b, 0) / percents.length);
+              return { name: cat.name, avg };
+            })
+            .filter((c): c is { name: string; avg: number } => c !== null);
+          if (uncategorized.length > 0) {
+            categoryBreakdown.push({
+              name: "Uncategorized",
+              avg: Math.round(uncategorized.reduce((a, b) => a + b, 0) / uncategorized.length),
+            });
+          }
+
           return (
             <>
+              <div className="flex flex-wrap gap-3 mb-3">
+                {categoryBreakdown.map((c) => (
+                  <span key={c.name} className="text-xs bg-sky-50 border border-sky-100 rounded px-2 py-1">
+                    {c.name}: <span className="font-semibold">{c.avg}%</span>
+                  </span>
+                ))}
+                <span className="text-xs bg-emerald-50 border border-emerald-100 rounded px-2 py-1">
+                  Overall: <span className="font-semibold">{overall !== null ? `${overall}%` : "—"}</span>
+                </span>
+              </div>
               <p className="text-sm font-medium mb-3">
                 Overall grade: {overall !== null ? `${overall}%` : "Not enough graded work yet"}
               </p>

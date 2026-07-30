@@ -5,31 +5,48 @@ import { getCurrentClassroomId } from "@/lib/classroomScope";
 
 // POST full student payload:
 // {
-//   firstName, lastName, grade, section, dob, understandingLevel,
+//   classroomId? (which of the teacher's classrooms - defaults to current),
+//   sectionId? (which Period within that classroom, if any),
+//   firstName, lastName, grade?, section, dob, understandingLevel,
 //   tagIds: string[],
 //   allergies: [{ allergen, severity, reaction, notes }],
 //   dietaryRestrictions: [{ restriction, notes }],
 //   ieps: [{ type, accommodations, serviceMinutes, goals, caseManager, reviewDate, subSafeSummary }],
 //   parents: [{ name, relationship, phone, email, preferredContact, isEmergencyContact, notes }]
 // }
-// (classroomId is derived from the session, never trusted from the client)
 export async function POST(req: NextRequest) {
   const session = await auth();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const classroomId = await getCurrentClassroomId();
+  const teacherId = (session.user as { id?: string })?.id;
+  const body = await req.json();
+
+  // A student can be tagged straight into any of the teacher's own
+  // classrooms at creation time, not just whichever one is currently
+  // active - verified against ownership before trusting it.
+  let classroomId = await getCurrentClassroomId();
+  if (body.classroomId && teacherId) {
+    const owned = await prisma.classroom.findFirst({ where: { id: body.classroomId, teacherId } });
+    if (owned) classroomId = owned.id;
+  }
   if (!classroomId) {
     return NextResponse.json({ error: "No classroom set up yet" }, { status: 400 });
   }
 
-  const body = await req.json();
+  // The chosen Period has to actually belong to the chosen classroom.
+  let sectionId: string | null = null;
+  if (body.sectionId) {
+    const ownedSection = await prisma.section.findFirst({ where: { id: body.sectionId, classroomId } });
+    if (ownedSection) sectionId = ownedSection.id;
+  }
 
   const student = await prisma.student.create({
     data: {
       classroomId,
+      sectionId,
       firstName: body.firstName,
       lastName: body.lastName,
-      grade: body.grade,
+      grade: body.grade || null,
       section: body.section || null,
       dob: body.dob ? new Date(body.dob) : null,
       understandingLevel: body.understandingLevel ? Number(body.understandingLevel) : null,

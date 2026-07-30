@@ -158,6 +158,17 @@ export default function GradebookPage() {
     return effectiveGradePercent(assignment, entry);
   }
 
+  // Average % for one student within just one category's assignments - the
+  // same inner calculation studentWeightedAverage does per-category, pulled
+  // out standalone so the per-category "Section Grade" tables can use it too.
+  function categoryAverage(studentId: string, catAssignments: Assignment[]): number | null {
+    const percents = catAssignments
+      .map((a) => entryPercent(a, entryFor(a, studentId)))
+      .filter((p): p is number => p !== null);
+    if (percents.length === 0) return null;
+    return Math.round(percents.reduce((sum, p) => sum + p, 0) / percents.length);
+  }
+
   // Weighted overall grade: average % within each category, then combine
   // using that category's weight, normalized against only the categories
   // that actually have graded work (so missing categories don't distort it).
@@ -332,72 +343,124 @@ export default function GradebookPage() {
   );
 
   function renderTable(rowStudents: Student[], colAssignments: Assignment[]) {
-    return (
-      <table className="border-collapse text-sm">
-        <thead>
-          <tr>
-            <th className="border p-2 bg-white sticky left-0">Student</th>
-            {colAssignments.map((a) => (
-              <th key={a.id} className="border p-2 bg-white whitespace-nowrap">
-                <Link href={`/homework/${a.id}`} className="text-sky-600 hover:underline">
-                  {a.name}
-                </Link>
-                <br />
-                <span className="text-xs text-slate-400">
-                  Assigned {formatShortDate(a.assignedDate)}
-                  {a.dueDate && (
-                    <>
-                      <br />
-                      Due {formatShortDate(a.dueDate)}
-                    </>
-                  )}
-                </span>
-              </th>
-            ))}
-            <th className="border p-2 bg-white whitespace-nowrap">Overall Grade</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rowStudents.map((student) => {
-            const avg = studentWeightedAverage(student.id, colAssignments);
-            return (
-              <tr key={student.id}>
-                <td className="border p-2 font-medium sticky left-0 bg-white whitespace-nowrap">
-                  <Link href={`/students/${student.id}`} className="hover:underline">
-                    {student.lastName}, {student.firstName}
-                  </Link>
-                </td>
-                {colAssignments.map((a) => {
-                  const entry = entryFor(a, student.id);
-                  const { text, color } = cellDisplay(a, entry);
-                  const tag = submissionTag(a, entry);
-                  return (
-                    <td key={a.id} className="border p-1 text-center">
-                      <span
-                        className="inline-block px-2 py-1 rounded text-xs whitespace-nowrap"
-                        style={{ backgroundColor: color }}
-                      >
-                        {text}
-                      </span>
-                      {tag && (
-                        <span
-                          className="block text-[10px] mt-0.5 font-medium"
-                          style={{ color: tag === "Missing" ? "#b91c1c" : "#b45309" }}
-                        >
-                          {tag}
-                        </span>
+    // Group this table's assignments by grading category (Classwork/Homework/
+    // Tests, or whatever's been configured) - anything with no category goes
+    // in its own "Uncategorized" bucket, same grouping studentWeightedAverage
+    // already uses internally for the overall grade.
+    const groups: { key: string; label: string; assignments: Assignment[] }[] = [];
+    categories.forEach((cat) => {
+      const catAssignments = colAssignments.filter((a) => a.gradeCategoryId === cat.id);
+      if (catAssignments.length > 0) groups.push({ key: cat.id, label: cat.name, assignments: catAssignments });
+    });
+    const uncategorized = colAssignments.filter((a) => !a.gradeCategoryId);
+    if (uncategorized.length > 0) {
+      groups.push({ key: "uncategorized", label: "Uncategorized", assignments: uncategorized });
+    }
+
+    function oneCategoryTable(label: string, catAssignments: Assignment[]) {
+      return (
+        <div key={label} className="mb-6">
+          <h3 className="font-semibold text-sm mb-1">{label}</h3>
+          <table className="border-collapse text-sm">
+            <thead>
+              <tr>
+                <th className="border p-2 bg-white sticky left-0">Student</th>
+                {catAssignments.map((a) => (
+                  <th key={a.id} className="border p-2 bg-white whitespace-nowrap">
+                    <Link href={`/homework/${a.id}`} className="text-sky-600 hover:underline">
+                      {a.name}
+                    </Link>
+                    <br />
+                    <span className="text-xs text-slate-400">
+                      Assigned {formatShortDate(a.assignedDate)}
+                      {a.dueDate && (
+                        <>
+                          <br />
+                          Due {formatShortDate(a.dueDate)}
+                        </>
                       )}
-                    </td>
-                  );
-                })}
-                <td className="border p-2 text-center font-medium">
-                  {avg !== null ? `${avg}%` : "—"}
-                </td>
+                    </span>
+                  </th>
+                ))}
+                <th className="border p-2 bg-sky-50 whitespace-nowrap">{label} Grade</th>
               </tr>
-            );
-          })}
-        </tbody>
-      </table>
+            </thead>
+            <tbody>
+              {rowStudents.map((student) => {
+                const sectionAvg = categoryAverage(student.id, catAssignments);
+                return (
+                  <tr key={student.id}>
+                    <td className="border p-2 font-medium sticky left-0 bg-white whitespace-nowrap">
+                      <Link href={`/students/${student.id}`} className="hover:underline">
+                        {student.lastName}, {student.firstName}
+                      </Link>
+                    </td>
+                    {catAssignments.map((a) => {
+                      const entry = entryFor(a, student.id);
+                      const { text, color } = cellDisplay(a, entry);
+                      const tag = submissionTag(a, entry);
+                      return (
+                        <td key={a.id} className="border p-1 text-center">
+                          <span
+                            className="inline-block px-2 py-1 rounded text-xs whitespace-nowrap"
+                            style={{ backgroundColor: color }}
+                          >
+                            {text}
+                          </span>
+                          {tag && (
+                            <span
+                              className="block text-[10px] mt-0.5 font-medium"
+                              style={{ color: tag === "Missing" ? "#b91c1c" : "#b45309" }}
+                            >
+                              {tag}
+                            </span>
+                          )}
+                        </td>
+                      );
+                    })}
+                    <td className="border p-2 text-center font-medium bg-sky-50">
+                      {sectionAvg !== null ? `${sectionAvg}%` : "—"}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      );
+    }
+
+    return (
+      <div>
+        {groups.map((g) => oneCategoryTable(g.label, g.assignments))}
+        {groups.length === 0 && <p className="text-slate-400 text-sm mb-4">No assignments here yet.</p>}
+
+        <table className="border-collapse text-sm">
+          <thead>
+            <tr>
+              <th className="border p-2 bg-white sticky left-0">Student</th>
+              <th className="border p-2 bg-emerald-50 whitespace-nowrap">Overall Grade</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rowStudents.map((student) => {
+              const avg = studentWeightedAverage(student.id, colAssignments);
+              return (
+                <tr key={student.id}>
+                  <td className="border p-2 font-medium sticky left-0 bg-white whitespace-nowrap">
+                    <Link href={`/students/${student.id}`} className="hover:underline">
+                      {student.lastName}, {student.firstName}
+                    </Link>
+                  </td>
+                  <td className="border p-2 text-center font-medium bg-emerald-50">
+                    {avg !== null ? `${avg}%` : "—"}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
     );
   }
 }
