@@ -489,7 +489,10 @@ export async function setDayStatusForSection(
   // now needs one more day than the shared schedule - same reason the
   // shared version inserts a real extra day, but here it can't touch the
   // shared PacingUnitDay sequence (every other Period would see it too), so
-  // it's tracked as a per-Period offset instead.
+  // it's tracked as a per-Period offset instead. Symmetric in both
+  // directions: un-marking half_completed (e.g. correcting a misclick,
+  // fixing it to "completed" once no spillover was actually needed) gives
+  // the day back, so the counter never gets stuck one-way.
   if (status === "half_completed" && !wasHalfCompleted) {
     const day = await prisma.pacingUnitDay.findUnique({ where: { id: dayId } });
     if (day) {
@@ -497,6 +500,15 @@ export async function setDayStatusForSection(
         where: { pacingUnitId_sectionId: { pacingUnitId: day.pacingUnitId, sectionId } },
         update: { extraDays: { increment: 1 } },
         create: { pacingUnitId: day.pacingUnitId, sectionId, extraDays: 1 },
+      });
+    }
+  } else if (status !== "half_completed" && wasHalfCompleted) {
+    const day = await prisma.pacingUnitDay.findUnique({ where: { id: dayId } });
+    if (day) {
+      await prisma.periodPacingOffset.upsert({
+        where: { pacingUnitId_sectionId: { pacingUnitId: day.pacingUnitId, sectionId } },
+        update: { extraDays: { decrement: 1 } },
+        create: { pacingUnitId: day.pacingUnitId, sectionId, extraDays: -1 },
       });
     }
   }
