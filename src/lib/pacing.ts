@@ -17,8 +17,16 @@ import { addUtcDays, isWeekend } from "@/lib/dateOnly";
 // like a weekend. Half days are deliberately NOT included here - they're
 // still instructional, just flagged in the UI.
 export async function getHolidayRanges(classroomId: string) {
+  const classroom = await prisma.classroom.findUnique({
+    where: { id: classroomId },
+    select: { teacher: { select: { schoolId: true } } },
+  });
+  const schoolId = classroom?.teacher?.schoolId;
   const events = await prisma.calendarEvent.findMany({
-    where: { classroomId, type: { in: ["holiday", "teacher_work_day"] } },
+    where: {
+      type: { in: ["holiday", "teacher_work_day"] },
+      OR: [{ classroomId }, ...(schoolId ? [{ schoolId }] : [])],
+    },
   });
   return events.map((e) => ({ startDate: e.startDate, endDate: e.endDate }));
 }
