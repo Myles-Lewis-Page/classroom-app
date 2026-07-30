@@ -1,16 +1,25 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import SectionManager from "@/components/SectionManager";
 
 const GRADE_OPTIONS = ["1st", "2nd", "3rd", "4th", "5th"];
 const GENERIC_SUBJECTS = ["Math", "Reading", "Writing", "Science", "Social Studies", "Spelling"];
 
 type Teacher = { name: string; email: string };
-type Classroom = { id: string; name: string; schoolName: string | null; schoolYear: string; isArchived: boolean };
+type Classroom = {
+  id: string;
+  name: string;
+  schoolName: string | null;
+  schoolYear: string;
+  isArchived: boolean;
+  sections?: { id: string; name: string }[];
+};
 type SkillSubject = { id: string; name: string; isActive: boolean };
 
 export default function ProfilePage() {
+  const router = useRouter();
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [grade, setGrade] = useState("3rd");
@@ -25,6 +34,9 @@ export default function ProfilePage() {
   const [showAddPeriod, setShowAddPeriod] = useState(false);
   const [periodLabel, setPeriodLabel] = useState("");
   const [periodGrade, setPeriodGrade] = useState("3rd");
+  const [newClassroomSchoolName, setNewClassroomSchoolName] = useState("");
+  const [newClassroomHasSubgroups, setNewClassroomHasSubgroups] = useState(false);
+  const [newClassroomPeriodNames, setNewClassroomPeriodNames] = useState<string[]>(["Period 1", "Period 2"]);
   const [addingPeriod, setAddingPeriod] = useState(false);
   // First-time setup question: will this classroom have Periods? If yes,
   // collect the initial Period names right here so the teacher doesn't have
@@ -90,21 +102,34 @@ export default function ProfilePage() {
       body: JSON.stringify({ classroomId }),
     });
     loadProfile();
+    router.refresh();
   }
 
   async function addPeriod() {
     if (!periodLabel.trim()) return;
     setAddingPeriod(true);
+    const names = newClassroomHasSubgroups
+      ? newClassroomPeriodNames.map((n) => n.trim()).filter(Boolean)
+      : [];
     const res = await fetch("/api/profile/add-classroom", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ grade: periodGrade, periodLabel: periodLabel.trim() }),
+      body: JSON.stringify({
+        grade: periodGrade,
+        label: periodLabel.trim(),
+        schoolName: newClassroomSchoolName.trim(),
+        periodNames: names,
+      }),
     });
     setAddingPeriod(false);
     if (res.ok) {
       setPeriodLabel("");
+      setNewClassroomSchoolName("");
+      setNewClassroomHasSubgroups(false);
+      setNewClassroomPeriodNames(["Period 1", "Period 2"]);
       setShowAddPeriod(false);
       loadProfile();
+      router.refresh();
     }
   }
 
@@ -120,6 +145,7 @@ export default function ProfilePage() {
     setArchiving(false);
     setSavedName(null);
     loadProfile();
+    router.refresh();
   }
 
   function toggleSubject(name: string) {
@@ -165,6 +191,7 @@ export default function ProfilePage() {
         }
       }
       loadProfile();
+      router.refresh();
     }
   }
 
@@ -238,17 +265,23 @@ export default function ProfilePage() {
           </p>
           <div className="flex flex-wrap gap-2">
             {allClassrooms.map((c) => (
-              <button
-                key={c.id}
-                onClick={() => switchClassroom(c.id)}
-                disabled={c.id === currentClassroom?.id}
-                className={`text-sm px-3 py-1 rounded border ${
-                  c.id === currentClassroom?.id ? "btn-primary" : "bg-white"
-                } ${c.isArchived ? "opacity-60" : ""}`}
-              >
-                {c.name}
-                {c.isArchived ? " (archived)" : ""}
-              </button>
+              <div key={c.id} className="flex flex-col items-start">
+                <button
+                  onClick={() => switchClassroom(c.id)}
+                  disabled={c.id === currentClassroom?.id}
+                  className={`text-sm px-3 py-1 rounded border ${
+                    c.id === currentClassroom?.id ? "btn-primary" : "bg-white"
+                  } ${c.isArchived ? "opacity-60" : ""}`}
+                >
+                  {c.name}
+                  {c.isArchived ? " (archived)" : ""}
+                </button>
+                {c.sections && c.sections.length > 0 && (
+                  <p className="text-[11px] text-slate-400 mt-0.5 px-1">
+                    Periods: {c.sections.map((s) => s.name).join(", ")}
+                  </p>
+                )}
+              </div>
             ))}
           </div>
         </div>
@@ -281,36 +314,111 @@ export default function ProfilePage() {
             + Add a Separate Classroom
           </button>
         ) : (
-          <div className="flex gap-2 flex-wrap items-end">
-            <div>
-              <label className="block text-xs text-slate-500">Label (e.g. "Homeroom", "Reading Pullout")</label>
-              <input
-                placeholder="e.g. Homeroom"
-                value={periodLabel}
-                onChange={(e) => setPeriodLabel(e.target.value)}
-                className="border rounded px-2 py-1"
-              />
+          <div className="space-y-3">
+            <div className="flex gap-2 flex-wrap items-end">
+              <div>
+                <label className="block text-xs text-slate-500">Label (e.g. "Homeroom", "Reading Pullout")</label>
+                <input
+                  placeholder="e.g. Homeroom"
+                  value={periodLabel}
+                  onChange={(e) => setPeriodLabel(e.target.value)}
+                  className="border rounded px-2 py-1"
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-slate-500">Grade</label>
+                <select
+                  value={periodGrade}
+                  onChange={(e) => setPeriodGrade(e.target.value)}
+                  className="border rounded px-2 py-1"
+                >
+                  {GRADE_OPTIONS.map((g) => (
+                    <option key={g} value={g}>
+                      {g} grade
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs text-slate-500">School name (optional)</label>
+                <input
+                  placeholder="e.g. Lincoln Elementary"
+                  value={newClassroomSchoolName}
+                  onChange={(e) => setNewClassroomSchoolName(e.target.value)}
+                  className="border rounded px-2 py-1"
+                />
+              </div>
             </div>
+
             <div>
-              <label className="block text-xs text-slate-500">Grade</label>
-              <select
-                value={periodGrade}
-                onChange={(e) => setPeriodGrade(e.target.value)}
-                className="border rounded px-2 py-1"
-              >
-                {GRADE_OPTIONS.map((g) => (
-                  <option key={g} value={g}>
-                    {g} grade
-                  </option>
-                ))}
-              </select>
+              <label className="block text-xs text-slate-500 mb-1">
+                Will this classroom have subgroups (Periods)?
+              </label>
+              <div className="flex gap-2 mb-2">
+                <button
+                  type="button"
+                  onClick={() => setNewClassroomHasSubgroups(false)}
+                  className={`text-sm px-3 py-1 rounded border ${
+                    !newClassroomHasSubgroups ? "btn-primary" : "bg-white"
+                  }`}
+                >
+                  No, just one class
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setNewClassroomHasSubgroups(true)}
+                  className={`text-sm px-3 py-1 rounded border ${
+                    newClassroomHasSubgroups ? "btn-primary" : "bg-white"
+                  }`}
+                >
+                  Yes, add Periods
+                </button>
+              </div>
+              {newClassroomHasSubgroups && (
+                <div className="space-y-1">
+                  {newClassroomPeriodNames.map((name, i) => (
+                    <div key={i} className="flex gap-2">
+                      <input
+                        value={name}
+                        onChange={(e) =>
+                          setNewClassroomPeriodNames((prev) =>
+                            prev.map((n, ni) => (ni === i ? e.target.value : n))
+                          )
+                        }
+                        className="border rounded px-2 py-1 text-sm flex-1"
+                      />
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setNewClassroomPeriodNames((prev) => prev.filter((_, ni) => ni !== i))
+                        }
+                        className="text-rose-600 text-xs"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setNewClassroomPeriodNames((prev) => [...prev, `Period ${prev.length + 1}`])
+                    }
+                    className="btn-outline text-xs"
+                  >
+                    + Add another Period
+                  </button>
+                </div>
+              )}
             </div>
-            <button onClick={addPeriod} disabled={addingPeriod} className="btn-primary">
-              {addingPeriod ? "Creating..." : "Create"}
-            </button>
-            <button onClick={() => setShowAddPeriod(false)} className="btn-outline">
-              Cancel
-            </button>
+
+            <div className="flex gap-2">
+              <button onClick={addPeriod} disabled={addingPeriod || !periodLabel.trim()} className="btn-primary">
+                {addingPeriod ? "Creating..." : "Create Classroom"}
+              </button>
+              <button onClick={() => setShowAddPeriod(false)} className="btn-outline">
+                Cancel
+              </button>
+            </div>
           </div>
         )}
       </div>

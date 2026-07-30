@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 
-type ClassroomOption = { id: string; name: string; isArchived: boolean };
+type ClassroomOption = { id: string; name: string; isArchived: boolean; sections?: { id: string; name: string }[] };
 
 export default function PeriodSwitcher({
   classrooms,
@@ -31,12 +31,13 @@ export default function PeriodSwitcher({
       value={currentId}
       onChange={handleChange}
       className="text-sm border rounded px-2 py-0.5 bg-white text-slate-600"
-      title="Switch classroom/period"
+      title="Switch classroom"
     >
       {classrooms.map((c) => (
         <option key={c.id} value={c.id}>
           {c.name}
           {c.isArchived ? " (archived)" : ""}
+          {c.sections && c.sections.length > 0 ? ` — ${c.sections.map((s) => s.name).join(", ")}` : ""}
         </option>
       ))}
     </select>

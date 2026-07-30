@@ -38,7 +38,12 @@ export default async function Nav() {
     teacherId
       ? prisma.classroom.findMany({
           where: { teacherId, isArchived: false },
-          select: { id: true, name: true, isArchived: true },
+          select: {
+            id: true,
+            name: true,
+            isArchived: true,
+            sections: { orderBy: { order: "asc" }, select: { id: true, name: true } },
+          },
           orderBy: { createdAt: "desc" },
         })
       : [],
@@ -73,7 +78,10 @@ export default async function Nav() {
             </Link>
           )}
           {classroomId && (
-            <PeriodSwitcher classrooms={allClassrooms} currentId={classroomId} />
+            <span className="flex items-center gap-1">
+              <span className="text-xs text-slate-400">Class:</span>
+              <PeriodSwitcher classrooms={allClassrooms} currentId={classroomId} />
+            </span>
           )}
           <SectionSwitcher />
           <Link href="/profile" className="text-sm whitespace-nowrap text-slate-600 hover:text-sky-600">

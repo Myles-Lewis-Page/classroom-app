@@ -21,10 +21,12 @@ export async function GET() {
       })
     : [];
   // All of this teacher's classrooms (active + archived), for the
-  // multi-classroom switcher on the Profile page.
+  // multi-classroom switcher on the Profile page - each with its Periods so
+  // the switcher can show what's nested under each one.
   const allClassrooms = teacherId
     ? await prisma.classroom.findMany({
         where: { teacherId },
+        include: { sections: { orderBy: { order: "asc" }, select: { id: true, name: true } } },
         orderBy: { createdAt: "desc" },
       })
     : [];
