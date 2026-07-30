@@ -269,6 +269,44 @@ export async function shrinkUnitDaysIfPossible(unitId: string) {
 }
 
 /**
+ * "Mark unit done early": the teacher is wrapping up a unit before reaching
+ * every day that was originally planned for it (e.g. the class moved faster
+ * than expected). Trims every trailing day that hasn't actually been
+ * progressed (status still "not_started"), always leaving at least Day 1,
+ * updates the unit's own endDate to match its new true last day (so it
+ * stops showing as "drifted" against its set dates), and cascades every
+ * later unit up to fill the freed school days - the exact inverse of a unit
+ * running long and pushing things back.
+ */
+export async function finishUnitEarly(unitId: string): Promise<{ removedDays: number }> {
+  const before = await captureUnitDayState(unitId);
+
+  const days = await prisma.pacingUnitDay.findMany({
+    where: { pacingUnitId: unitId },
+    orderBy: { dayNumber: "desc" },
+  });
+
+  const toDelete: string[] = [];
+  for (const day of days) {
+    if (day.status !== "not_started") break; // stop at the last real progress
+    if (day.dayNumber === 1) break; // never trim down to zero days
+    toDelete.push(day.id);
+  }
+
+  if (toDelete.length > 0) {
+    await prisma.pacingUnitDay.deleteMany({ where: { id: { in: toDelete } } });
+    await recomputeUnitDayDates(unitId);
+    const lastDate = await getUnitLastDayDate(unitId);
+    if (lastDate) {
+      await prisma.pacingUnit.update({ where: { id: unitId }, data: { endDate: lastDate } });
+    }
+    await cascadeAfterChange(unitId, before);
+  }
+
+  return { removedDays: toDelete.length };
+}
+
+/**
  * Finds the first OTHER unit in the classroom whose actual occupied range
  * (its real first-day-to-last-day span if it has generated days, else its
  * plain start/end) overlaps the given [start, end] - used to hard-block
@@ -421,7 +459,29 @@ export async function setDayStatus(dayId: string, status: "not_started" | "compl
   return prisma.pacingUnitDay.findUnique({ where: { id: dayId } });
 }
 
-/** Removes an auto-inserted extra day and closes the gap. Only ever called for isExtraDay rows. */
+/**
+ * Same idea as setDayStatus, but scoped to one Period only - lets a Period
+ * progress at its own pace through the SAME shared day/topic sequence, e.g.
+ * one Period running behind another. Deliberately does NOT touch the shared
+ * PacingUnitDay row, insert an extra day, or cascade later units - the
+ * underlying schedule is shared across every Period; only how far each one
+ * has actually gotten through it is per-Period. If a Period needs more time
+ * than the shared schedule allows for, that shows up as a "behind pace"
+ * readout rather than inserting a day only that Period would see.
+ */
+export async function setDayStatusForSection(
+  dayId: string,
+  sectionId: string,
+  status: "not_started" | "completed" | "half_completed"
+) {
+  return prisma.pacingUnitDayPeriod.upsert({
+    where: { pacingUnitDayId_sectionId: { pacingUnitDayId: dayId, sectionId } },
+    update: { status },
+    create: { pacingUnitDayId: dayId, sectionId, status },
+  });
+}
+
+
 export async function removeExtraDay(dayId: string) {
   const day = await prisma.pacingUnitDay.findUnique({ where: { id: dayId } });
   if (!day || !day.isExtraDay) return false;

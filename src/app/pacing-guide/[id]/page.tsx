@@ -16,7 +16,10 @@ import {
   rangesOverlap,
 } from "@/lib/dateOnly";
 
+import { useSectionContext } from "@/components/SectionContext";
+
 type DayStatus = "not_started" | "completed" | "half_completed";
+type PeriodStatus = { id: string; sectionId: string; status: DayStatus };
 type Day = {
   id: string;
   dayNumber: number;
@@ -31,6 +34,7 @@ type Day = {
   materialsNeeded: string | null;
   status: DayStatus;
   isExtraDay: boolean;
+  periodStatuses: PeriodStatus[];
 };
 type UnitSummative = { id: string; title: string; date: string };
 type UnitTopic = {
@@ -312,6 +316,7 @@ type Row =
 
 export default function UnitDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
+  const { activeSectionId, sections } = useSectionContext();
   const [unit, setUnit] = useState<Unit | null>(null);
   const [calendarEvents, setCalendarEvents] = useState<CalEvent[]>([]);
   const [colorIndex, setColorIndex] = useState(0);
@@ -348,7 +353,7 @@ export default function UnitDetailPage({ params }: { params: Promise<{ id: strin
     await fetch(`/api/pacing-units/days/${dayId}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status }),
+      body: JSON.stringify({ status, ...(activeSectionId ? { sectionId: activeSectionId } : {}) }),
     });
     load();
   }
@@ -425,6 +430,30 @@ export default function UnitDetailPage({ params }: { params: Promise<{ id: strin
     load();
   }
 
+  // "Mark unit done early": the class wrapped up before reaching every
+  // originally-planned day. Trims the unused trailing days and pulls every
+  // later unit up to fill the freed school days.
+  async function finishEarly() {
+    if (!unit) return;
+    if (
+      !confirm(
+        "Mark this unit done early? Any trailing days that haven't been started yet get dropped, and every later unit shifts up to fill the freed days. This can't be undone."
+      )
+    )
+      return;
+    const res = await fetch(`/api/pacing-units/${id}/finish-early`, { method: "POST" });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      alert(data.error || "Couldn't finish this unit early.");
+      return;
+    }
+    const data = await res.json();
+    if (data.removedDays === 0) {
+      alert("Nothing to trim - every remaining day already has progress on it.");
+    }
+    load();
+  }
+
   const holidayEvents = useMemo(
     () => calendarEvents.filter((e) => e.type === "holiday" || e.type === "teacher_work_day"),
     [calendarEvents]
@@ -485,8 +514,16 @@ export default function UnitDetailPage({ params }: { params: Promise<{ id: strin
     .filter((e) => rangesOverlap(startDate, lastDayDate, parseDateOnly(e.startDate), parseDateOnly(e.endDate)))
     .sort((a, b) => new Date(a.startDate).getTime() - new Date(b.startDate).getTime());
 
+  function effectiveStatus(d: Day): DayStatus {
+    if (!activeSectionId) return d.status;
+    return d.periodStatuses.find((ps) => ps.sectionId === activeSectionId)?.status ?? d.status;
+  }
+
   const totalDays = unit.days.length;
-  const completedDays = unit.days.filter((d) => d.status === "completed" || d.status === "half_completed").length;
+  const completedDays = unit.days.filter((d) => {
+    const s = effectiveStatus(d);
+    return s === "completed" || s === "half_completed";
+  }).length;
   const topicDaysSum = unit.unitTopics.reduce((sum, t) => sum + t.days, 0);
   const topicDaysPlanned = Math.min(topicDaysSum, totalDays);
   const originalPlannedDays = countInstructionalDays(startDate, parseDateOnly(unit.endDate), holidayEvents);
@@ -494,14 +531,16 @@ export default function UnitDetailPage({ params }: { params: Promise<{ id: strin
   const todayStr = new Date().toISOString().slice(0, 10);
   const today = parseDateOnly(todayStr);
   const expectedByToday = unit.days.filter((d) => parseDateOnly(d.date) <= today).length;
+  const activePeriodName = sections.find((s) => s.id === activeSectionId)?.name ?? null;
   let paceMessage = "";
   if (totalDays > 0) {
+    const who = activePeriodName ? `${activePeriodName} is` : "Class is";
     if (completedDays < expectedByToday - 1) {
-      paceMessage = "A bit behind - might be worth trimming a topic down.";
+      paceMessage = `${who} a bit behind - might be worth trimming a topic down.`;
     } else if (completedDays > expectedByToday + 1) {
-      paceMessage = "Ahead of schedule - room to slow down if needed.";
+      paceMessage = `${who} ahead of schedule - room to slow down if needed.`;
     } else {
-      paceMessage = "Right on pace.";
+      paceMessage = `${who} right on pace.`;
     }
   }
 
@@ -514,13 +553,22 @@ export default function UnitDetailPage({ params }: { params: Promise<{ id: strin
       <div className="rounded-lg p-4 sm:p-6 my-4" style={{ backgroundColor: color }}>
         <div className="flex justify-between items-start gap-2 mb-3">
           <h1 className="text-2xl font-bold">{unit.name} - Lesson Plans</h1>
-          <button
-            onClick={recalculateDays}
-            className="text-xs text-slate-600 hover:underline shrink-0 mt-1"
-            title="Regenerate this unit's days from its set start/end dates and reapply topics"
-          >
-            Recalculate Days
-          </button>
+          <div className="flex gap-3 items-center shrink-0 mt-1">
+            <button
+              onClick={finishEarly}
+              className="text-xs text-emerald-700 hover:underline"
+              title="Trim unstarted trailing days and pull later units up to fill the freed time"
+            >
+              Mark Done Early
+            </button>
+            <button
+              onClick={recalculateDays}
+              className="text-xs text-slate-600 hover:underline"
+              title="Regenerate this unit's days from its set start/end dates and reapply topics"
+            >
+              Recalculate Days
+            </button>
+          </div>
         </div>
         <div className="flex gap-6 flex-wrap text-sm">
           <div>
@@ -715,6 +763,8 @@ export default function UnitDetailPage({ params }: { params: Promise<{ id: strin
                   <DayRow
                     key={row.day.id}
                     day={row.day}
+                    displayStatus={effectiveStatus(row.day)}
+                    activePeriodName={sections.find((s) => s.id === activeSectionId)?.name ?? null}
                     halfDayLabel={row.halfDayLabel}
                     onSaveField={saveDayField}
                     onSetStatus={setDayStatus}
@@ -754,12 +804,16 @@ export default function UnitDetailPage({ params }: { params: Promise<{ id: strin
 
 function DayRow({
   day,
+  displayStatus,
+  activePeriodName,
   halfDayLabel,
   onSaveField,
   onSetStatus,
   onRemoveExtraDay,
 }: {
   day: Day;
+  displayStatus: DayStatus;
+  activePeriodName: string | null;
   halfDayLabel: string | null;
   onSaveField: (dayId: string, field: string, value: string) => void;
   onSetStatus: (dayId: string, status: DayStatus) => void;
@@ -853,15 +907,20 @@ function DayRow({
       ))}
       <td className={cellClass}>
         <select
-          value={day.status}
+          value={displayStatus}
           onChange={(e) => onSetStatus(day.id, e.target.value as DayStatus)}
           className="text-xs border-none focus:outline-none rounded px-1"
-          style={{ backgroundColor: STATUS_COLOR[day.status] }}
+          style={{ backgroundColor: STATUS_COLOR[displayStatus] }}
         >
           <option value="not_started">{STATUS_LABEL.not_started}</option>
           <option value="completed">{STATUS_LABEL.completed}</option>
           <option value="half_completed">{STATUS_LABEL.half_completed}</option>
         </select>
+        {activePeriodName && displayStatus !== day.status && (
+          <span className="block text-[9px] text-amber-600 whitespace-nowrap">
+            {activePeriodName} only - plan says {STATUS_LABEL[day.status]}
+          </span>
+        )}
       </td>
     </tr>
   );

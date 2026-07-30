@@ -12,7 +12,6 @@
     "lint": "eslint",
     "seed": "tsx prisma/seed.ts",
     "reset-password": "tsx prisma/reset-password.ts",
-    "merge-classrooms": "tsx prisma/merge-classrooms.ts",
     "postinstall": "prisma generate"
   },
   "prisma": {

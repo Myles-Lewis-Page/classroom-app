@@ -18,7 +18,7 @@ export async function GET(
   const unit = await prisma.pacingUnit.findUnique({
     where: { id },
     include: {
-      days: { orderBy: { dayNumber: "asc" } },
+      days: { orderBy: { dayNumber: "asc" }, include: { periodStatuses: true } },
       unitSummatives: { orderBy: { date: "asc" } },
       unitTopics: { orderBy: { order: "asc" } },
     },
@@ -122,7 +122,7 @@ export async function PATCH(
   const withDays = await prisma.pacingUnit.findUnique({
     where: { id },
     include: {
-      days: { orderBy: { dayNumber: "asc" } },
+      days: { orderBy: { dayNumber: "asc" }, include: { periodStatuses: true } },
       unitSummatives: { orderBy: { date: "asc" } },
       unitTopics: { orderBy: { order: "asc" } },
     },

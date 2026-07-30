@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
 import { getCurrentClassroomId } from "@/lib/classroomScope";
-import { setDayStatus, removeExtraDay } from "@/lib/pacing";
+import { setDayStatus, setDayStatusForSection, removeExtraDay } from "@/lib/pacing";
 
 // PATCH { topic?, learningTarget?, standards?, supports?, lessonActivities?,
 //         warmUp?, materialsNeeded?, status? }
@@ -47,6 +47,22 @@ export async function PATCH(
   }
 
   if (body.status !== undefined && ["not_started", "completed", "half_completed"].includes(body.status)) {
+    // If a sectionId is given, this only tracks that ONE Period's progress
+    // through the shared day - doesn't touch the shared row, insert a day,
+    // or cascade later units. Validate the section actually belongs to this
+    // classroom first so a stray id can't write into someone else's data.
+    if (body.sectionId) {
+      const section = await prisma.section.findUnique({ where: { id: body.sectionId } });
+      if (!section || section.classroomId !== classroomId) {
+        return NextResponse.json({ error: "Invalid sectionId" }, { status: 400 });
+      }
+      await setDayStatusForSection(dayId, body.sectionId, body.status);
+      const updated = await prisma.pacingUnitDay.findUnique({
+        where: { id: dayId },
+        include: { periodStatuses: true },
+      });
+      return NextResponse.json(updated);
+    }
     const updated = await setDayStatus(dayId, body.status);
     return NextResponse.json(updated);
   }

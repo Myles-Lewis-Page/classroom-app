@@ -107,6 +107,7 @@ model Section {
   students       Student[]
   assignments    Assignment[] @relation("AssignmentSections")
   scheduleBlocks ScheduleBlock[]
+  pacingDayStatuses PacingUnitDayPeriod[]
 
   @@unique([classroomId, name])
 }
@@ -654,8 +655,27 @@ model PacingUnitDay {
   // true if this row was auto-inserted because a previous day was marked
   // half_completed - lets the UI offer to remove it if it ends up unused.
   isExtraDay       Boolean    @default(false)
+  periodStatuses   PacingUnitDayPeriod[]
 
   @@unique([pacingUnitId, dayNumber])
+}
+
+// Per-Period completion status for a shared PacingUnitDay - lets one Period
+// run behind (or ahead of) another on the SAME shared day/topic sequence,
+// without duplicating the actual lesson content (topic, learning target,
+// etc), which stays unit-wide. A day with no row here for a given Section
+// is treated as "not_started" for that Period by default - only created
+// once a Period's status on that day is actually set to something.
+model PacingUnitDayPeriod {
+  id               String        @id @default(cuid())
+  pacingUnitDayId  String
+  pacingUnitDay    PacingUnitDay @relation(fields: [pacingUnitDayId], references: [id], onDelete: Cascade)
+  sectionId        String
+  section          Section       @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+  status           String        @default("not_started") // "not_started" | "completed" | "half_completed"
+  updatedAt        DateTime      @updatedAt
+
+  @@unique([pacingUnitDayId, sectionId])
 }
 
 model ParentContactLog {
