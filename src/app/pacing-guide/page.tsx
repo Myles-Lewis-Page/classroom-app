@@ -12,8 +12,16 @@ type Unit = {
   endDate: string;
   standards: string | null;
   topics: string | null;
-  days: { id: string }[];
+  days: { id: string; date: string; dayNumber: number }[];
 };
+
+// The unit's actual last instructional day - can run past its set endDate
+// if a topic or a half-completed lesson pushed it out further.
+function actualEndDate(unit: Unit): string {
+  if (unit.days.length === 0) return unit.endDate;
+  const sorted = [...unit.days].sort((a, b) => a.dayNumber - b.dayNumber);
+  return sorted[sorted.length - 1].date;
+}
 
 export default function PacingGuidePage() {
   const [units, setUnits] = useState<Unit[]>([]);
@@ -105,7 +113,12 @@ export default function PacingGuidePage() {
                 style={{ backgroundColor: UNIT_COLORS[i % UNIT_COLORS.length] }}
               >
                 <span className="font-semibold block">{u.name}</span>
-                {formatShortDate(u.startDate)} - {formatShortDate(u.endDate)}
+                {formatShortDate(u.startDate)} -{" "}
+                {toDateInputValue(actualEndDate(u)) !== toDateInputValue(u.endDate) ? (
+                  <span className="text-rose-600 font-medium">{formatShortDate(actualEndDate(u))}</span>
+                ) : (
+                  formatShortDate(u.endDate)
+                )}
               </Link>
             ))}
           </div>
@@ -186,7 +199,14 @@ export default function PacingGuidePage() {
                     <h3 className="font-bold hover:underline">{unit.name}</h3>
                     <p className="text-sm text-slate-500">
                       {formatShortDate(unit.startDate)} -{" "}
-                      {formatShortDate(unit.endDate)} · {unit.days.length} days
+                      {toDateInputValue(actualEndDate(unit)) !== toDateInputValue(unit.endDate) ? (
+                        <span className="text-rose-600 font-medium">
+                          {formatShortDate(actualEndDate(unit))}
+                        </span>
+                      ) : (
+                        formatShortDate(unit.endDate)
+                      )}{" "}
+                      · {unit.days.length} days
                     </p>
                   </div>
                 </Link>
