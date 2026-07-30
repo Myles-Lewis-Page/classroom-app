@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import ParentContactRotationWidget from "@/components/ParentContactRotationWidget";
 import { useSectionContext, filterBySection } from "@/components/SectionContext";
+import { formatShortDate } from "@/lib/dateOnly";
 
 type Student = { id: string; firstName: string; lastName: string; sectionId: string | null };
 type Subject = { id: string; name: string; icon: string | null; order: number };
@@ -320,7 +321,7 @@ export default function BehaviorLogPage() {
                   noteType === "good" ? "bg-emerald-200 border-emerald-400" : "bg-white"
                 }`}
               >
-                🙂 Good
+                Good
               </button>
               <button
                 type="button"
@@ -329,7 +330,7 @@ export default function BehaviorLogPage() {
                   noteType === "bad" ? "bg-rose-200 border-rose-400" : "bg-white"
                 }`}
               >
-                🙁 Bad
+                Bad
               </button>
             </div>
           </div>
@@ -427,7 +428,7 @@ export default function BehaviorLogPage() {
                   <span className="font-medium">
                     {n.student.lastName}, {n.student.firstName}
                   </span>{" "}
-                  — {new Date(n.date).toLocaleDateString()}
+                  — {formatShortDate(n.date)}
                   {n.subject && <span className="text-slate-500"> · {n.subject.name}</span>}
                 </p>
                 <p className="mt-1">{n.tag}</p>
@@ -436,7 +437,7 @@ export default function BehaviorLogPage() {
               <div className="text-right shrink-0">
                 {n.contactLog ? (
                   <p className="text-xs text-emerald-700">
-                    ✅ Called {new Date(n.contactLog.date).toLocaleDateString()} via{" "}
+                    Called {formatShortDate(n.contactLog.date)} via{" "}
                     {METHOD_LABEL[n.contactLog.method] ?? n.contactLog.method}
                     {n.contactLog.followUp && <span className="block text-amber-600">Needs follow up</span>}
                   </p>
@@ -653,7 +654,7 @@ export default function BehaviorLogPage() {
                   <td className="py-2 whitespace-nowrap">
                     {log.student.firstName} {log.student.lastName}
                   </td>
-                  <td className="py-2 whitespace-nowrap">{new Date(log.date).toLocaleDateString()}</td>
+                  <td className="py-2 whitespace-nowrap">{formatShortDate(log.date)}</td>
                   <td className="py-2 whitespace-nowrap">{REASON_LABEL[log.reason] ?? log.reason}</td>
                   <td className="py-2 whitespace-nowrap">{METHOD_LABEL[log.method] ?? log.method}</td>
                   <td className="py-2">{log.comment}</td>

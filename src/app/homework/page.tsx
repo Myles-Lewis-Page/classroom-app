@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import LineChart from "@/components/LineChart";
 import { effectiveGradePercent } from "@/lib/grading";
+import { formatShortDate } from "@/lib/dateOnly";
 
 type SkillSubject = { id: string; name: string };
 type GradeCategory = { id: string; name: string; weight: number };
@@ -330,8 +331,8 @@ export default function AssignmentsPage() {
                 <h3 className="font-bold">{a.name}</h3>
                 <p className="text-sm text-slate-500 mb-2">
                   {a.gradeCategory && `${a.gradeCategory.name} · `}
-                  Assigned {new Date(a.assignedDate).toLocaleDateString()}
-                  {a.dueDate && ` · Due ${new Date(a.dueDate).toLocaleDateString()}`}
+                  Assigned {formatShortDate(a.assignedDate)}
+                  {a.dueDate && ` · Due ${formatShortDate(a.dueDate)}`}
                   {" · "}
                   {a.gradingType === "points" ? `Graded out of ${a.maxPoints}` : "Completion graded"}
                   {!!a.latePenaltyPercentPerDay && ` · -${a.latePenaltyPercentPerDay}%/day late`}

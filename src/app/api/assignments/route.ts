@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
 import { getCurrentClassroomId } from "@/lib/classroomScope";
+import { parseDateOnly } from "@/lib/dateOnly";
 
 // GET /api/assignments?subjectId=xxx (optional filter, like Skills)
 export async function GET(req: NextRequest) {
@@ -46,8 +47,8 @@ export async function POST(req: NextRequest) {
     data: {
       classroomId,
       name: body.name,
-      assignedDate: new Date(body.assignedDate),
-      dueDate: body.dueDate ? new Date(body.dueDate) : null,
+      assignedDate: parseDateOnly(body.assignedDate),
+      dueDate: body.dueDate ? parseDateOnly(body.dueDate) : null,
       skillSubjectId: body.subjectId || null,
       gradeCategoryId: body.gradeCategoryId || null,
       gradingType,

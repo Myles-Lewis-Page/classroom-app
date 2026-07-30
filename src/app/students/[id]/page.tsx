@@ -14,6 +14,7 @@ import EditParents from "@/components/EditParents";
 import PieChart from "@/components/PieChart";
 import LineChart from "@/components/LineChart";
 import { effectiveGradePercent, daysLate } from "@/lib/grading";
+import { formatShortDate } from "@/lib/dateOnly";
 
 type StudentDetail = {
   id: string;
@@ -517,9 +518,9 @@ export default function StudentProfilePage({ params }: { params: Promise<{ id: s
                     {h.assignment.gradeCategory && `${h.assignment.gradeCategory.name}: `}
                     {h.assignment.name}
                   </td>
-                  <td className="whitespace-nowrap">{new Date(h.assignment.assignedDate).toLocaleDateString()}</td>
+                  <td className="whitespace-nowrap">{formatShortDate(h.assignment.assignedDate)}</td>
                   <td className="whitespace-nowrap">
-                    {h.assignment.dueDate ? new Date(h.assignment.dueDate).toLocaleDateString() : "—"}
+                    {h.assignment.dueDate ? formatShortDate(h.assignment.dueDate) : "—"}
                   </td>
                   <td>
                     {h.status === "missing" ? (

@@ -4,6 +4,7 @@ import { useEffect, useState, useMemo } from "react";
 import Link from "next/link";
 import { useSectionContext, filterBySection } from "@/components/SectionContext";
 import { effectiveGradePercent, daysLate } from "@/lib/grading";
+import { formatShortDate } from "@/lib/dateOnly";
 
 type Student = { id: string; firstName: string; lastName: string; sectionId: string | null };
 type SkillSubject = { id: string; name: string };
@@ -284,11 +285,11 @@ export default function GradebookPage() {
                   </Link>
                   <br />
                   <span className="text-xs text-slate-400">
-                    Assigned {new Date(a.assignedDate).toLocaleDateString()}
+                    Assigned {formatShortDate(a.assignedDate)}
                     {a.dueDate && (
                       <>
                         <br />
-                        Due {new Date(a.dueDate).toLocaleDateString()}
+                        Due {formatShortDate(a.dueDate)}
                       </>
                     )}
                   </span>

@@ -30,7 +30,7 @@ export default function ParentContactRotationWidget({ compact = false }: { compa
     <div className="card">
       <div className="flex items-center justify-between mb-2">
         <h3 className="font-semibold">
-          {met ? "✅" : "📞"} Weekly Positive-Call Goal: {data.weeklyCount}/{data.weeklyGoal}
+          Weekly Positive-Call Goal: {data.weeklyCount}/{data.weeklyGoal}
         </h3>
         {!compact && (
           <Link href="/behavior" className="text-sky-600 text-sm hover:underline">

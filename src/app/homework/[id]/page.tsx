@@ -4,6 +4,7 @@ import { useEffect, useState, use, useMemo } from "react";
 import Link from "next/link";
 import { useSectionContext } from "@/components/SectionContext";
 import { effectiveGradePercent, daysLate } from "@/lib/grading";
+import { formatShortDate } from "@/lib/dateOnly";
 
 type Entry = {
   status: string;
@@ -122,8 +123,8 @@ export default function AssignmentDetailPage({ params }: { params: Promise<{ id:
       </Link>
       <h1 className="text-2xl font-bold mt-2 mb-1">{assignment.name}</h1>
       <p className="text-slate-500 mb-4">
-        Assigned {new Date(assignment.assignedDate).toLocaleDateString()}
-        {assignment.dueDate && ` · Due ${new Date(assignment.dueDate).toLocaleDateString()}`}
+        Assigned {formatShortDate(assignment.assignedDate)}
+        {assignment.dueDate && ` · Due ${formatShortDate(assignment.dueDate)}`}
         {" · "}
         {assignment.gradingType === "points"
           ? `Graded out of ${assignment.maxPoints}`

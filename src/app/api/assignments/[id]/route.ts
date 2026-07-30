@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
 import { getCurrentClassroomId } from "@/lib/classroomScope";
+import { parseDateOnly } from "@/lib/dateOnly";
 
 export async function GET(
   req: NextRequest,
@@ -57,8 +58,8 @@ export async function PATCH(
   } = {};
 
   if (body.name !== undefined) data.name = body.name;
-  if (body.assignedDate !== undefined) data.assignedDate = new Date(body.assignedDate);
-  if (body.dueDate !== undefined) data.dueDate = body.dueDate ? new Date(body.dueDate) : null;
+  if (body.assignedDate !== undefined) data.assignedDate = parseDateOnly(body.assignedDate);
+  if (body.dueDate !== undefined) data.dueDate = body.dueDate ? parseDateOnly(body.dueDate) : null;
   if (body.subjectId !== undefined) data.skillSubjectId = body.subjectId || null;
   if (body.gradeCategoryId !== undefined) data.gradeCategoryId = body.gradeCategoryId || null;
   if (body.latePenaltyPercentPerDay !== undefined) {
