@@ -19,43 +19,55 @@ type AttendanceStats = {
   month: { present: number; absent: number };
   ytd: { present: number; absent: number };
 };
-type PacingDay = {
-  id: string;
-  date: string;
-  topic: string | null;
-  status: "not_started" | "completed" | "half_completed";
-  dayNumber: number;
-};
-type PacingWidgetData = {
-  unit: { id: string; name: string } | null;
-  totalDays?: number;
-  completedDays?: number;
-  halfCompletedDays?: number;
-  notStartedDays?: number;
-  thisWeekDays?: PacingDay[];
+type PacingTodayUnit = {
+  unit: { id: string; name: string };
+  day: { id: string; date: string; topic: string | null; status: "not_started" | "completed" | "half_completed"; dayNumber: number };
 };
 
-const STATUS_LABEL: Record<PacingDay["status"], string> = {
+const STATUS_LABEL: Record<PacingTodayUnit["day"]["status"], string> = {
   not_started: "Not Started",
   completed: "Completed",
   half_completed: "Half Completed",
 };
-const STATUS_COLOR: Record<PacingDay["status"], string> = {
+const STATUS_COLOR: Record<PacingTodayUnit["day"]["status"], string> = {
   not_started: "#e2e8f0",
   completed: "#bbf7d0",
   half_completed: "#fde68a",
 };
 
-function formatWeekday(dateStr: string): string {
-  const d = new Date(dateStr);
-  return d.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric", timeZone: "UTC" });
-}
-
 export default function DashboardPage() {
   const [data, setData] = useState<DashboardData | null>(null);
   const [attendanceStats, setAttendanceStats] = useState<AttendanceStats | null>(null);
-  const [pacing, setPacing] = useState<PacingWidgetData | null>(null);
+  const [pacing, setPacing] = useState<{ units: PacingTodayUnit[] } | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  function loadPacing() {
+    fetch("/api/dashboard/pacing")
+      .then((r) => r.json())
+      .then(setPacing)
+      .catch(() => setPacing({ units: [] }));
+  }
+
+  async function setTodayStatus(dayId: string, status: PacingTodayUnit["day"]["status"]) {
+    // Optimistic update so the button feels instant - the PATCH below is the
+    // same endpoint the Pacing Guide itself uses, so it stays perfectly in
+    // sync (extra-day insertion on half_completed, etc. all still apply).
+    setPacing((prev) =>
+      prev
+        ? {
+            units: prev.units.map((u) =>
+              u.day.id === dayId ? { ...u, day: { ...u.day, status } } : u
+            ),
+          }
+        : prev
+    );
+    await fetch(`/api/pacing-units/days/${dayId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status }),
+    });
+    loadPacing();
+  }
 
   useEffect(() => {
     fetch("/api/dashboard")
@@ -67,7 +79,7 @@ export default function DashboardPage() {
       .catch((err) => setError(err.message || "Failed to load dashboard"));
 
     fetch("/api/attendance/stats").then((r) => r.json()).then(setAttendanceStats);
-    fetch("/api/dashboard/pacing").then((r) => r.json()).then(setPacing);
+    loadPacing();
   }, []);
 
   if (error) {
@@ -97,17 +109,10 @@ export default function DashboardPage() {
       <ParentContactRotationWidget compact />
 
       <div className="card">
-        <div className="flex justify-between items-center mb-2">
-          <h3 className="font-semibold">This Week's Pacing Guide</h3>
-          {pacing?.unit && (
-            <Link href={`/pacing-guide/${pacing.unit.id}`} className="text-sky-600 text-sm hover:underline">
-              Open unit →
-            </Link>
-          )}
-        </div>
+        <h3 className="font-semibold mb-2">Today's Pacing Guide</h3>
         {!pacing ? (
           <p className="text-sm text-gray-500">Loading...</p>
-        ) : !pacing.unit ? (
+        ) : pacing.units.length === 0 ? (
           <p className="text-sm text-gray-500">
             No unit is scheduled for today.{" "}
             <Link href="/pacing-guide" className="text-sky-600 hover:underline">
@@ -115,49 +120,32 @@ export default function DashboardPage() {
             </Link>
           </p>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <p className="text-sm text-slate-600 mb-2">{pacing.unit.name}</p>
-              <PieChart
-                size={100}
-                slices={[
-                  { label: "Completed", value: pacing.completedDays ?? 0, color: STATUS_COLOR.completed },
-                  {
-                    label: "Half Completed",
-                    value: pacing.halfCompletedDays ?? 0,
-                    color: STATUS_COLOR.half_completed,
-                  },
-                  { label: "Not Started", value: pacing.notStartedDays ?? 0, color: STATUS_COLOR.not_started },
-                ]}
-              />
-              <p className="text-xs text-slate-500 mt-2">
-                {(pacing.completedDays ?? 0) + (pacing.halfCompletedDays ?? 0)} of {pacing.totalDays ?? 0} days
-                through the unit
-              </p>
-            </div>
-            <div>
-              <p className="text-sm font-medium mb-1">This Week</p>
-              {(pacing.thisWeekDays?.length ?? 0) === 0 ? (
-                <p className="text-sm text-gray-500">No instructional days scheduled this week.</p>
-              ) : (
-                <ul className="text-sm space-y-1">
-                  {pacing.thisWeekDays!.map((d) => (
-                    <li key={d.id} className="flex items-center justify-between gap-2 border-b py-1">
-                      <span>
-                        <span className="text-slate-500">{formatWeekday(d.date)}</span>
-                        {d.topic && <span className="ml-2">{d.topic}</span>}
-                      </span>
-                      <span
-                        className="text-xs px-2 py-0.5 rounded-full shrink-0"
-                        style={{ backgroundColor: STATUS_COLOR[d.status] }}
-                      >
-                        {STATUS_LABEL[d.status]}
-                      </span>
-                    </li>
+          <div className="space-y-3">
+            {pacing.units.map(({ unit, day }) => (
+              <div key={day.id} className="flex items-center justify-between gap-3 border rounded px-3 py-2">
+                <div>
+                  <Link href={`/pacing-guide/${unit.id}`} className="font-medium text-sky-600 hover:underline">
+                    {unit.name}
+                  </Link>
+                  {day.topic && <p className="text-sm text-slate-600">{day.topic}</p>}
+                </div>
+                <div className="flex gap-1 shrink-0">
+                  {(["not_started", "half_completed", "completed"] as const).map((s) => (
+                    <button
+                      key={s}
+                      onClick={() => setTodayStatus(day.id, s)}
+                      className="text-xs px-2 py-1 rounded-full"
+                      style={{
+                        backgroundColor: day.status === s ? STATUS_COLOR[s] : "#f1f5f9",
+                        fontWeight: day.status === s ? 600 : 400,
+                      }}
+                    >
+                      {STATUS_LABEL[s]}
+                    </button>
                   ))}
-                </ul>
-              )}
-            </div>
+                </div>
+              </div>
+            ))}
           </div>
         )}
       </div>
