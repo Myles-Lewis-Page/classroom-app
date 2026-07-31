@@ -9,9 +9,9 @@ type SubStudent = {
   firstName: string;
   lastName: string;
   sectionId: string | null;
-  allergies: { allergen: string; severity: string; reaction: string | null }[];
+  allergies: { allergen: string; severity: string }[];
   dietaryRestrictions: { restriction: string }[];
-  ieps: { subSafeSummary: string | null; accommodations: string }[];
+  hasIep: boolean;
   seatingAssignment: { posX: number; posY: number } | null;
   observations: { note: string }[];
 };
@@ -71,7 +71,7 @@ export default function SubModePage() {
         <div className="space-y-3">
           {visibleStudents.map((s) => {
             const hasSafetyInfo = s.allergies.length > 0 || s.dietaryRestrictions.length > 0;
-            const hasIep = s.ieps.length > 0;
+            const hasIep = s.hasIep;
             const hasNotes = s.observations.length > 0;
             return (
               <div key={s.id} className="border rounded p-3 break-inside-avoid">
@@ -95,8 +95,7 @@ export default function SubModePage() {
                 )}
                 {hasIep && (
                   <p className="text-sm text-sky-700">
-                    IEP/504:{" "}
-                    {s.ieps.map((i) => i.subSafeSummary || i.accommodations).join("; ")}
+                    Has an IEP/504 plan — see classroom teacher for details.
                   </p>
                 )}
                 {hasNotes && (

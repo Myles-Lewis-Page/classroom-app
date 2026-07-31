@@ -1,10 +1,29 @@
 import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
+import { generateTempPassword } from "../src/lib/tempPassword";
 
 const prisma = new PrismaClient();
 
 async function main() {
-  const passwordHash = await bcrypt.hash("changeme123", 10);
+  // This used to be a fixed, documented password ("changeme123") - fine
+  // for a truly local-only demo, but this repo is public, so that string
+  // was effectively a published credential for anyone who found the repo
+  // and guessed (or read the README to learn) it was the first teacher
+  // login. Generated fresh per seed run instead, printed once to the
+  // console/deploy logs, and the account is forced to change it on first
+  // login - same pattern as every other system-generated password in this
+  // app (see src/lib/tempPassword.ts).
+  //
+  // upsert-by-email means this only ever sets the password on first
+  // creation - re-running the seed against an already-seeded database
+  // (e.g. SEED_ON_BOOT left on by accident) does NOT reset an existing
+  // teacher's password, so this can't be used to silently take over an
+  // account that's already had its password changed.
+  const existing = await prisma.teacher.findUnique({ where: { email: "teacher@example.com" } });
+  const tempPassword = existing ? null : generateTempPassword();
+  const passwordHash = tempPassword
+    ? await bcrypt.hash(tempPassword, 12)
+    : existing!.passwordHash;
 
   const teacher = await prisma.teacher.upsert({
     where: { email: "teacher@example.com" },
@@ -13,6 +32,7 @@ async function main() {
       name: "Teacher",
       email: "teacher@example.com",
       passwordHash,
+      mustChangePassword: true,
     },
   });
 
@@ -104,7 +124,12 @@ async function main() {
   }
 
   console.log("Seed complete.");
-  console.log("Login: teacher@example.com / changeme123");
+  if (tempPassword) {
+    console.log(`Login: teacher@example.com / ${tempPassword}`);
+    console.log("(This account must change its password on first login.)");
+  } else {
+    console.log("teacher@example.com already existed - its password was left untouched.");
+  }
 }
 
 main()
