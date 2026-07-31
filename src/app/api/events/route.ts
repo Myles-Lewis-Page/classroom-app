@@ -13,7 +13,7 @@ export async function GET() {
 
   const events = await prisma.event.findMany({
     where: { classroomId },
-    include: { statuses: { include: { student: true } } },
+    include: { statuses: { include: { student: true } }, sections: true },
     orderBy: { date: "asc" },
   });
   return NextResponse.json(events);
@@ -40,6 +40,10 @@ export async function POST(req: NextRequest) {
   const body = await req.json();
   const date = parseDateOnly(body.date);
 
+  // sectionIds: which Periods this event applies to. Empty/missing = the
+  // whole classroom, same "no tag means everyone" convention as Assignments.
+  const sectionIds: string[] = Array.isArray(body.sectionIds) ? body.sectionIds.filter(Boolean) : [];
+
   const calendarEvent = await prisma.calendarEvent.create({
     data: { classroomId, name: body.name, startDate: date, endDate: date, type: "other" },
   });
@@ -53,12 +57,20 @@ export async function POST(req: NextRequest) {
       requiresPayment: !!body.requiresPayment,
       description: body.description ?? null,
       calendarEventId: calendarEvent.id,
+      ...(sectionIds.length > 0 ? { sections: { connect: sectionIds.map((id) => ({ id })) } } : {}),
     },
   });
 
   // Auto-create a "missing" status row for every active student IN THIS
-  // CLASSROOM ONLY - not every student in the whole database.
-  const students = await prisma.student.findMany({ where: { isActive: true, classroomId } });
+  // CLASSROOM ONLY - not every student in the whole database - and, if this
+  // event is tagged to specific Periods, only for students in those Periods.
+  const students = await prisma.student.findMany({
+    where: {
+      isActive: true,
+      classroomId,
+      ...(sectionIds.length > 0 ? { sectionId: { in: sectionIds } } : {}),
+    },
+  });
   await prisma.eventStatus.createMany({
     data: students.map((s) => ({
       eventId: event.id,

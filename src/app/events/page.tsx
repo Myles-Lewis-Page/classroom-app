@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useSectionContext } from "@/components/SectionContext";
+import PeriodPicker from "@/components/PeriodPicker";
 import { formatShortDate } from "@/lib/dateOnly";
 
 type EventStatus = {
@@ -17,15 +18,18 @@ type EventItem = {
   date: string;
   requiresPayment: boolean;
   statuses: EventStatus[];
+  sections: { id: string; name: string }[];
 };
 
 export default function EventsPage() {
-  const { activeSectionId } = useSectionContext();
+  const { sections } = useSectionContext();
+  const [filterPeriodId, setFilterPeriodId] = useState<string | null>(null);
   const [events, setEvents] = useState<EventItem[]>([]);
   const [showMissingOnly, setShowMissingOnly] = useState(true);
   const [newName, setNewName] = useState("");
   const [newDate, setNewDate] = useState("");
   const [requiresPayment, setRequiresPayment] = useState(false);
+  const [newSectionIds, setNewSectionIds] = useState<string[]>([]);
   const [classroomId, setClassroomId] = useState<string>("");
   const [classroomError, setClassroomError] = useState(false);
   const [classroomLoading, setClassroomLoading] = useState(true);
@@ -84,11 +88,13 @@ export default function EventsPage() {
         name: newName,
         date: newDate,
         requiresPayment,
+        sectionIds: newSectionIds,
       }),
     });
     setNewName("");
     setNewDate("");
     setRequiresPayment(false);
+    setNewSectionIds([]);
     load();
   }
 
@@ -155,6 +161,27 @@ export default function EventsPage() {
             />
             Requires payment
           </label>
+          {sections.length > 0 && (
+            <div>
+              <label className="block text-xs text-slate-500">Periods (blank = whole class)</label>
+              <div className="flex flex-wrap gap-2 border rounded px-2 py-1">
+                {sections.map((s) => (
+                  <label key={s.id} className="flex items-center gap-1 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={newSectionIds.includes(s.id)}
+                      onChange={(e) =>
+                        setNewSectionIds((prev) =>
+                          e.target.checked ? [...prev, s.id] : prev.filter((id) => id !== s.id)
+                        )
+                      }
+                    />
+                    {s.name}
+                  </label>
+                ))}
+              </div>
+            </div>
+          )}
           <button
             onClick={createEvent}
             disabled={!classroomId}
@@ -173,18 +200,21 @@ export default function EventsPage() {
         </p>
       </div>
 
-      <label className="flex items-center gap-2 text-sm mb-4">
-        <input
-          type="checkbox"
-          checked={showMissingOnly}
-          onChange={(e) => setShowMissingOnly(e.target.checked)}
-        />
-        Show only missing slips
-      </label>
+      <div className="flex items-center gap-4 mb-4 flex-wrap">
+        <label className="flex items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={showMissingOnly}
+            onChange={(e) => setShowMissingOnly(e.target.checked)}
+          />
+          Show only missing slips
+        </label>
+        <PeriodPicker sections={sections} value={filterPeriodId} onChange={setFilterPeriodId} label="Period:" />
+      </div>
 
       {events.map((event) => {
-        const sectionStatuses = activeSectionId
-          ? event.statuses.filter((s) => s.student.sectionId === activeSectionId)
+        const sectionStatuses = filterPeriodId
+          ? event.statuses.filter((s) => s.student.sectionId === filterPeriodId)
           : event.statuses;
         const statuses = showMissingOnly
           ? sectionStatuses.filter((s) => s.slipStatus === "missing")
@@ -194,6 +224,11 @@ export default function EventsPage() {
             <div className="flex justify-between items-start">
               <h3 className="font-bold mb-1">
                 {event.name} — {formatShortDate(event.date)}
+                {event.sections.length > 0 && (
+                  <span className="ml-2 text-xs font-normal text-slate-500">
+                    ({event.sections.map((s) => s.name).join(", ")})
+                  </span>
+                )}
               </h3>
               <button
                 onClick={() => removeEvent(event.id, event.name)}

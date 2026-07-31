@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import ParentContactRotationWidget from "@/components/ParentContactRotationWidget";
 import { useSectionContext, filterBySection } from "@/components/SectionContext";
+import PeriodPicker from "@/components/PeriodPicker";
 import { formatShortDate } from "@/lib/dateOnly";
 
 type Student = { id: string; firstName: string; lastName: string; sectionId: string | null };
@@ -64,7 +65,8 @@ function todayStr() {
 }
 
 export default function BehaviorLogPage() {
-  const { activeSectionId } = useSectionContext();
+  const { sections } = useSectionContext();
+  const [periodId, setPeriodId] = useState<string | null>(null);
   const [students, setStudents] = useState<Student[]>([]);
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [notes, setNotes] = useState<BehaviorNote[]>([]);
@@ -109,8 +111,8 @@ export default function BehaviorLogPage() {
   const [historyFollowUpOnly, setHistoryFollowUpOnly] = useState(false);
 
   const visibleStudents = useMemo(
-    () => filterBySection(students, activeSectionId),
-    [students, activeSectionId]
+    () => filterBySection(students, periodId),
+    [students, periodId]
   );
 
   useEffect(() => {
@@ -255,6 +257,10 @@ export default function BehaviorLogPage() {
         whenever you actually make it - that's what marks it "called." You can also log parent
         contacts for other reasons any time, whether or not they're tied to a behavior note.
       </p>
+
+      <div className="mb-4">
+        <PeriodPicker sections={sections} value={periodId} onChange={setPeriodId} label="Period:" />
+      </div>
 
       <div className="mb-6">
         <ParentContactRotationWidget />

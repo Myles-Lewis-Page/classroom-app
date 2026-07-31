@@ -4,6 +4,7 @@ import { useEffect, useState, useMemo, useRef } from "react";
 import Link from "next/link";
 import PieChart from "@/components/PieChart";
 import { useSectionContext, filterBySection } from "@/components/SectionContext";
+import PeriodPicker from "@/components/PeriodPicker";
 
 type Tag = { tag: { id: string; name: string; color: string | null } };
 type Student = {
@@ -19,7 +20,8 @@ type Student = {
 type AttendanceEntry = { studentId: string; status: string };
 
 export default function RosterPage() {
-  const { activeSectionId } = useSectionContext();
+  const { sections } = useSectionContext();
+  const [periodId, setPeriodId] = useState<string | null>(null);
   const [students, setStudents] = useState<Student[]>([]);
   const [attendance, setAttendance] = useState<Record<string, string>>({});
   const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
@@ -112,8 +114,8 @@ export default function RosterPage() {
   }
 
   const visibleStudents = useMemo(
-    () => filterBySection(students, activeSectionId),
-    [students, activeSectionId]
+    () => filterBySection(students, periodId),
+    [students, periodId]
   );
 
   const filtered = useMemo(() => {
@@ -133,6 +135,9 @@ export default function RosterPage() {
   return (
     <div className="p-4 sm:p-6 max-w-6xl mx-auto">
       <h1 className="text-2xl font-bold mb-4">Roster & Attendance</h1>
+      <div className="mb-4">
+        <PeriodPicker sections={sections} value={periodId} onChange={setPeriodId} label="Period:" />
+      </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* LEFT COLUMN: Roster */}

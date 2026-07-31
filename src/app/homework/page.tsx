@@ -5,7 +5,6 @@ import Link from "next/link";
 import GradeHistogram from "@/components/GradeHistogram";
 import { effectiveGradePercent } from "@/lib/grading";
 import { formatShortDate } from "@/lib/dateOnly";
-import { useSectionContext } from "@/components/SectionContext";
 
 type SkillSubject = { id: string; name: string };
 type GradeCategory = { id: string; name: string; weight: number };
@@ -40,7 +39,6 @@ type Assignment = {
 };
 
 export default function AssignmentsPage() {
-  const { activeSectionId } = useSectionContext();
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [subjects, setSubjects] = useState<SkillSubject[]>([]);
   const [categories, setCategories] = useState<GradeCategory[]>([]);
@@ -173,18 +171,9 @@ export default function AssignmentsPage() {
       .filter((p): p is number => p !== null);
   }
 
-  // "No sections" on an assignment = whole classroom, so it's visible from
-  // every Period. Otherwise only show it when it's tagged to the active
-  // Period (or when viewing "All Students").
-  function inActiveSection(a: Assignment) {
-    if (!activeSectionId) return true;
-    if (a.sections.length === 0) return true;
-    return a.sections.some((s) => s.id === activeSectionId);
-  }
-
-  const visibleAssignments = assignments
-    .filter((a) => (selectedSubjectId === "all" ? true : a.skillSubjectId === selectedSubjectId))
-    .filter(inActiveSection);
+  const visibleAssignments = assignments.filter((a) =>
+    selectedSubjectId === "all" ? true : a.skillSubjectId === selectedSubjectId
+  );
 
   const todayStr = new Date().toISOString().slice(0, 10);
   const isPastDue = (a: Assignment) => !!a.dueDate && a.dueDate.slice(0, 10) < todayStr;

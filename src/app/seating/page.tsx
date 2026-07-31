@@ -3,6 +3,7 @@
 import { useEffect, useState, useMemo } from "react";
 import Link from "next/link";
 import { useSectionContext, filterBySection } from "@/components/SectionContext";
+import PeriodPicker from "@/components/PeriodPicker";
 
 type Student = {
   id: string;
@@ -15,7 +16,8 @@ type Relationship = { studentId: string; relatedStudentId: string };
 type Seat = { id: string; row: number; col: number };
 
 export default function SeatingChartPage() {
-  const { activeSectionId } = useSectionContext();
+  const { sections } = useSectionContext();
+  const [periodId, setPeriodId] = useState<string | null>(null);
   const [students, setStudents] = useState<Student[]>([]);
   const [conflicts, setConflicts] = useState<Relationship[]>([]);
   const [seats, setSeats] = useState<Seat[]>([]);
@@ -27,8 +29,8 @@ export default function SeatingChartPage() {
   // place" list and "not yet seated" summary are section-scoped, so a
   // teacher looking at one group only sees that group's students to place.
   const visibleStudents = useMemo(
-    () => filterBySection(students, activeSectionId),
-    [students, activeSectionId]
+    () => filterBySection(students, periodId),
+    [students, periodId]
   );
 
   useEffect(() => {
@@ -124,6 +126,9 @@ export default function SeatingChartPage() {
         <Link href="/seating/layout" className="btn-outline text-sm">
           Design Layout →
         </Link>
+      </div>
+      <div className="mb-4">
+        <PeriodPicker sections={sections} value={periodId} onChange={setPeriodId} label="Period:" />
       </div>
 
       {seats.length === 0 ? (

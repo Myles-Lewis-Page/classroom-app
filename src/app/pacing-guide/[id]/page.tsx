@@ -17,6 +17,7 @@ import {
 } from "@/lib/dateOnly";
 
 import { useSectionContext } from "@/components/SectionContext";
+import PeriodPicker from "@/components/PeriodPicker";
 
 type DayStatus = "not_started" | "completed" | "half_completed";
 type PeriodStatus = { id: string; sectionId: string; status: DayStatus };
@@ -334,7 +335,8 @@ type Row =
 
 export default function UnitDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
-  const { activeSectionId, sections } = useSectionContext();
+  const { sections } = useSectionContext();
+  const [periodId, setPeriodId] = useState<string | null>(null);
   const [unit, setUnit] = useState<Unit | null>(null);
   const [calendarEvents, setCalendarEvents] = useState<CalEvent[]>([]);
   const [colorIndex, setColorIndex] = useState(0);
@@ -371,7 +373,7 @@ export default function UnitDetailPage({ params }: { params: Promise<{ id: strin
     await fetch(`/api/pacing-units/days/${dayId}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status, ...(activeSectionId ? { sectionId: activeSectionId } : {}) }),
+      body: JSON.stringify({ status, ...(periodId ? { sectionId: periodId } : {}) }),
     });
     load();
   }
@@ -476,15 +478,15 @@ export default function UnitDetailPage({ params }: { params: Promise<{ id: strin
   // later unit up to fill the freed school days.
   async function finishEarly() {
     if (!unit) return;
-    const periodName = sections.find((s) => s.id === activeSectionId)?.name;
-    const confirmMsg = activeSectionId
+    const periodName = sections.find((s) => s.id === periodId)?.name;
+    const confirmMsg = periodId
       ? `Mark this unit done early for ${periodName} only? This just updates how far ahead ${periodName} is tracked as being - the shared schedule, other Periods, and later units are untouched.`
       : "Mark this unit done early for the whole class? Any trailing days that haven't been started yet get dropped, and every later unit shifts up to fill the freed days. This can't be undone.";
     if (!confirm(confirmMsg)) return;
     const res = await fetch(`/api/pacing-units/${id}/finish-early`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ sectionId: activeSectionId || undefined }),
+      body: JSON.stringify({ sectionId: periodId || undefined }),
     });
     if (!res.ok) {
       const data = await res.json().catch(() => ({}));
@@ -492,7 +494,7 @@ export default function UnitDetailPage({ params }: { params: Promise<{ id: strin
       return;
     }
     const data = await res.json();
-    if (activeSectionId) {
+    if (periodId) {
       alert(
         data.savedDays > 0
           ? `${periodName} is now tracked as finishing ${data.savedDays} day${data.savedDays === 1 ? "" : "s"} early.`
@@ -540,15 +542,15 @@ export default function UnitDetailPage({ params }: { params: Promise<{ id: strin
     // schedule's last day (see PeriodExtraDay), so they show up as their
     // own rows/weeks right after everything else, only when that Period is
     // the one being viewed.
-    if (activeSectionId) {
+    if (periodId) {
       unit.periodExtraDays
-        .filter((e) => e.sectionId === activeSectionId)
+        .filter((e) => e.sectionId === periodId)
         .forEach((e) => {
           out.push({ kind: "extra", date: parseDateOnly(e.date), extraDay: e });
         });
     }
     return out;
-  }, [unit, holidayEvents, halfDayEvents, activeSectionId]);
+  }, [unit, holidayEvents, halfDayEvents, periodId]);
 
   const weeks = useMemo(() => {
     const map = new Map<string, Row[]>();
@@ -569,8 +571,8 @@ export default function UnitDetailPage({ params }: { params: Promise<{ id: strin
   const sortedDays = [...unit.days].sort((a, b) => a.dayNumber - b.dayNumber);
   const sharedLastDayDate =
     sortedDays.length > 0 ? parseDateOnly(sortedDays[sortedDays.length - 1].date) : parseDateOnly(unit.endDate);
-  const activePeriodExtraDays = activeSectionId
-    ? unit.periodExtraDays.filter((e) => e.sectionId === activeSectionId)
+  const activePeriodExtraDays = periodId
+    ? unit.periodExtraDays.filter((e) => e.sectionId === periodId)
     : [];
   const latestExtraDate =
     activePeriodExtraDays.length > 0
@@ -587,8 +589,8 @@ export default function UnitDetailPage({ params }: { params: Promise<{ id: strin
     .sort((a, b) => new Date(a.startDate).getTime() - new Date(b.startDate).getTime());
 
   function effectiveStatus(d: Day): DayStatus {
-    if (!activeSectionId) return d.status;
-    return d.periodStatuses.find((ps) => ps.sectionId === activeSectionId)?.status ?? d.status;
+    if (!periodId) return d.status;
+    return d.periodStatuses.find((ps) => ps.sectionId === periodId)?.status ?? d.status;
   }
 
   const totalDays = unit.days.length;
@@ -603,7 +605,7 @@ export default function UnitDetailPage({ params }: { params: Promise<{ id: strin
   const todayStr = new Date().toISOString().slice(0, 10);
   const today = parseDateOnly(todayStr);
   const expectedByToday = unit.days.filter((d) => parseDateOnly(d.date) <= today).length;
-  const activePeriodName = sections.find((s) => s.id === activeSectionId)?.name ?? null;
+  const activePeriodName = sections.find((s) => s.id === periodId)?.name ?? null;
   let paceMessage = "";
   if (totalDays > 0) {
     const who = activePeriodName ? `${activePeriodName} is` : "Class is";
@@ -618,24 +620,27 @@ export default function UnitDetailPage({ params }: { params: Promise<{ id: strin
 
   return (
     <div className="p-4 sm:p-6 max-w-5xl mx-auto">
-      <Link href="/pacing-guide" className="text-sky-600 text-sm hover:underline">
-        ← Back to Pacing Guide
-      </Link>
+      <div className="flex justify-between items-center">
+        <Link href="/pacing-guide" className="text-sky-600 text-sm hover:underline">
+          ← Back to Pacing Guide
+        </Link>
+      </div>
 
       <div className="rounded-lg p-4 sm:p-6 my-4" style={{ backgroundColor: color }}>
         <div className="flex justify-between items-start gap-2 mb-3">
           <h1 className="text-2xl font-bold">{unit.name} - Lesson Plans</h1>
           <div className="flex gap-3 items-center shrink-0 mt-1">
+            <PeriodPicker sections={sections} value={periodId} onChange={setPeriodId} label="Period:" />
             <button
               onClick={finishEarly}
               className="text-xs text-emerald-700 hover:underline"
               title={
-                activeSectionId
+                periodId
                   ? "Marks just the active Period as finishing early - doesn't touch the shared schedule"
                   : "Trim unstarted trailing days and pull later units up to fill the freed time"
               }
             >
-              {activeSectionId ? "Mark Done Early (this Period)" : "Mark Done Early"}
+              {periodId ? "Mark Done Early (this Period)" : "Mark Done Early"}
             </button>
             <button
               onClick={recalculateDays}
@@ -682,11 +687,11 @@ export default function UnitDetailPage({ params }: { params: Promise<{ id: strin
               {completedDays} of {totalDays} days used
             </p>
             {paceMessage && <p className="text-xs text-slate-600">{paceMessage}</p>}
-            {activeSectionId &&
+            {periodId &&
               (() => {
-                const offset = unit.periodOffsets.find((o) => o.sectionId === activeSectionId);
+                const offset = unit.periodOffsets.find((o) => o.sectionId === periodId);
                 if (!offset || offset.extraDays === 0) return null;
-                const periodName = sections.find((s) => s.id === activeSectionId)?.name;
+                const periodName = sections.find((s) => s.id === periodId)?.name;
                 return offset.extraDays > 0 ? (
                   <p className="text-xs text-amber-600 font-medium">
                     {periodName} is tracking {offset.extraDays} extra day{offset.extraDays === 1 ? "" : "s"} on this unit.
@@ -863,7 +868,7 @@ export default function UnitDetailPage({ params }: { params: Promise<{ id: strin
                     key={row.day.id}
                     day={row.day}
                     displayStatus={effectiveStatus(row.day)}
-                    activePeriodName={sections.find((s) => s.id === activeSectionId)?.name ?? null}
+                    activePeriodName={sections.find((s) => s.id === periodId)?.name ?? null}
                     halfDayLabel={row.halfDayLabel}
                     onSaveField={saveDayField}
                     onSetStatus={setDayStatus}

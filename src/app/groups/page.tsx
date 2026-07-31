@@ -3,6 +3,7 @@
 import { useEffect, useState, useMemo } from "react";
 import { buildGroups, Group, StudentForGrouping } from "@/lib/groupBuilder";
 import { useSectionContext, filterBySection } from "@/components/SectionContext";
+import PeriodPicker from "@/components/PeriodPicker";
 
 type Student = {
   id: string;
@@ -14,7 +15,8 @@ type Student = {
 type Relationship = { studentId: string; relatedStudentId: string; type: string };
 
 export default function GroupBuilderPage() {
-  const { activeSectionId } = useSectionContext();
+  const { sections } = useSectionContext();
+  const [periodId, setPeriodId] = useState<string | null>(null);
   const [students, setStudents] = useState<Student[]>([]);
   const [relationships, setRelationships] = useState<Relationship[]>([]);
   const [groupSize, setGroupSize] = useState(4);
@@ -22,8 +24,8 @@ export default function GroupBuilderPage() {
   const [groups, setGroups] = useState<Group[]>([]);
 
   const visibleStudents = useMemo(
-    () => filterBySection(students, activeSectionId),
-    [students, activeSectionId]
+    () => filterBySection(students, periodId),
+    [students, periodId]
   );
 
   useEffect(() => {
@@ -62,6 +64,7 @@ export default function GroupBuilderPage() {
       <h1 className="text-2xl font-bold mb-4">Group Builder</h1>
 
       <div className="flex gap-3 mb-4 items-end flex-wrap">
+        <PeriodPicker sections={sections} value={periodId} onChange={setPeriodId} label="Period:" />
         <div>
           <label className="block text-sm mb-1">Group size</label>
           <input

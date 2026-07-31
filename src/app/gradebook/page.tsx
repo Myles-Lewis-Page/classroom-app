@@ -31,7 +31,7 @@ type Assignment = {
 };
 
 export default function GradebookPage() {
-  const { activeSectionId, sections } = useSectionContext();
+  const { sections } = useSectionContext();
   const [students, setStudents] = useState<Student[]>([]);
   const [subjects, setSubjects] = useState<SkillSubject[]>([]);
   const [categories, setCategories] = useState<GradeCategory[]>([]);
@@ -41,16 +41,11 @@ export default function GradebookPage() {
   const [weightInputs, setWeightInputs] = useState<Record<string, string>>({});
   const [newCategoryName, setNewCategoryName] = useState("");
   const [newCategoryWeight, setNewCategoryWeight] = useState("0");
-  // Independent of the top-nav Period switcher: "combined" always shows every
-  // student in one table regardless of which Period is active up top; "byPeriod"
-  // renders one table per Period. The nav switcher still narrows things like
-  // Roster/Behavior elsewhere - this is just for how the Gradebook itself reads.
+  // "combined" always shows every student in one table; "byPeriod" renders
+  // one table per Period. Purely local to this page.
   const [viewMode, setViewMode] = useState<"combined" | "byPeriod">("combined");
 
-  const visibleStudents = useMemo(
-    () => (viewMode === "combined" ? students : filterBySection(students, activeSectionId)),
-    [students, activeSectionId, viewMode]
-  );
+  const visibleStudents = students;
 
   useEffect(() => {
     fetch("/api/students").then((r) => r.json()).then(setStudents);
@@ -99,15 +94,9 @@ export default function GradebookPage() {
 
   const totalWeight = categories.reduce((sum, c) => sum + c.weight, 0);
 
-  const visibleAssignments = assignments
-    .filter((a) => (selectedSubjectId === "all" ? true : a.skillSubjectId === selectedSubjectId))
-    .filter(
-      (a) =>
-        viewMode === "combined" ||
-        !activeSectionId ||
-        a.sections.length === 0 ||
-        a.sections.some((s) => s.id === activeSectionId)
-    );
+  const visibleAssignments = assignments.filter((a) =>
+    selectedSubjectId === "all" ? true : a.skillSubjectId === selectedSubjectId
+  );
 
   function assignmentsForSection(sectionId: string) {
     return assignments

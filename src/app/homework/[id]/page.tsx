@@ -30,7 +30,7 @@ const SUBMIT_COLOR: Record<string, string> = { missing: "#e0e7ff", handed_in: "#
 
 export default function AssignmentDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
-  const { activeSectionId, sections } = useSectionContext();
+  const { sections } = useSectionContext();
   const [assignment, setAssignment] = useState<AssignmentDetail | null>(null);
   const [histogramMode, setHistogramMode] = useState<"all" | "byPeriod">("all");
 
@@ -144,13 +144,106 @@ export default function AssignmentDetailPage({ params }: { params: Promise<{ id:
     return new Date(entry.submittedAt) > new Date(assignment.dueDate);
   }
 
-  const visibleEntries = useMemo(() => {
-    if (!assignment) return [];
-    if (!activeSectionId) return assignment.entries;
-    return assignment.entries.filter((e) => e.student.sectionId === activeSectionId);
-  }, [assignment, activeSectionId]);
-
   if (!assignment) return <div className="p-6">Loading...</div>;
+
+  function entryList(entries: Entry[]) {
+    return (
+      <>
+        <div className="grid grid-cols-[1fr_auto_auto] gap-x-4 gap-y-2 items-center text-sm font-medium text-slate-500 mb-1 px-1">
+          <span>Student</span>
+          <span>Submitted</span>
+          <span>Grade</span>
+        </div>
+        <ul className="space-y-2 mb-6">
+          {entries.map((e) => {
+            const late = isLate(e);
+            return (
+              <li
+                key={e.student.id}
+                className="grid grid-cols-[1fr_auto_auto] gap-x-4 items-center card py-2"
+              >
+                <span>
+                  {e.student.lastName}, {e.student.firstName}
+                  {e.status === "handed_in" && e.submittedAt && (
+                    <span className="text-xs text-slate-500 flex items-center gap-1 mt-0.5">
+                      <input
+                        type="date"
+                        value={toDateInputValue(e.submittedAt)}
+                        onChange={(ev) => editSubmittedDate(e.student.id, ev.target.value)}
+                        className="border rounded px-1 py-0.5 text-xs"
+                        title="Edit the date this was actually handed in"
+                      />
+                      {late && <span className="text-rose-600 font-medium">Late</span>}
+                    </span>
+                  )}
+                </span>
+
+                <select
+                  value={e.status}
+                  onChange={(ev) => setSubmission(e.student.id, ev.target.value)}
+                  className="px-2 py-1 rounded text-sm border"
+                  style={{ backgroundColor: SUBMIT_COLOR[e.status], color: "#1e293b" }}
+                >
+                  {Object.entries(SUBMIT_LABEL).map(([value, label]) => (
+                    <option key={value} value={value}>
+                      {label}
+                    </option>
+                  ))}
+                </select>
+
+                {assignment!.gradingType === "points" ? (
+                  <span className="flex items-center gap-2">
+                    <input
+                      type="number"
+                      min={0}
+                      max={assignment!.maxPoints ?? undefined}
+                      value={e.gradeScore ?? ""}
+                      onChange={(ev) => setGradeScore(e.student.id, ev.target.value)}
+                      placeholder={e.status === "exempt" ? "Exempt" : `/ ${assignment!.maxPoints}`}
+                      disabled={e.status === "exempt"}
+                      className="w-20 px-2 py-1 rounded text-sm border disabled:opacity-50 disabled:bg-slate-100"
+                    />
+                    {late && assignment!.latePenaltyPercentPerDay && e.gradeScore !== null && (
+                      <span className="text-xs text-amber-600">
+                        → {effectiveGradePercent(assignment!, e)}% ({daysLate(assignment!, e)}d late)
+                      </span>
+                    )}
+                  </span>
+                ) : (
+                  <span className="flex items-center gap-2">
+                    <select
+                      value={e.gradeStatus ?? ""}
+                      onChange={(ev) => setGradeStatus(e.student.id, ev.target.value)}
+                      disabled={e.status === "exempt"}
+                      className="px-2 py-1 rounded text-sm border disabled:opacity-50 disabled:bg-slate-100"
+                      style={{
+                        backgroundColor:
+                          e.gradeStatus === "complete"
+                            ? "#a7f3d0"
+                            : e.gradeStatus === "incomplete"
+                            ? "#fecaca"
+                            : "#f5f3ff",
+                        color: "#1e293b",
+                      }}
+                    >
+                      <option value="">Not graded</option>
+                      <option value="complete">Complete</option>
+                      <option value="incomplete">Incomplete</option>
+                    </select>
+                    {late && assignment!.latePenaltyPercentPerDay && e.gradeStatus === "complete" && (
+                      <span className="text-xs text-amber-600">
+                        → {effectiveGradePercent(assignment!, e)}% ({daysLate(assignment!, e)}d late)
+                      </span>
+                    )}
+                  </span>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      </>
+    );
+  }
 
   return (
     <div className="p-4 sm:p-6 max-w-3xl mx-auto">
@@ -214,99 +307,18 @@ export default function AssignmentDetailPage({ params }: { params: Promise<{ id:
         </div>
       )}
 
-      <div className="grid grid-cols-[1fr_auto_auto] gap-x-4 gap-y-2 items-center text-sm font-medium text-slate-500 mb-1 px-1">
-        <span>Student</span>
-        <span>Submitted</span>
-        <span>Grade</span>
-      </div>
-
-      <ul className="space-y-2">
-        {visibleEntries.map((e) => {
-          const late = isLate(e);
-          return (
-            <li
-              key={e.student.id}
-              className="grid grid-cols-[1fr_auto_auto] gap-x-4 items-center card py-2"
-            >
-              <span>
-                {e.student.lastName}, {e.student.firstName}
-                {e.status === "handed_in" && e.submittedAt && (
-                  <span className="text-xs text-slate-500 flex items-center gap-1 mt-0.5">
-                    <input
-                      type="date"
-                      value={toDateInputValue(e.submittedAt)}
-                      onChange={(ev) => editSubmittedDate(e.student.id, ev.target.value)}
-                      className="border rounded px-1 py-0.5 text-xs"
-                      title="Edit the date this was actually handed in"
-                    />
-                    {late && <span className="text-rose-600 font-medium">Late</span>}
-                  </span>
-                )}
-              </span>
-
-              <select
-                value={e.status}
-                onChange={(ev) => setSubmission(e.student.id, ev.target.value)}
-                className="px-2 py-1 rounded text-sm border"
-                style={{ backgroundColor: SUBMIT_COLOR[e.status], color: "#1e293b" }}
-              >
-                {Object.entries(SUBMIT_LABEL).map(([value, label]) => (
-                  <option key={value} value={value}>
-                    {label}
-                  </option>
-                ))}
-              </select>
-
-              {assignment.gradingType === "points" ? (
-                <span className="flex items-center gap-2">
-                  <input
-                    type="number"
-                    min={0}
-                    max={assignment.maxPoints ?? undefined}
-                    value={e.gradeScore ?? ""}
-                    onChange={(ev) => setGradeScore(e.student.id, ev.target.value)}
-                    placeholder={e.status === "exempt" ? "Exempt" : `/ ${assignment.maxPoints}`}
-                    disabled={e.status === "exempt"}
-                    className="w-20 px-2 py-1 rounded text-sm border disabled:opacity-50 disabled:bg-slate-100"
-                  />
-                  {late && assignment.latePenaltyPercentPerDay && e.gradeScore !== null && (
-                    <span className="text-xs text-amber-600">
-                      → {effectiveGradePercent(assignment, e)}% ({daysLate(assignment, e)}d late)
-                    </span>
-                  )}
-                </span>
-              ) : (
-                <span className="flex items-center gap-2">
-                  <select
-                    value={e.gradeStatus ?? ""}
-                    onChange={(ev) => setGradeStatus(e.student.id, ev.target.value)}
-                    disabled={e.status === "exempt"}
-                    className="px-2 py-1 rounded text-sm border disabled:opacity-50 disabled:bg-slate-100"
-                    style={{
-                      backgroundColor:
-                        e.gradeStatus === "complete"
-                          ? "#a7f3d0"
-                          : e.gradeStatus === "incomplete"
-                          ? "#fecaca"
-                          : "#f5f3ff",
-                      color: "#1e293b",
-                    }}
-                  >
-                    <option value="">Not graded</option>
-                    <option value="complete">Complete</option>
-                    <option value="incomplete">Incomplete</option>
-                  </select>
-                  {late && assignment.latePenaltyPercentPerDay && e.gradeStatus === "complete" && (
-                    <span className="text-xs text-amber-600">
-                      → {effectiveGradePercent(assignment, e)}% ({daysLate(assignment, e)}d late)
-                    </span>
-                  )}
-                </span>
-              )}
-            </li>
-          );
-        })}
-      </ul>
+      {histogramMode === "all" ? (
+        entryList(assignment.entries)
+      ) : (
+        <div className="space-y-6">
+          {sections.map((s) => (
+            <div key={s.id}>
+              <h2 className="font-semibold mb-2">{s.name}</h2>
+              {entryList(assignment.entries.filter((e) => e.student.sectionId === s.id))}
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

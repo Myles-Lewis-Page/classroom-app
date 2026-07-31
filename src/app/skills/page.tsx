@@ -14,7 +14,8 @@ type Status = { studentId: string; skillId: string; status: string };
 function SkillsPageInner() {
   const searchParams = useSearchParams();
   const subjectFromUrl = searchParams.get("subject");
-  const { activeSectionId } = useSectionContext();
+  const { sections } = useSectionContext();
+  const [viewMode, setViewMode] = useState<"overall" | "byPeriod">("overall");
 
   const [subjects, setSubjects] = useState<SkillSubject[]>([]);
   const [selectedSubjectId, setSelectedSubjectId] = useState<string>("");
@@ -23,11 +24,6 @@ function SkillsPageInner() {
   const [statuses, setStatuses] = useState<Record<string, string>>({});
   const [newSkillCategory, setNewSkillCategory] = useState("");
   const [newSkillName, setNewSkillName] = useState("");
-
-  const visibleStudents = useMemo(
-    () => filterBySection(students, activeSectionId),
-    [students, activeSectionId]
-  );
 
   useEffect(() => {
     fetch("/api/students").then((r) => r.json()).then(setStudents);
@@ -109,13 +105,14 @@ function SkillsPageInner() {
     groups.get(key)!.push(skill);
   });
 
-  // Class-wide bucket counts (Mastered / Progressing / Not started) across a
-  // given set of skills, for the pie charts.
-  function bucketCounts(skillSet: Skill[]) {
+  // Bucket counts (Mastered / Progressing / Not started) across a given set
+  // of skills and students, for the pie charts - takes an explicit student
+  // list so it works the same whether called for the whole class or one Period.
+  function bucketCounts(skillSet: Skill[], studentList: Student[]) {
     let mastered = 0;
     let progressing = 0;
     let notStarted = 0;
-    visibleStudents.forEach((student) => {
+    studentList.forEach((student) => {
       skillSet.forEach((skill) => {
         const rating = parseRating(statuses[`${student.id}::${skill.id}`]);
         if (rating === 5) mastered++;
@@ -126,10 +123,124 @@ function SkillsPageInner() {
     return { mastered, progressing, notStarted };
   }
 
-  const overallBuckets = bucketCounts(skills);
-  const totalPairs = visibleStudents.length * skills.length;
-  const percentMastered =
-    totalPairs > 0 ? Math.round((overallBuckets.mastered / totalPairs) * 100) : 0;
+  function renderSubjectContent(studentList: Student[], keyPrefix: string) {
+    const overallBuckets = bucketCounts(skills, studentList);
+    const totalPairs = studentList.length * skills.length;
+    const percentMastered =
+      totalPairs > 0 ? Math.round((overallBuckets.mastered / totalPairs) * 100) : 0;
+
+    return (
+      <>
+        {/* Overall subject summary */}
+        <div className="panel mb-6">
+          <h2 className="font-bold text-lg mb-1">
+            Overall — {subjects.find((s) => s.id === selectedSubjectId)?.name}
+          </h2>
+          <p className="text-sm text-slate-600 mb-3">
+            {percentMastered}% of all skill checks are fully mastered
+          </p>
+          <PieChart
+            slices={[
+              { label: "Mastered (5/5)", value: overallBuckets.mastered, color: "#a7f3d0" },
+              { label: "Progressing (1-4)", value: overallBuckets.progressing, color: "#fde68a" },
+              { label: "Not started", value: overallBuckets.notStarted, color: "#ede9fe" },
+            ]}
+          />
+        </div>
+
+        {Array.from(groups.entries()).map(([groupName, groupSkills]) => {
+          const groupBuckets = bucketCounts(groupSkills, studentList);
+          return (
+            <div key={`${keyPrefix}-${groupName}`} className="mb-10">
+              <h2 className="font-bold text-lg mb-2 capitalize">{groupName}</h2>
+
+              <div className="panel mb-3 inline-block">
+                <PieChart
+                  size={100}
+                  slices={[
+                    { label: "Mastered", value: groupBuckets.mastered, color: "#a7f3d0" },
+                    { label: "Progressing", value: groupBuckets.progressing, color: "#fde68a" },
+                    { label: "Not started", value: groupBuckets.notStarted, color: "#ede9fe" },
+                  ]}
+                />
+              </div>
+
+              <table className="border-collapse text-sm block overflow-x-auto">
+                <thead>
+                  <tr>
+                    <th className="border p-2 bg-white sticky left-0">Student</th>
+                    {groupSkills.map((skill) => (
+                      <th key={skill.id} className="border p-2 bg-white whitespace-nowrap">
+                        {skill.skillName}
+                        <br />
+                        <button
+                          onClick={() => removeSkill(skill.id, skill.skillName)}
+                          className="text-rose-600 text-xs mt-1 hover:underline"
+                          title="Remove this skill"
+                        >
+                          Remove
+                        </button>
+                      </th>
+                    ))}
+                    <th className="border p-2 bg-white whitespace-nowrap">Avg (out of 5)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {studentList.map((student) => {
+                    const ratings = groupSkills.map((skill) =>
+                      parseRating(statuses[`${student.id}::${skill.id}`])
+                    );
+                    const avg =
+                      ratings.length > 0
+                        ? Math.round(ratings.reduce((a, b) => a + b, 0) / ratings.length)
+                        : 0;
+                    return (
+                      <tr key={student.id}>
+                        <td className="border p-2 font-medium sticky left-0 bg-white whitespace-nowrap">
+                          {student.lastName}, {student.firstName}
+                        </td>
+                        {groupSkills.map((skill) => {
+                          const rating = parseRating(statuses[`${student.id}::${skill.id}`]);
+                          return (
+                            <td key={skill.id} className="border p-1 text-center">
+                              <button
+                                onClick={() => cycle(student.id, skill.id)}
+                                className="w-7 h-7 rounded-full inline-flex items-center justify-center text-xs font-semibold text-slate-700"
+                                style={{ backgroundColor: ratingScaleColor(rating) }}
+                                title={`${rating}/5`}
+                              >
+                                {rating}
+                              </button>
+                            </td>
+                          );
+                        })}
+                        <td className="border p-2">
+                          <div className="flex items-center gap-1">
+                            {Array.from({ length: 5 }).map((_, i) => (
+                              <span
+                                key={i}
+                                className="w-4 h-4 rounded-sm inline-block"
+                                style={{
+                                  backgroundColor: i < avg ? "#a7f3d0" : "#ede9fe",
+                                }}
+                              />
+                            ))}
+                            <span className="text-xs text-slate-500 ml-1 whitespace-nowrap">
+                              {avg}/5
+                            </span>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          );
+        })}
+      </>
+    );
+  }
 
   return (
     <div className="p-4 sm:p-6 max-w-6xl mx-auto overflow-x-auto">
@@ -150,6 +261,23 @@ function SkillsPageInner() {
         </p>
       ) : (
         <>
+          {sections.length > 0 && (
+            <div className="flex gap-2 mb-3">
+              <button
+                onClick={() => setViewMode("overall")}
+                className={`px-3 py-1 rounded text-sm ${viewMode === "overall" ? "btn-primary" : "bg-white border"}`}
+              >
+                Overall
+              </button>
+              <button
+                onClick={() => setViewMode("byPeriod")}
+                className={`px-3 py-1 rounded text-sm ${viewMode === "byPeriod" ? "btn-primary" : "bg-white border"}`}
+              >
+                By Period
+              </button>
+            </div>
+          )}
+
           <div className="flex gap-2 mb-4 flex-wrap">
             {subjects.map((s) => (
               <button
@@ -184,116 +312,17 @@ function SkillsPageInner() {
 
           {skills.length === 0 ? (
             <p className="text-slate-500">No skills yet for this subject - add one above.</p>
+          ) : viewMode === "overall" ? (
+            renderSubjectContent(students, "overall")
           ) : (
-            <>
-              {/* Overall subject summary */}
-              <div className="panel mb-6">
-                <h2 className="font-bold text-lg mb-1">
-                  Overall — {subjects.find((s) => s.id === selectedSubjectId)?.name}
-                </h2>
-                <p className="text-sm text-slate-600 mb-3">
-                  {percentMastered}% of all skill checks are fully mastered across the class
-                </p>
-                <PieChart
-                  slices={[
-                    { label: "Mastered (5/5)", value: overallBuckets.mastered, color: "#a7f3d0" },
-                    { label: "Progressing (1-4)", value: overallBuckets.progressing, color: "#fde68a" },
-                    { label: "Not started", value: overallBuckets.notStarted, color: "#ede9fe" },
-                  ]}
-                />
-              </div>
-
-              {Array.from(groups.entries()).map(([groupName, groupSkills]) => {
-                const groupBuckets = bucketCounts(groupSkills);
-                return (
-                  <div key={groupName} className="mb-10">
-                    <h2 className="font-bold text-lg mb-2 capitalize">{groupName}</h2>
-
-                    <div className="panel mb-3 inline-block">
-                      <PieChart
-                        size={100}
-                        slices={[
-                          { label: "Mastered", value: groupBuckets.mastered, color: "#a7f3d0" },
-                          { label: "Progressing", value: groupBuckets.progressing, color: "#fde68a" },
-                          { label: "Not started", value: groupBuckets.notStarted, color: "#ede9fe" },
-                        ]}
-                      />
-                    </div>
-
-                    <table className="border-collapse text-sm block overflow-x-auto">
-                      <thead>
-                        <tr>
-                          <th className="border p-2 bg-white sticky left-0">Student</th>
-                          {groupSkills.map((skill) => (
-                            <th key={skill.id} className="border p-2 bg-white whitespace-nowrap">
-                              {skill.skillName}
-                              <br />
-                              <button
-                                onClick={() => removeSkill(skill.id, skill.skillName)}
-                                className="text-rose-600 text-xs mt-1 hover:underline"
-                                title="Remove this skill"
-                              >
-                                Remove
-                              </button>
-                            </th>
-                          ))}
-                          <th className="border p-2 bg-white whitespace-nowrap">Avg (out of 5)</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {visibleStudents.map((student) => {
-                          const ratings = groupSkills.map((skill) =>
-                            parseRating(statuses[`${student.id}::${skill.id}`])
-                          );
-                          const avg =
-                            ratings.length > 0
-                              ? Math.round(ratings.reduce((a, b) => a + b, 0) / ratings.length)
-                              : 0;
-                          return (
-                            <tr key={student.id}>
-                              <td className="border p-2 font-medium sticky left-0 bg-white whitespace-nowrap">
-                                {student.lastName}, {student.firstName}
-                              </td>
-                              {groupSkills.map((skill) => {
-                                const rating = parseRating(statuses[`${student.id}::${skill.id}`]);
-                                return (
-                                  <td key={skill.id} className="border p-1 text-center">
-                                    <button
-                                      onClick={() => cycle(student.id, skill.id)}
-                                      className="w-7 h-7 rounded-full inline-flex items-center justify-center text-xs font-semibold text-slate-700"
-                                      style={{ backgroundColor: ratingScaleColor(rating) }}
-                                      title={`${rating}/5`}
-                                    >
-                                      {rating}
-                                    </button>
-                                  </td>
-                                );
-                              })}
-                              <td className="border p-2">
-                                <div className="flex items-center gap-1">
-                                  {Array.from({ length: 5 }).map((_, i) => (
-                                    <span
-                                      key={i}
-                                      className="w-4 h-4 rounded-sm inline-block"
-                                      style={{
-                                        backgroundColor: i < avg ? "#a7f3d0" : "#ede9fe",
-                                      }}
-                                    />
-                                  ))}
-                                  <span className="text-xs text-slate-500 ml-1 whitespace-nowrap">
-                                    {avg}/5
-                                  </span>
-                                </div>
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                );
-              })}
-            </>
+            <div className="space-y-10">
+              {sections.map((s) => (
+                <div key={s.id}>
+                  <h2 className="font-bold text-xl mb-3">{s.name}</h2>
+                  {renderSubjectContent(filterBySection(students, s.id), s.id)}
+                </div>
+              ))}
+            </div>
           )}
         </>
       )}

@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useMemo } from "react";
 import { useSectionContext, filterBySection } from "@/components/SectionContext";
+import PeriodPicker from "@/components/PeriodPicker";
 
 type SubStudent = {
   id: string;
@@ -17,13 +18,14 @@ type SubStudent = {
 type Subject = { id: string; name: string };
 
 export default function SubModePage() {
-  const { activeSectionId } = useSectionContext();
+  const { sections } = useSectionContext();
+  const [periodId, setPeriodId] = useState<string | null>(null);
   const [students, setStudents] = useState<SubStudent[]>([]);
   const [subjects, setSubjects] = useState<Subject[]>([]);
 
   const visibleStudents = useMemo(
-    () => filterBySection(students, activeSectionId),
-    [students, activeSectionId]
+    () => filterBySection(students, periodId),
+    [students, periodId]
   );
 
   useEffect(() => {
@@ -42,6 +44,10 @@ export default function SubModePage() {
         <button onClick={() => window.print()} className="btn-primary px-4 py-2">
           Print Packet
         </button>
+      </div>
+
+      <div className="mb-4 print:hidden">
+        <PeriodPicker sections={sections} value={periodId} onChange={setPeriodId} label="Period:" />
       </div>
 
       <section className="mb-6">
