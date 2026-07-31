@@ -119,10 +119,9 @@ model Classroom {
   firstDayOfSchool DateTime?
   lastDayOfSchool  DateTime?
 
-  // Free-text newsletter content the teacher builds up over the week - gets
-  // prepended, once, ahead of each student's individual section when the
-  // Weekly Report generates each parent's email. Not auto-cleared after
-  // sending; the teacher manages that themselves.
+  // Legacy free-text newsletter field - replaced by the Newsletter/
+  // NewsletterBlock block-based system below. Left in place (not deleted)
+  // so no data is lost; no page reads or writes this anymore.
   newsletterContent String?
 
   // Canvas bounds for the Seating Layout editor (how big a grid the teacher
@@ -142,7 +141,80 @@ model Classroom {
   sections        Section[]
   calendarEvents  CalendarEvent[]
   scheduleBlocks  ScheduleBlock[]
+  newsletters         Newsletter[]
+  newsletterTemplates NewsletterTemplate[]
   activeForTeachers Teacher[] @relation("ActiveClassroom")
+}
+
+// ---------- NEWSLETTER (block-based builder) ----------
+// Replaces the old single free-text field. A classroom always has exactly
+// one "draft" Newsletter at a time (the one the teacher is currently
+// building up over the week) plus zero or more "published" ones, which are
+// a frozen historical record created by the Publish action - see
+// src/lib/newsletter.ts for the render/publish logic. Weekly Report reads
+// the current draft's rendered text live (no separate copy needed there).
+model Newsletter {
+  id            String    @id @default(cuid())
+  classroomId   String
+  classroom     Classroom @relation(fields: [classroomId], references: [id], onDelete: Cascade)
+  status        String    @default("draft") // "draft" | "published"
+  weekOf        DateTime? // set on publish - the Monday of the week this issue covers
+  publishedAt   DateTime?
+  // Frozen plain-text rendering, captured at publish time so the archive
+  // shows exactly what was sent even if e.g. an Events block's underlying
+  // event later gets edited or deleted. The live draft is rendered on the
+  // fly instead (see src/lib/newsletter.ts) so it always reflects current
+  // data while she's still working on it.
+  renderedText  String?
+  createdAt     DateTime  @default(now())
+  blocks        NewsletterBlock[]
+
+  @@index([classroomId, status])
+}
+
+model NewsletterBlock {
+  id           String     @id @default(cuid())
+  newsletterId String
+  newsletter   Newsletter @relation(fields: [newsletterId], references: [id], onDelete: Cascade)
+  // "heading" | "paragraph" | "list" | "divider" | "image" | "events"
+  type         String
+  // Shape depends on type - see src/lib/newsletter.ts for the contract:
+  //   heading:   { text }
+  //   paragraph: { text }
+  //   list:      { items: string[] }
+  //   divider:   {}
+  //   image:     { url, caption? } - renders as a real image in the
+  //              in-app preview, but as a plain link in the actual parent
+  //              email (see note in the newsletter page - there's no real
+  //              outbound email in this app, delivery is a mailto: link,
+  //              which can't carry embedded images).
+  //   events:    {} - auto-pulls this classroom's upcoming events at
+  //              render time, no configuration needed.
+  content      Json
+  order        Int
+
+  @@index([newsletterId, order])
+}
+
+// A reusable starting layout (e.g. "Standard Weekly Format") the teacher
+// can save from a draft and re-apply to a future week's draft, rather than
+// rebuilding the same block structure from scratch every time.
+model NewsletterTemplate {
+  id          String    @id @default(cuid())
+  classroomId String
+  classroom   Classroom @relation(fields: [classroomId], references: [id], onDelete: Cascade)
+  name        String
+  createdAt   DateTime  @default(now())
+  blocks      NewsletterTemplateBlock[]
+}
+
+model NewsletterTemplateBlock {
+  id         String             @id @default(cuid())
+  templateId String
+  template   NewsletterTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  type       String
+  content    Json
+  order      Int
 }
 
 // A lighter sub-grouping *within* one classroom (e.g. "Group A" / "Group B",

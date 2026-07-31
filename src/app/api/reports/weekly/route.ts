@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
 import { getCurrentClassroomId } from "@/lib/classroomScope";
+import { getOrCreateDraft, renderNewsletterBlocks } from "@/lib/newsletter";
 
 // GET /api/reports/weekly?start=2026-07-20&end=2026-07-24
 // Returns a per-student aggregated report for the given date range.
@@ -20,10 +21,12 @@ export async function GET(req: NextRequest) {
   start.setHours(0, 0, 0, 0);
   end.setHours(23, 59, 59, 999);
 
-  const classroomRecord = await prisma.classroom.findUnique({
-    where: { id: classroomId },
-    select: { newsletterContent: true },
-  });
+  // The newsletter block-builder's current draft, rendered live so the
+  // Weekly Report always reflects whatever she's got so far - this is the
+  // same rendering logic used to freeze the archive snapshot on Publish,
+  // see src/lib/newsletter.ts.
+  const draft = await getOrCreateDraft(classroomId);
+  const newsletterContent = await renderNewsletterBlocks(draft.blocks, classroomId);
 
   const students = await prisma.student.findMany({
     where: { isActive: true, classroomId },
@@ -111,7 +114,7 @@ export async function GET(req: NextRequest) {
     end,
     reports,
     chaperoneShortfalls,
-    newsletterContent: classroomRecord?.newsletterContent ?? "",
+    newsletterContent,
   });
 }
 
