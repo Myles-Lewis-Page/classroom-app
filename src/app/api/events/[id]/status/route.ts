@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
 import { getCurrentClassroomId } from "@/lib/classroomScope";
 
-// POST { studentId, slipStatus?, paymentStatus? }
+// POST { studentId, slipStatus?, paymentStatus?, confirmed? }
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -24,7 +24,8 @@ export async function POST(
     where: { eventId_studentId: { eventId: id, studentId: body.studentId } },
     data: {
       ...(body.slipStatus ? { slipStatus: body.slipStatus } : {}),
-      ...(body.paymentStatus ? { paymentStatus: body.paymentStatus } : {}),
+      ...(body.paymentStatus !== undefined ? { paymentStatus: body.paymentStatus || null } : {}),
+      ...(body.confirmed !== undefined ? { confirmed: !!body.confirmed } : {}),
     },
   });
 

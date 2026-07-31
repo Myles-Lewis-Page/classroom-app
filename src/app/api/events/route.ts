@@ -13,7 +13,7 @@ export async function GET() {
 
   const events = await prisma.event.findMany({
     where: { classroomId },
-    include: { statuses: { include: { student: true } }, sections: true },
+    include: { statuses: { include: { student: true } }, sections: true, chaperones: true },
     orderBy: { date: "asc" },
   });
   return NextResponse.json(events);
@@ -55,6 +55,8 @@ export async function POST(req: NextRequest) {
       date,
       dueDate: body.dueDate ? parseDateOnly(body.dueDate) : null,
       requiresPayment: !!body.requiresPayment,
+      paymentAmount: body.requiresPayment && body.paymentAmount ? Number(body.paymentAmount) : null,
+      chaperonesNeeded: body.chaperonesNeeded ? Number(body.chaperonesNeeded) : null,
       description: body.description ?? null,
       calendarEventId: calendarEvent.id,
       ...(sectionIds.length > 0 ? { sections: { connect: sectionIds.map((id) => ({ id })) } } : {}),

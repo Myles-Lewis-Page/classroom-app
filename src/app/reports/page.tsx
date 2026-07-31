@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { formatShortDate } from "@/lib/dateOnly";
 
 type StudentReport = {
   studentId: string;
@@ -18,8 +19,9 @@ type StudentReport = {
   }[];
   observations: { note: string }[];
   praiseNotes: { note: string }[];
-  missingEvents: string[];
+  missingEvents: { name: string; due: string | null; what: string }[];
 };
+type ChaperoneShortfall = { name: string; date: string; needed: number; confirmed: number };
 
 function mondayOf(date: Date): string {
   const d = new Date(date);
@@ -32,6 +34,7 @@ function mondayOf(date: Date): string {
 export default function WeeklyReportPage() {
   const [start, setStart] = useState(() => mondayOf(new Date()));
   const [reports, setReports] = useState<StudentReport[]>([]);
+  const [chaperoneShortfalls, setChaperoneShortfalls] = useState<ChaperoneShortfall[]>([]);
   const [loading, setLoading] = useState(false);
 
   async function generate() {
@@ -44,6 +47,7 @@ export default function WeeklyReportPage() {
     );
     const data = await res.json();
     setReports(data.reports);
+    setChaperoneShortfalls(data.chaperoneShortfalls ?? []);
     setLoading(false);
   }
 
@@ -92,8 +96,21 @@ export default function WeeklyReportPage() {
     }
     if (r.missingEvents.length) {
       lines.push("", "⚠️ Still needed:");
-      r.missingEvents.forEach((e) => lines.push(`- ${e} slip/payment`));
+      r.missingEvents.forEach((e) =>
+        lines.push(`- ${e.name}: ${e.what}${e.due ? ` (due ${formatShortDate(e.due)})` : ""}`)
+      );
     }
+    return lines.join("\n");
+  }
+
+  function chaperoneNoteText(): string {
+    if (chaperoneShortfalls.length === 0) return "";
+    const lines = ["🙋 We still need more chaperones:"];
+    chaperoneShortfalls.forEach((s) =>
+      lines.push(
+        `- ${s.name} (${formatShortDate(s.date)}): ${s.confirmed} of ${s.needed} confirmed - please let me know if you can help!`
+      )
+    );
     return lines.join("\n");
   }
 
@@ -116,6 +133,24 @@ export default function WeeklyReportPage() {
         </button>
       </div>
 
+      {chaperoneShortfalls.length > 0 && (
+        <div className="border border-amber-300 bg-amber-50 rounded p-4 mb-6">
+          <h2 className="font-bold text-amber-800 mb-1">🙋 Still need more chaperones</h2>
+          <p className="text-sm text-slate-500 mb-2">
+            Include this at the top of the newsletter - it's classroom-wide, not tied to any one
+            student.
+          </p>
+          <ul className="text-sm space-y-1">
+            {chaperoneShortfalls.map((s) => (
+              <li key={s.name}>
+                {s.name} ({formatShortDate(s.date)}): {s.confirmed} of {s.needed} confirmed
+              </li>
+            ))}
+          </ul>
+          <pre className="text-xs bg-white border rounded p-2 mt-2 whitespace-pre-wrap">{chaperoneNoteText()}</pre>
+        </div>
+      )}
+
       {reports.map((r) => (
         <div key={r.studentId} className="border rounded p-4 mb-4">
           <div className="flex justify-between items-start">
@@ -128,7 +163,10 @@ export default function WeeklyReportPage() {
               </p>
               {r.missingEvents.length > 0 && (
                 <p className="text-sm text-rose-600">
-                  ⚠️ Still needed: {r.missingEvents.join(", ")}
+                  ⚠️ Still needed:{" "}
+                  {r.missingEvents
+                    .map((e) => `${e.name} (${e.what})${e.due ? ` due ${formatShortDate(e.due)}` : ""}`)
+                    .join(", ")}
                 </p>
               )}
             </div>

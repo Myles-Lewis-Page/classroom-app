@@ -46,7 +46,10 @@ export async function GET(req: NextRequest) {
             where: { studentId: student.id, date: { gte: start, lte: end } },
           }),
           prisma.eventStatus.findMany({
-            where: { studentId: student.id, slipStatus: "missing" },
+            where: {
+              studentId: student.id,
+              OR: [{ slipStatus: "missing" }, { paymentStatus: "unpaid" }],
+            },
             include: { event: true },
           }),
         ]);
@@ -68,12 +71,37 @@ export async function GET(req: NextRequest) {
         homework,
         observations,
         praiseNotes,
-        missingEvents: missingEvents.map((e) => e.event.name),
+        missingEvents: missingEvents.map((e) => {
+          const parts: string[] = [];
+          if (e.slipStatus === "missing") parts.push("slip");
+          if (e.paymentStatus === "unpaid") parts.push("payment");
+          return {
+            name: e.event.name,
+            due: e.event.dueDate,
+            what: parts.join(" & "),
+          };
+        }),
       };
     })
   );
 
-  return NextResponse.json({ start, end, reports });
+  // Classroom-wide (not per-student) chaperone shortfall for any upcoming
+  // event that's tracking a needed count - shown once at the top of the
+  // report rather than nagged on every single student's section.
+  const upcomingEvents = await prisma.event.findMany({
+    where: { classroomId, date: { gte: start }, chaperonesNeeded: { not: null } },
+    include: { chaperones: true },
+  });
+  const chaperoneShortfalls = upcomingEvents
+    .map((e) => ({
+      name: e.name,
+      date: e.date,
+      needed: e.chaperonesNeeded as number,
+      confirmed: e.chaperones.filter((c) => c.confirmed).length,
+    }))
+    .filter((e) => e.confirmed < e.needed);
+
+  return NextResponse.json({ start, end, reports, chaperoneShortfalls });
 }
 
 function startOfWeek(d: Date): Date {

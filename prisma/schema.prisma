@@ -252,6 +252,7 @@ model Student {
   attendanceEntries   AttendanceEntry[]
   homeworkEntries     HomeworkEntry[]
   eventStatuses       EventStatus[]
+  eventChaperones     EventChaperone[]
   skillStatuses       StudentSkillStatus[]
   observations        Observation[]
   praiseNotes         PraiseNote[]
@@ -551,7 +552,14 @@ model Event {
   date            DateTime
   dueDate         DateTime?
   requiresPayment Boolean   @default(false)
+  // Dollar amount owed per student, when requiresPayment is true.
+  paymentAmount   Float?
   description     String?
+  // Free-text teacher notes - private, never shown to parents.
+  notes           String?
+  // How many chaperones this event needs - compared against confirmed
+  // EventChaperone rows to flag a shortfall in the weekly report.
+  chaperonesNeeded Int?
   createdAt       DateTime  @default(now())
 
   // Auto-synced into the School Calendar as a "Reminder" entry (see
@@ -563,6 +571,7 @@ model Event {
   calendarEvent   CalendarEvent? @relation(fields: [calendarEventId], references: [id], onDelete: SetNull)
 
   statuses EventStatus[]
+  chaperones EventChaperone[]
   // Which Periods (Sections) this event applies to - empty means the whole
   // classroom, same "no tag means everyone" convention used for Assignments.
   sections Section[] @relation("EventSections")
@@ -576,7 +585,30 @@ model EventStatus {
   student       Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
   slipStatus    String   @default("missing")
   paymentStatus String?
+  // "Confirmed coming" - a separate flag from slip/payment, since a slip
+  // being turned in doesn't necessarily mean the teacher's actually
+  // confirmed the student is attending.
+  confirmed     Boolean  @default(false)
   updatedAt     DateTime @updatedAt
+
+  @@unique([eventId, studentId])
+}
+
+// A parent chaperone volunteer for an Event, tied to their student - the
+// @@unique below is what makes "don't attach if that kid's parents already
+// signed up" automatic: one chaperone slot per student per event, not per
+// parent, so a family can't (accidentally or otherwise) end up with two
+// separate signups for the same kid.
+model EventChaperone {
+  id           String   @id @default(cuid())
+  eventId      String
+  event        Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  studentId    String
+  student      Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  parentName   String
+  relationship String   // "Mom" | "Dad" | "Guardian" | other free text
+  confirmed    Boolean  @default(false)
+  createdAt    DateTime @default(now())
 
   @@unique([eventId, studentId])
 }
