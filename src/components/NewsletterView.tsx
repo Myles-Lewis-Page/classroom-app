@@ -1,12 +1,34 @@
 import type { BlockColor } from "@/lib/newsletter";
+import { qrCodeImageUrl } from "@/lib/qrcode";
 
 export type ViewBlock = {
   id: string;
-  type: "heading" | "paragraph" | "list" | "divider" | "image" | "events";
+  type:
+    | "heading"
+    | "paragraph"
+    | "list"
+    | "divider"
+    | "image"
+    | "events"
+    | "chaperones"
+    | "spellingWords"
+    | "wordWall"
+    | "readingNow"
+    | "homeLearning";
   content: Record<string, unknown>;
 };
 
 export type ViewEvent = { name: string; date: string | Date };
+export type ViewShortfall = {
+  id: string;
+  name: string;
+  date: string | Date;
+  needed: number;
+  confirmed: number;
+  // Pre-built by the server (see /api/newsletter/draft) - never build this
+  // URL client-side, since it needs the server's base URL/origin.
+  link: string;
+};
 
 // Design tokens for the classroom-newsletter look: a cream page, five
 // playful accent colors a teacher can tag each box with (mirroring how a
@@ -45,11 +67,13 @@ export default function NewsletterView({
   weekLabel,
   blocks,
   upcomingEvents,
+  shortfalls = [],
 }: {
   classroomName: string;
   weekLabel: string;
   blocks: ViewBlock[];
   upcomingEvents: ViewEvent[];
+  shortfalls?: ViewShortfall[];
 }) {
   return (
     <div
@@ -71,7 +95,7 @@ export default function NewsletterView({
 
       <div className="grid sm:grid-cols-2 gap-4">
         {blocks.map((block) => (
-          <BlockCard key={block.id} block={block} upcomingEvents={upcomingEvents} />
+          <BlockCard key={block.id} block={block} upcomingEvents={upcomingEvents} shortfalls={shortfalls} />
         ))}
         {blocks.length === 0 && (
           <p className="sm:col-span-2 text-center text-[#9b8f7a] py-10" style={{ fontFamily: "'Kalam', cursive" }}>
@@ -90,7 +114,15 @@ export default function NewsletterView({
   );
 }
 
-function BlockCard({ block, upcomingEvents }: { block: ViewBlock; upcomingEvents: ViewEvent[] }) {
+function BlockCard({
+  block,
+  upcomingEvents,
+  shortfalls,
+}: {
+  block: ViewBlock;
+  upcomingEvents: ViewEvent[];
+  shortfalls: ViewShortfall[];
+}) {
   const { type, content } = block;
 
   if (type === "divider") {
@@ -190,6 +222,112 @@ function BlockCard({ block, upcomingEvents }: { block: ViewBlock; upcomingEvents
             ))}
           </ul>
         )}
+      </div>
+    );
+  }
+
+  if (type === "chaperones") {
+    const color = colorFor(content, "coral");
+    const c = COLOR_CLASSES[color];
+    if (shortfalls.length === 0) return null;
+    return (
+      <div className={`sm:col-span-2 rounded-2xl border-4 ${c.border} ${c.tint} p-4`}>
+        <p className={`font-bold ${c.text} mb-3`} style={{ fontFamily: "'Baloo 2', sans-serif" }}>
+          We Need More Chaperones
+        </p>
+        <div className="grid sm:grid-cols-2 gap-4">
+          {shortfalls.map((s) => {
+            return (
+              <div key={s.id} className="flex items-center gap-3 bg-white rounded-xl p-3 border border-[#eee]">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={qrCodeImageUrl(s.link, 120)} alt={`QR code to sign up to chaperone ${s.name}`} className="w-20 h-20 shrink-0" />
+                <div className="text-sm">
+                  <p className="font-semibold">{s.name}</p>
+                  <p className="text-[#9b8f7a]">
+                    {new Date(s.date).toLocaleDateString(undefined, { timeZone: "UTC", month: "short", day: "numeric" })}
+                    {" · "}
+                    {s.confirmed} of {s.needed} confirmed
+                  </p>
+                  <p className={`${c.text} text-xs mt-1`}>Scan to sign up</p>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
+
+  if (type === "spellingWords" || type === "wordWall") {
+    const color = colorFor(content, type === "spellingWords" ? "sky" : "teal");
+    const c = COLOR_CLASSES[color];
+    const words = ((content?.words as string[]) ?? []).map((w) => w.trim()).filter(Boolean);
+    if (words.length === 0) return null;
+    return (
+      <div className={`rounded-2xl border-4 ${c.border} ${c.tint} p-4`}>
+        <p className={`font-bold ${c.text} mb-2`} style={{ fontFamily: "'Baloo 2', sans-serif" }}>
+          {type === "spellingWords" ? "Spelling Words" : "Word Wall"}
+        </p>
+        <ol className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm list-decimal list-inside">
+          {words.map((w, i) => (
+            <li key={i}>{w}</li>
+          ))}
+        </ol>
+      </div>
+    );
+  }
+
+  if (type === "readingNow") {
+    const color = colorFor(content, "grape");
+    const c = COLOR_CLASSES[color];
+    const title = String(content?.title ?? "").trim();
+    const author = String(content?.author ?? "").trim();
+    const questions = ((content?.questions as string[]) ?? []).map((q) => q.trim()).filter(Boolean);
+    if (!title) return null;
+    return (
+      <div className={`rounded-2xl border-4 ${c.border} ${c.tint} p-4`}>
+        <p className={`font-bold ${c.text} mb-1`} style={{ fontFamily: "'Baloo 2', sans-serif" }}>
+          What We&apos;re Reading
+        </p>
+        <p className="font-semibold">
+          {title}
+          {author && <span className="font-normal text-[#6b6459]"> by {author}</span>}
+        </p>
+        {questions.length > 0 && (
+          <div className="mt-2">
+            <p className="text-xs font-semibold text-[#6b6459] mb-1">Ask your reader:</p>
+            <ul className="space-y-1 text-sm">
+              {questions.map((q, i) => (
+                <li key={i} className="flex items-start gap-2">
+                  <span className={`${c.text} font-bold mt-0.5`}>•</span>
+                  <span>{q}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  if (type === "homeLearning") {
+    const color = colorFor(content, "sunny");
+    const c = COLOR_CLASSES[color];
+    const items = ((content?.items as string[]) ?? []).map((i) => i.trim()).filter(Boolean);
+    if (items.length === 0) return null;
+    return (
+      <div className={`rounded-2xl border-4 ${c.border} ${c.tint} p-4`}>
+        <p className={`font-bold ${c.text} mb-2`} style={{ fontFamily: "'Baloo 2', sans-serif" }}>
+          Learning at Home
+        </p>
+        <ul className="space-y-1.5 text-sm">
+          {items.map((item, i) => (
+            <li key={i} className="flex items-start gap-2">
+              <span className={`${c.text} font-bold mt-0.5`}>•</span>
+              <span>{item}</span>
+            </li>
+          ))}
+        </ul>
       </div>
     );
   }

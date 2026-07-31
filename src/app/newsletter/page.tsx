@@ -1,10 +1,21 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import NewsletterView, { NewsletterFonts, COLOR_CLASSES, type ViewEvent } from "@/components/NewsletterView";
+import NewsletterView, { NewsletterFonts, COLOR_CLASSES, type ViewEvent, type ViewShortfall } from "@/components/NewsletterView";
 import type { BlockColor } from "@/lib/newsletter";
 
-type BlockType = "heading" | "paragraph" | "list" | "divider" | "image" | "events";
+type BlockType =
+  | "heading"
+  | "paragraph"
+  | "list"
+  | "divider"
+  | "image"
+  | "events"
+  | "chaperones"
+  | "spellingWords"
+  | "wordWall"
+  | "readingNow"
+  | "homeLearning";
 
 type Block = {
   id: string;
@@ -38,6 +49,11 @@ const BLOCK_LABELS: Record<BlockType, string> = {
   divider: "Divider",
   image: "Image",
   events: "Important Dates (auto)",
+  chaperones: "Chaperones Needed (auto, QR code)",
+  spellingWords: "Spelling Words",
+  wordWall: "Word Wall",
+  readingNow: "Current Reading + Questions",
+  homeLearning: "Learning at Home",
 };
 
 export default function NewsletterPage() {
@@ -45,6 +61,7 @@ export default function NewsletterPage() {
   const [preview, setPreview] = useState("");
   const [classroomName, setClassroomName] = useState("Our Classroom");
   const [upcomingEvents, setUpcomingEvents] = useState<ViewEvent[]>([]);
+  const [shortfalls, setShortfalls] = useState<ViewShortfall[]>([]);
   const [loading, setLoading] = useState(true);
   const [savingBlockId, setSavingBlockId] = useState<string | null>(null);
   const [dragId, setDragId] = useState<string | null>(null);
@@ -67,6 +84,7 @@ export default function NewsletterPage() {
     setPreview(data.preview ?? "");
     setClassroomName(data.classroomName ?? "Our Classroom");
     setUpcomingEvents(data.upcomingEvents ?? []);
+    setShortfalls(data.shortfalls ?? []);
     setLoading(false);
   }, []);
 
@@ -363,6 +381,7 @@ export default function NewsletterPage() {
             weekLabel={`Week of ${new Date().toLocaleDateString(undefined, { month: "long", day: "numeric" })}`}
             blocks={viewBlocks}
             upcomingEvents={upcomingEvents}
+            shortfalls={shortfalls}
           />
           <button
             onClick={() => setShowPlainText((v) => !v)}
@@ -537,6 +556,155 @@ function BlockEditor({
           Automatically lists your next 10 upcoming events - nothing to fill in here.
         </p>
         <ColorPicker value={color} onChange={(c) => onSave({ color: c })} />
+      </div>
+    );
+  }
+
+  if (block.type === "chaperones") {
+    return (
+      <div>
+        <p className="text-xs text-slate-500">
+          Automatically shows a QR code for any event still short on chaperones - nothing to fill
+          in. Doesn&apos;t appear at all if every event already has enough.
+        </p>
+        <ColorPicker value={color} onChange={(c) => onSave({ color: c })} />
+      </div>
+    );
+  }
+
+  if (block.type === "spellingWords" || block.type === "wordWall") {
+    const words = (content.words as string[]) ?? [""];
+    return (
+      <div className="space-y-1">
+        {words.map((word, idx) => (
+          <div key={idx} className="flex gap-1">
+            <input
+              value={word}
+              onChange={(e) => {
+                const next = [...words];
+                next[idx] = e.target.value;
+                onChange({ words: next, color });
+              }}
+              onBlur={() => onSave({ words, color })}
+              className="border rounded px-2 py-1 w-full text-sm"
+              placeholder="Word"
+            />
+            <button
+              onClick={() => {
+                const next = words.filter((_, i) => i !== idx);
+                onChange({ words: next, color });
+                onSave({ words: next, color });
+              }}
+              className="text-rose-600 text-xs px-1"
+            >
+              ✕
+            </button>
+          </div>
+        ))}
+        <button
+          onClick={() => onChange({ words: [...words, ""], color })}
+          className="text-sky-600 text-xs hover:underline"
+        >
+          + Add word
+        </button>
+        <ColorPicker value={color} onChange={(c) => onSave({ words, color: c })} />
+      </div>
+    );
+  }
+
+  if (block.type === "readingNow") {
+    const title = (content.title as string) ?? "";
+    const author = (content.author as string) ?? "";
+    const questions = (content.questions as string[]) ?? [""];
+    return (
+      <div className="space-y-1">
+        <input
+          value={title}
+          onChange={(e) => onChange({ title: e.target.value, author, questions, color })}
+          onBlur={() => onSave({ title, author, questions, color })}
+          className="border rounded px-2 py-1 w-full text-sm font-semibold"
+          placeholder="Book title"
+        />
+        <input
+          value={author}
+          onChange={(e) => onChange({ title, author: e.target.value, questions, color })}
+          onBlur={() => onSave({ title, author, questions, color })}
+          className="border rounded px-2 py-1 w-full text-sm"
+          placeholder="Author (optional)"
+        />
+        <p className="text-xs text-slate-500 mt-2">Questions to ask at home:</p>
+        {questions.map((q, idx) => (
+          <div key={idx} className="flex gap-1">
+            <input
+              value={q}
+              onChange={(e) => {
+                const next = [...questions];
+                next[idx] = e.target.value;
+                onChange({ title, author, questions: next, color });
+              }}
+              onBlur={() => onSave({ title, author, questions, color })}
+              className="border rounded px-2 py-1 w-full text-sm"
+              placeholder="Question"
+            />
+            <button
+              onClick={() => {
+                const next = questions.filter((_, i) => i !== idx);
+                onChange({ title, author, questions: next, color });
+                onSave({ title, author, questions: next, color });
+              }}
+              className="text-rose-600 text-xs px-1"
+            >
+              ✕
+            </button>
+          </div>
+        ))}
+        <button
+          onClick={() => onChange({ title, author, questions: [...questions, ""], color })}
+          className="text-sky-600 text-xs hover:underline"
+        >
+          + Add question
+        </button>
+        <ColorPicker value={color} onChange={(c) => onSave({ title, author, questions, color: c })} />
+      </div>
+    );
+  }
+
+  if (block.type === "homeLearning") {
+    const items = (content.items as string[]) ?? [""];
+    return (
+      <div className="space-y-1">
+        {items.map((item, idx) => (
+          <div key={idx} className="flex gap-1">
+            <input
+              value={item}
+              onChange={(e) => {
+                const next = [...items];
+                next[idx] = e.target.value;
+                onChange({ items: next, color });
+              }}
+              onBlur={() => onSave({ items, color })}
+              className="border rounded px-2 py-1 w-full text-sm"
+              placeholder="A tip or activity for home"
+            />
+            <button
+              onClick={() => {
+                const next = items.filter((_, i) => i !== idx);
+                onChange({ items: next, color });
+                onSave({ items: next, color });
+              }}
+              className="text-rose-600 text-xs px-1"
+            >
+              ✕
+            </button>
+          </div>
+        ))}
+        <button
+          onClick={() => onChange({ items: [...items, ""], color })}
+          className="text-sky-600 text-xs hover:underline"
+        >
+          + Add item
+        </button>
+        <ColorPicker value={color} onChange={(c) => onSave({ items, color: c })} />
       </div>
     );
   }

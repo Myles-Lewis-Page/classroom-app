@@ -1,7 +1,21 @@
 import { prisma } from "@/lib/prisma";
 import { formatShortDate } from "@/lib/dateOnly";
+import { getChaperoneShortfalls } from "@/lib/chaperones";
+import { chaperoneInterestUrl } from "@/lib/qrcode";
 
-export const BLOCK_TYPES = ["heading", "paragraph", "list", "divider", "image", "events"] as const;
+export const BLOCK_TYPES = [
+  "heading",
+  "paragraph",
+  "list",
+  "divider",
+  "image",
+  "events",
+  "chaperones",
+  "spellingWords",
+  "wordWall",
+  "readingNow",
+  "homeLearning",
+] as const;
 export type NewsletterBlockType = (typeof BLOCK_TYPES)[number];
 
 // The five accent colors a block can be tagged with, used to color-code
@@ -18,7 +32,12 @@ export type NewsletterBlockContent =
   | { type: "list"; items: string[]; color?: BlockColor }
   | { type: "divider"; color?: BlockColor }
   | { type: "image"; url: string; caption?: string }
-  | { type: "events"; color?: BlockColor };
+  | { type: "events"; color?: BlockColor }
+  | { type: "chaperones"; color?: BlockColor }
+  | { type: "spellingWords"; words: string[]; color?: BlockColor }
+  | { type: "wordWall"; words: string[]; color?: BlockColor }
+  | { type: "readingNow"; title: string; author?: string; questions: string[]; color?: BlockColor }
+  | { type: "homeLearning"; items: string[]; color?: BlockColor };
 
 export type RawBlock = { id?: string; type: string; content: unknown; order: number };
 export type UpcomingEvent = { name: string; date: Date };
@@ -38,6 +57,16 @@ export function defaultContentForType(type: NewsletterBlockType): Record<string,
       return { url: "", caption: "" };
     case "events":
       return { color: "grape" };
+    case "chaperones":
+      return { color: "coral" };
+    case "spellingWords":
+      return { words: [""], color: "sky" };
+    case "wordWall":
+      return { words: [""], color: "teal" };
+    case "readingNow":
+      return { title: "", author: "", questions: [""], color: "grape" };
+    case "homeLearning":
+      return { items: [""], color: "sunny" };
   }
 }
 
@@ -67,7 +96,8 @@ export async function getUpcomingEvents(classroomId: string): Promise<UpcomingEv
  */
 export async function renderNewsletterBlocks(
   blocks: RawBlock[],
-  classroomId: string
+  classroomId: string,
+  baseUrl: string = process.env.NEXTAUTH_URL || ""
 ): Promise<string> {
   const sorted = [...blocks].sort((a, b) => a.order - b.order);
   const lines: string[] = [];
@@ -75,6 +105,8 @@ export async function renderNewsletterBlocks(
   // Only bother querying events if a block actually needs it.
   const needsEvents = sorted.some((b) => b.type === "events");
   const upcomingEvents = needsEvents ? await getUpcomingEvents(classroomId) : [];
+  const needsChaperones = sorted.some((b) => b.type === "chaperones");
+  const shortfalls = needsChaperones ? await getChaperoneShortfalls(classroomId) : [];
 
   for (const block of sorted) {
     const content = block.content as Record<string, unknown>;
@@ -120,6 +152,71 @@ export async function renderNewsletterBlocks(
           upcomingEvents.forEach((e) =>
             lines.push(`- ${e.name} — ${formatShortDate(e.date)}`)
           );
+          lines.push("");
+        }
+        break;
+      }
+      case "chaperones": {
+        // No QR code in plain text (can't embed images in a mailto body
+        // anyway) - just the message and a plain link to tap/click, which
+        // does the same job in an email.
+        if (shortfalls.length) {
+          lines.push("WE NEED MORE CHAPERONES:");
+          shortfalls.forEach((s) => {
+            lines.push(
+              `- ${s.name} (${formatShortDate(s.date)}): ${s.confirmed} of ${s.needed} confirmed`,
+              `  Sign up: ${chaperoneInterestUrl(s.id, baseUrl)}`
+            );
+          });
+          lines.push("");
+        }
+        break;
+      }
+      case "spellingWords": {
+        const words = (Array.isArray(content?.words) ? (content.words as string[]) : [])
+          .map((w) => String(w).trim())
+          .filter(Boolean);
+        if (words.length) {
+          lines.push("SPELLING WORDS:");
+          words.forEach((w, i) => lines.push(`${i + 1}. ${w}`));
+          lines.push("");
+        }
+        break;
+      }
+      case "wordWall": {
+        const words = (Array.isArray(content?.words) ? (content.words as string[]) : [])
+          .map((w) => String(w).trim())
+          .filter(Boolean);
+        if (words.length) {
+          lines.push("WORD WALL:");
+          words.forEach((w, i) => lines.push(`${i + 1}. ${w}`));
+          lines.push("");
+        }
+        break;
+      }
+      case "readingNow": {
+        const title = String(content?.title ?? "").trim();
+        const author = String(content?.author ?? "").trim();
+        const questions = (Array.isArray(content?.questions) ? (content.questions as string[]) : [])
+          .map((q) => String(q).trim())
+          .filter(Boolean);
+        if (title) {
+          lines.push(`WHAT WE'RE READING: ${title}${author ? ` by ${author}` : ""}`);
+          if (questions.length) {
+            lines.push("Ask your reader:");
+            questions.forEach((q) => lines.push(`- ${q}`));
+          }
+          lines.push("");
+        }
+        break;
+      }
+      case "homeLearning": {
+        const items = (Array.isArray(content?.items) ? (content.items as string[]) : [])
+          .map((i) => String(i).trim())
+          .filter(Boolean);
+        if (items.length) {
+          lines.push("LEARNING AT HOME:");
+          items.forEach((item) => lines.push(`- ${item}`));
           lines.push("");
         }
         break;

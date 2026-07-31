@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
 import { getCurrentClassroomId } from "@/lib/classroomScope";
 import { getOrCreateDraft, renderNewsletterBlocks } from "@/lib/newsletter";
+import { getChaperoneShortfalls } from "@/lib/chaperones";
 
 // GET /api/reports/weekly?start=2026-07-20&end=2026-07-24
 // Returns a per-student aggregated report for the given date range.
@@ -96,18 +97,7 @@ export async function GET(req: NextRequest) {
   // Classroom-wide (not per-student) chaperone shortfall for any upcoming
   // event that's tracking a needed count - shown once at the top of the
   // report rather than nagged on every single student's section.
-  const upcomingEvents = await prisma.event.findMany({
-    where: { classroomId, date: { gte: start }, chaperonesNeeded: { not: null } },
-    include: { chaperones: true },
-  });
-  const chaperoneShortfalls = upcomingEvents
-    .map((e) => ({
-      name: e.name,
-      date: e.date,
-      needed: e.chaperonesNeeded as number,
-      confirmed: e.chaperones.filter((c) => c.confirmed).length,
-    }))
-    .filter((e) => e.confirmed < e.needed);
+  const chaperoneShortfalls = await getChaperoneShortfalls(classroomId, start);
 
   return NextResponse.json({
     start,

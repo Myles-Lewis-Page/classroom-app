@@ -1,14 +1,30 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import NewsletterView, { NewsletterFonts, type ViewEvent } from "@/components/NewsletterView";
+import NewsletterView, { NewsletterFonts, type ViewEvent, type ViewShortfall } from "@/components/NewsletterView";
 
-type Block = { id: string; type: "heading" | "paragraph" | "list" | "divider" | "image" | "events"; content: Record<string, unknown> };
+type Block = {
+  id: string;
+  type:
+    | "heading"
+    | "paragraph"
+    | "list"
+    | "divider"
+    | "image"
+    | "events"
+    | "chaperones"
+    | "spellingWords"
+    | "wordWall"
+    | "readingNow"
+    | "homeLearning";
+  content: Record<string, unknown>;
+};
 
 export default function NewsletterPrintPage() {
   const [blocks, setBlocks] = useState<Block[]>([]);
   const [classroomName, setClassroomName] = useState("Our Classroom");
   const [upcomingEvents, setUpcomingEvents] = useState<ViewEvent[]>([]);
+  const [shortfalls, setShortfalls] = useState<ViewShortfall[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -18,6 +34,7 @@ export default function NewsletterPrintPage() {
         setBlocks(data.newsletter?.blocks ?? []);
         setClassroomName(data.classroomName ?? "Our Classroom");
         setUpcomingEvents(data.upcomingEvents ?? []);
+        setShortfalls(data.shortfalls ?? []);
         setLoading(false);
       });
   }, []);
@@ -37,6 +54,7 @@ export default function NewsletterPrintPage() {
         weekLabel={`Week of ${new Date().toLocaleDateString(undefined, { month: "long", day: "numeric" })}`}
         blocks={blocks}
         upcomingEvents={upcomingEvents}
+        shortfalls={shortfalls}
       />
     </div>
   );

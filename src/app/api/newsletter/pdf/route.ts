@@ -2,17 +2,17 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
 import { getCurrentClassroomId } from "@/lib/classroomScope";
-import { getOrCreateDraft, renderNewsletterBlocks, getUpcomingEvents } from "@/lib/newsletter";
+import { getOrCreateDraft, getUpcomingEvents } from "@/lib/newsletter";
 import { getChaperoneShortfalls } from "@/lib/chaperones";
 import { chaperoneInterestUrl } from "@/lib/qrcode";
+import { renderNewsletterPdf } from "@/lib/newsletterPdf";
 
-// GET - the current in-progress draft, a live-rendered plain-text preview
-// (what actually goes in the parent email - see src/lib/newsletter.ts),
-// the classroom name (for the visual banner), upcoming events (for the
-// visual "events" block), and any chaperone shortfalls with their public
-// sign-up links already built server-side (the client must never build
-// this URL itself - it needs the server's base URL, which isn't available
-// in the browser bundle).
+// GET - the current draft newsletter as a downloadable PDF. This exists
+// specifically so the Weekly Report doesn't have to inline the newsletter
+// as plain text in the parent email body: since this app has no real
+// outbound email (delivery is a mailto: link, which can only carry plain
+// text with no attachment support at all), she downloads this once and
+// attaches it herself in her actual email client instead.
 export async function GET(req: NextRequest) {
   const session = await auth();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -28,13 +28,20 @@ export async function GET(req: NextRequest) {
     getUpcomingEvents(classroomId),
     getChaperoneShortfalls(classroomId),
   ]);
-  const preview = await renderNewsletterBlocks(draft.blocks, classroomId, baseUrl);
 
-  return NextResponse.json({
-    newsletter: draft,
-    preview,
+  const pdfBuffer = await renderNewsletterPdf({
     classroomName: classroom?.name ?? "Our Classroom",
+    weekLabel: `Week of ${new Date().toLocaleDateString(undefined, { month: "long", day: "numeric" })}`,
+    blocks: draft.blocks,
     upcomingEvents,
     shortfalls: shortfalls.map((s) => ({ ...s, link: chaperoneInterestUrl(s.id, baseUrl) })),
+  });
+
+  const dateStr = new Date().toISOString().slice(0, 10);
+  return new NextResponse(new Uint8Array(pdfBuffer), {
+    headers: {
+      "Content-Type": "application/pdf",
+      "Content-Disposition": `attachment; filename="newsletter-${dateStr}.pdf"`,
+    },
   });
 }

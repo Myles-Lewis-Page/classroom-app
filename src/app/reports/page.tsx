@@ -65,8 +65,14 @@ export default function WeeklyReportPage() {
 
   function buildEmailBody(r: StudentReport): string {
     const lines: string[] = [];
+    // The newsletter no longer gets inlined here as plain text - parent
+    // emails are a mailto: link (plain text, no attachment support at
+    // all), so a colorful/structured newsletter can't actually travel
+    // through it either way. Instead she downloads the newsletter as a
+    // PDF (button above) and attaches that file herself in her real email
+    // client, alongside whichever mailto: compose windows this opens.
     if (newsletterContent.trim()) {
-      lines.push(newsletterContent.trim(), "", "――――――――――――――――――――", "");
+      lines.push("(See this week's newsletter - download the PDF above and attach it to this email.)", "");
     }
     lines.push(
       `Weekly Report for ${r.name}`,
@@ -142,12 +148,22 @@ export default function WeeklyReportPage() {
       {newsletterContent.trim() && (
         <div className="border rounded p-4 mb-4 bg-slate-50">
           <div className="flex justify-between items-center mb-1">
-            <h2 className="font-semibold text-sm">Newsletter (goes at the top of every email)</h2>
+            <h2 className="font-semibold text-sm">This week&apos;s newsletter</h2>
             <a href="/newsletter" className="text-sky-600 text-xs hover:underline">
               Edit →
             </a>
           </div>
-          <pre className="text-xs whitespace-pre-wrap">{newsletterContent}</pre>
+          <p className="text-sm text-slate-600 mb-2">
+            Parent emails open as plain text and can&apos;t carry the newsletter&apos;s colors,
+            fonts, or photos - download it as a PDF and attach that file to each email yourself
+            instead of it being pasted in as text.
+          </p>
+          <a
+            href="/api/newsletter/pdf"
+            className="btn-primary inline-block px-4 py-2 text-sm"
+          >
+            Download Newsletter PDF
+          </a>
         </div>
       )}
 
