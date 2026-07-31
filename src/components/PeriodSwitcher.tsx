@@ -1,8 +1,5 @@
 "use client";
 
-import { useRouter } from "next/navigation";
-import { useSectionContext } from "@/components/SectionContext";
-
 type ClassroomOption = { id: string; name: string; isArchived: boolean; sections?: { id: string; name: string }[] };
 
 export default function PeriodSwitcher({
@@ -12,9 +9,6 @@ export default function PeriodSwitcher({
   classrooms: ClassroomOption[];
   currentId: string;
 }) {
-  const router = useRouter();
-  const { refreshSections } = useSectionContext();
-
   async function handleChange(e: React.ChangeEvent<HTMLSelectElement>) {
     const classroomId = e.target.value;
     if (classroomId === currentId) return;
@@ -23,13 +17,13 @@ export default function PeriodSwitcher({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ classroomId }),
     });
-    // SectionContext only fetches Periods once on initial app load - it has
-    // no way to know the active classroom just changed underneath it, so
-    // without this it keeps showing whichever classroom's Periods were
-    // loaded first, even after switching to one with none (or different
-    // ones). router.refresh() alone only re-renders Server Components.
-    refreshSections();
-    router.refresh();
+    // Every page in the app fetches its own classroom-scoped data itself in
+    // a useEffect on mount only - router.refresh() only re-renders Server
+    // Components (Nav, the Period list), it can't make an already-mounted
+    // client page refetch. A full reload is the only way to guarantee every
+    // page (current and future) actually shows the newly-active classroom's
+    // data instead of silently continuing to show the old one's.
+    window.location.reload();
   }
 
   if (classrooms.length <= 1) return null;

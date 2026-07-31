@@ -1,8 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
-import { useSectionContext } from "@/components/SectionContext";
 import SectionManager from "@/components/SectionManager";
 
 const GENERIC_SUBJECTS = ["Math", "Reading", "Writing", "Science", "Social Studies", "Spelling"];
@@ -19,8 +17,6 @@ type Classroom = {
 type SkillSubject = { id: string; name: string; isActive: boolean };
 
 export default function ProfilePage() {
-  const router = useRouter();
-  const { refreshSections } = useSectionContext();
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [className, setClassName] = useState("");
@@ -115,8 +111,7 @@ export default function ProfilePage() {
       body: JSON.stringify({ classroomId }),
     });
     loadProfile();
-    refreshSections();
-    router.refresh();
+    window.location.reload();
   }
 
   async function addPeriod() {
@@ -150,8 +145,7 @@ export default function ProfilePage() {
       setNewClassroomPeriodNames(["Period 1", "Period 2"]);
       setShowAddPeriod(false);
       loadProfile();
-      refreshSections();
-      router.refresh();
+      window.location.reload();
     } catch {
       setAddPeriodError("Couldn't reach the server - check your connection and try again.");
     } finally {
@@ -171,8 +165,7 @@ export default function ProfilePage() {
     setArchiving(false);
     setSavedName(null);
     loadProfile();
-    refreshSections();
-    router.refresh();
+    window.location.reload();
   }
 
   function toggleSubject(name: string) {
@@ -191,8 +184,12 @@ export default function ProfilePage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setSetupError("");
-    if (!firstName.trim() || !lastName.trim() || !className.trim()) {
-      setSetupError("Please fill in your name and a class name above before creating the classroom.");
+    if (!className.trim() || (!isPrincipalManaged && (!firstName.trim() || !lastName.trim()))) {
+      setSetupError(
+        isPrincipalManaged
+          ? "Please fill in a class name above before creating the classroom."
+          : "Please fill in your name and a class name above before creating the classroom."
+      );
       return;
     }
     const isNewClassroom = !currentClassroom;
@@ -230,8 +227,7 @@ export default function ProfilePage() {
         }
       }
       loadProfile();
-      refreshSections();
-      router.refresh();
+      window.location.reload();
     } catch {
       setSetupError("Couldn't reach the server - check your connection and try again.");
     } finally {
@@ -374,15 +370,17 @@ export default function ProfilePage() {
                   className="border rounded px-2 py-1"
                 />
               </div>
-              <div>
-                <label className="block text-xs text-slate-500">School name (optional)</label>
-                <input
-                  placeholder="e.g. Lincoln Elementary"
-                  value={newClassroomSchoolName}
-                  onChange={(e) => setNewClassroomSchoolName(e.target.value)}
-                  className="border rounded px-2 py-1"
-                />
-              </div>
+              {!isPrincipalManaged && (
+                <div>
+                  <label className="block text-xs text-slate-500">School name (optional)</label>
+                  <input
+                    placeholder="e.g. Lincoln Elementary"
+                    value={newClassroomSchoolName}
+                    onChange={(e) => setNewClassroomSchoolName(e.target.value)}
+                    className="border rounded px-2 py-1"
+                  />
+                </div>
+              )}
             </div>
 
             <div>
@@ -522,15 +520,17 @@ export default function ProfilePage() {
           />
         </div>
 
-        <div>
-          <label className="block text-xs text-slate-500 mb-1">School name (optional)</label>
-          <input
-            placeholder="e.g. Lincoln Elementary"
-            value={schoolName}
-            onChange={(e) => setSchoolName(e.target.value)}
-            className="border rounded px-2 py-1 w-full"
-          />
-        </div>
+        {!isPrincipalManaged && (
+          <div>
+            <label className="block text-xs text-slate-500 mb-1">School name (optional)</label>
+            <input
+              placeholder="e.g. Lincoln Elementary"
+              value={schoolName}
+              onChange={(e) => setSchoolName(e.target.value)}
+              className="border rounded px-2 py-1 w-full"
+            />
+          </div>
+        )}
 
         {firstName && lastName && className && (
           <p className="text-sm text-slate-500">
