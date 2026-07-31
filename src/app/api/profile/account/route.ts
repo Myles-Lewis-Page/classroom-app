@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
+import { validatePasswordStrength } from "@/lib/passwordPolicy";
 
 // POST { currentPassword, newEmail?, newPassword? }
 // A Teacher can always change their own password. Email can only be
@@ -48,10 +49,11 @@ export async function POST(req: NextRequest) {
   }
 
   if (newPassword) {
-    if (newPassword.length < 8) {
-      return NextResponse.json({ error: "New password must be at least 8 characters" }, { status: 400 });
+    const policyError = validatePasswordStrength(newPassword);
+    if (policyError) {
+      return NextResponse.json({ error: policyError }, { status: 400 });
     }
-    data.passwordHash = await bcrypt.hash(newPassword, 10);
+    data.passwordHash = await bcrypt.hash(newPassword, 12);
     data.mustChangePassword = false;
   }
 

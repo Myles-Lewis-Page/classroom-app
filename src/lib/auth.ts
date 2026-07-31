@@ -2,9 +2,19 @@ import NextAuth from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
+import { checkRateLimit, getClientIp } from "@/lib/rateLimit";
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
-  session: { strategy: "jwt" },
+  session: {
+    strategy: "jwt",
+    // This app holds children's records (allergies, IEP/504, contact info)
+    // behind these sessions, so a long-lived default (NextAuth's default is
+    // 30 days) is too generous - especially on shared school computers.
+    // 8 hours covers a full school day; updateAge refreshes the session on
+    // activity so an actively-working teacher isn't logged out mid-day.
+    maxAge: 8 * 60 * 60,
+    updateAge: 60 * 60,
+  },
   // Railway (like most PaaS hosts) sits behind a reverse proxy, so the request
   // NextAuth sees has a forwarded host header rather than a "real" one it
   // trusts by default. This tells it to trust that forwarded host instead of
@@ -25,11 +35,24 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         email: { label: "Email", type: "email" },
         password: { label: "Password", type: "password" },
       },
-      async authorize(credentials) {
+      async authorize(credentials, request) {
         try {
           if (!credentials?.email || !credentials?.password) return null;
-          const email = (credentials.email as string).trim();
+          const email = (credentials.email as string).trim().toLowerCase();
           const password = credentials.password as string;
+
+          // Rate limit login attempts per-IP AND per-email, so a single
+          // account can't be brute-forced from many IPs, and a single IP
+          // can't be used to spray many accounts. Limits are intentionally
+          // a bit generous (a real teacher fat-fingering a password a few
+          // times shouldn't get locked out) but stop sustained guessing.
+          const ip = getClientIp(request);
+          const ipLimit = checkRateLimit(`login:ip:${ip}`, { max: 20, windowMs: 5 * 60_000 });
+          const emailLimit = checkRateLimit(`login:email:${email}`, { max: 8, windowMs: 5 * 60_000 });
+          if (!ipLimit.allowed || !emailLimit.allowed) {
+            console.warn(`Login rate limit hit for ip=${ip} email=${email}`);
+            return null;
+          }
 
           // Checked in this order since it's rarest-to-most-common - an
           // Admin or Principal email will never collide with a Teacher's

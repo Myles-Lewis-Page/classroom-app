@@ -18,7 +18,7 @@ export async function POST(
   if (!teacher) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
   const tempPassword = generateTempPassword();
-  const passwordHash = await bcrypt.hash(tempPassword, 10);
+  const passwordHash = await bcrypt.hash(tempPassword, 12);
   await prisma.teacher.update({
     where: { id },
     data: { passwordHash, mustChangePassword: true },

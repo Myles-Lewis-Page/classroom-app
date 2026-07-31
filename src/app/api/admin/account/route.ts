@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/roleScope";
+import { validatePasswordStrength } from "@/lib/passwordPolicy";
 
 // POST { currentPassword, newPassword } - Admin can only change their own
 // password here (no self-service email/name change - matches the minimal,
@@ -24,11 +25,12 @@ export async function POST(req: NextRequest) {
   if (!valid) {
     return NextResponse.json({ error: "Current password is incorrect" }, { status: 401 });
   }
-  if (newPassword.length < 8) {
-    return NextResponse.json({ error: "New password must be at least 8 characters" }, { status: 400 });
+  const policyError = validatePasswordStrength(newPassword);
+  if (policyError) {
+    return NextResponse.json({ error: policyError }, { status: 400 });
   }
 
-  const passwordHash = await bcrypt.hash(newPassword, 10);
+  const passwordHash = await bcrypt.hash(newPassword, 12);
   await prisma.admin.update({ where: { id: adminId }, data: { passwordHash } });
 
   return NextResponse.json({ ok: true });

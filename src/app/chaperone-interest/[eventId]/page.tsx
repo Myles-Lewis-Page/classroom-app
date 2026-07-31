@@ -2,7 +2,6 @@
 
 import { useEffect, useState, use } from "react";
 
-type Student = { id: string; firstName: string; lastName: string };
 type EventInfo = { id: string; name: string; date: string };
 
 export default function ChaperoneInterestPage({
@@ -12,10 +11,9 @@ export default function ChaperoneInterestPage({
 }) {
   const { eventId } = use(params);
   const [event, setEvent] = useState<EventInfo | null>(null);
-  const [students, setStudents] = useState<Student[]>([]);
   const [loadError, setLoadError] = useState(false);
 
-  const [studentId, setStudentId] = useState("");
+  const [studentName, setStudentName] = useState("");
   const [parentName, setParentName] = useState("");
   const [contactInfo, setContactInfo] = useState("");
   const [note, setNote] = useState("");
@@ -24,6 +22,8 @@ export default function ChaperoneInterestPage({
   const [error, setError] = useState("");
 
   useEffect(() => {
+    // This only ever returns the event's name/date - never the student
+    // roster. See src/app/api/chaperone-interest/route.ts for why.
     fetch(`/api/chaperone-interest?eventId=${eventId}`)
       .then((r) => {
         if (!r.ok) throw new Error();
@@ -31,15 +31,14 @@ export default function ChaperoneInterestPage({
       })
       .then((data) => {
         setEvent(data.event);
-        setStudents(data.students);
       })
       .catch(() => setLoadError(true));
   }, [eventId]);
 
   async function submit() {
     setError("");
-    if (!studentId || !parentName.trim() || !contactInfo.trim()) {
-      setError("Please pick your child and fill in your name and a way to reach you.");
+    if (!studentName.trim() || !parentName.trim() || !contactInfo.trim()) {
+      setError("Please fill in your child's name, your name, and a way to reach you.");
       return;
     }
     setSubmitting(true);
@@ -48,7 +47,7 @@ export default function ChaperoneInterestPage({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         eventId,
-        studentId,
+        studentName: studentName.trim(),
         parentName: parentName.trim(),
         contactInfo: contactInfo.trim(),
         note: note.trim(),
@@ -110,19 +109,12 @@ export default function ChaperoneInterestPage({
 
         <div className="space-y-3">
           <div>
-            <label className="block text-xs text-slate-500 mb-1">Your child</label>
-            <select
-              value={studentId}
-              onChange={(e) => setStudentId(e.target.value)}
+            <label className="block text-xs text-slate-500 mb-1">Your child&apos;s name</label>
+            <input
+              value={studentName}
+              onChange={(e) => setStudentName(e.target.value)}
               className="border rounded px-2 py-2 w-full"
-            >
-              <option value="">Select your child</option>
-              {students.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.firstName} {s.lastName}
-                </option>
-              ))}
-            </select>
+            />
           </div>
           <div>
             <label className="block text-xs text-slate-500 mb-1">Your name</label>

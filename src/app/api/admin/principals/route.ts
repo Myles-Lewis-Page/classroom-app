@@ -37,7 +37,7 @@ export async function POST(req: NextRequest) {
   if (existing) return NextResponse.json({ error: "A principal with that email already exists" }, { status: 409 });
 
   const tempPassword = generateTempPassword();
-  const passwordHash = await bcrypt.hash(tempPassword, 10);
+  const passwordHash = await bcrypt.hash(tempPassword, 12);
 
   const principal = await prisma.principal.create({
     data: { name, email, passwordHash, schoolId },

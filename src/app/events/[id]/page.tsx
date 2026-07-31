@@ -25,7 +25,11 @@ type ChaperoneInterest = {
   contactInfo: string;
   note: string | null;
   createdAt: string;
-  student: Student;
+  // The parent types this in on the public form - it's never validated
+  // against the roster (privacy fix: the public page never sees the
+  // roster). student is only ever set later, manually, by the teacher.
+  studentName: string;
+  student: Student | null;
 };
 type EventDetail = {
   id: string;
@@ -63,6 +67,10 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
   // New chaperone form
   const [chapStudentId, setChapStudentId] = useState("");
   const [chapParentName, setChapParentName] = useState("");
+  // The public interest form never touches the roster (privacy fix), so it
+  // can't reliably prefill chapStudentId - this just surfaces what the
+  // parent typed so the teacher can pick the matching student herself.
+  const [chapNameHint, setChapNameHint] = useState("");
   const [chapRelationship, setChapRelationship] = useState("Mom");
   const [chapError, setChapError] = useState("");
 
@@ -172,8 +180,14 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
   }
 
   function useInterestForChaperone(interest: ChaperoneInterest) {
-    setChapStudentId(interest.student.id);
+    // Prefer an already-linked student (teacher manually linked this
+    // interest to a roster record at some point); otherwise leave the
+    // student picker for the teacher to fill in themselves, since a
+    // parent-typed name on the public form is never validated against the
+    // roster.
+    setChapStudentId(interest.student?.id ?? "");
     setChapParentName(interest.parentName);
+    setChapNameHint(interest.student ? "" : interest.studentName);
   }
 
   async function dismissInterest(interestId: string) {
@@ -367,8 +381,8 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
               <li key={interest.id} className="text-sm border-b py-2">
                 <div className="flex justify-between items-start gap-2">
                   <div>
-                    <span className="font-medium">{interest.parentName}</span> —{" "}
-                    {interest.student.firstName} {interest.student.lastName}&apos;s parent
+                    <span className="font-medium">{interest.parentName}</span> — parent of{" "}
+                    {interest.studentName}
                     <br />
                     <span className="text-slate-500">{interest.contactInfo}</span>
                     {interest.note && <p className="text-slate-500 italic mt-0.5">&quot;{interest.note}&quot;</p>}
@@ -428,10 +442,18 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
 
         <div className="flex gap-2 flex-wrap items-end">
           <div>
-            <label className="block text-xs text-slate-500">Student</label>
+            <label className="block text-xs text-slate-500">
+              Student
+              {chapNameHint && (
+                <span className="text-sky-600 font-normal"> (parent typed: &quot;{chapNameHint}&quot;)</span>
+              )}
+            </label>
             <select
               value={chapStudentId}
-              onChange={(e) => setChapStudentId(e.target.value)}
+              onChange={(e) => {
+                setChapStudentId(e.target.value);
+                setChapNameHint("");
+              }}
               className="border rounded px-2 py-1"
             >
               <option value="">Select student</option>

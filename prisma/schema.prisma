@@ -632,8 +632,14 @@ model ChaperoneInterest {
   id           String   @id @default(cuid())
   eventId      String
   event        Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  studentId    String
-  student      Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  // Privacy fix: the public form never sees or picks from the class
+  // roster - a parent types their child's name as free text instead.
+  // studentId stays nullable and is only ever set later, manually, by the
+  // teacher if she chooses to link this interest row to a real student
+  // record after following up.
+  studentName  String
+  studentId    String?
+  student      Student? @relation(fields: [studentId], references: [id], onDelete: SetNull)
   parentName   String
   contactInfo  String   // email or phone, whatever the parent gave
   note         String?
