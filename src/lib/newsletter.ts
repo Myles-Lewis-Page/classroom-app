@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { formatShortDate } from "@/lib/dateOnly";
-import { getChaperoneShortfalls } from "@/lib/chaperones";
+import { getChaperoneShortfalls, type ChaperoneShortfall } from "@/lib/chaperones";
 import { chaperoneInterestUrl } from "@/lib/qrcode";
 
 export const BLOCK_TYPES = [
@@ -10,7 +10,6 @@ export const BLOCK_TYPES = [
   "divider",
   "image",
   "events",
-  "chaperones",
   "spellingWords",
   "wordWall",
   "readingNow",
@@ -33,14 +32,13 @@ export type NewsletterBlockContent =
   | { type: "divider"; color?: BlockColor }
   | { type: "image"; url: string; caption?: string }
   | { type: "events"; color?: BlockColor }
-  | { type: "chaperones"; color?: BlockColor }
   | { type: "spellingWords"; words: string[]; color?: BlockColor }
   | { type: "wordWall"; words: string[]; color?: BlockColor }
   | { type: "readingNow"; title: string; author?: string; questions: string[]; color?: BlockColor }
   | { type: "homeLearning"; items: string[]; color?: BlockColor };
 
-export type RawBlock = { id?: string; type: string; content: unknown; order: number };
-export type UpcomingEvent = { name: string; date: Date };
+export type RawBlock = { id?: string; type: string; content: unknown; order: number; column?: number; span?: number };
+export type UpcomingEvent = { id: string; name: string; date: Date };
 
 /** A sensible starting shape for a freshly-added block of a given type. */
 export function defaultContentForType(type: NewsletterBlockType): Record<string, unknown> {
@@ -57,8 +55,6 @@ export function defaultContentForType(type: NewsletterBlockType): Record<string,
       return { url: "", caption: "" };
     case "events":
       return { color: "grape" };
-    case "chaperones":
-      return { color: "coral" };
     case "spellingWords":
       return { words: [""], color: "sky" };
     case "wordWall":
@@ -70,13 +66,31 @@ export function defaultContentForType(type: NewsletterBlockType): Record<string,
   }
 }
 
+/**
+ * A block's starting column/span on the 4-column grid when it's first
+ * added - full-width for the "headline" style types (heading, divider,
+ * events, readingNow), half-width for everything else. She can drag/resize
+ * from there; this is just a sensible starting point.
+ */
+export function defaultLayoutForType(type: NewsletterBlockType): { column: number; span: number } {
+  switch (type) {
+    case "heading":
+    case "divider":
+    case "events":
+    case "readingNow":
+      return { column: 1, span: 4 };
+    default:
+      return { column: 1, span: 2 };
+  }
+}
+
 /** This classroom's next 10 upcoming events, for the "events" block type. */
 export async function getUpcomingEvents(classroomId: string): Promise<UpcomingEvent[]> {
   return prisma.event.findMany({
     where: { classroomId, date: { gte: new Date() } },
     orderBy: { date: "asc" },
     take: 10,
-    select: { name: true, date: true },
+    select: { id: true, name: true, date: true },
   });
 }
 
@@ -89,10 +103,10 @@ export async function getUpcomingEvents(classroomId: string): Promise<UpcomingEv
  * plain text can't carry real bold/italic/color no matter what the block
  * editor lets her type.
  *
- * The "events" block is the one type that needs a DB lookup (this
- * classroom's upcoming events) - everything else is pure data-in,
- * string-out, which is what makes it safe to also use this at publish time
- * to freeze a historical snapshot.
+ * There's no separate "chaperones" block type - any event that's short on
+ * confirmed chaperones gets a note right under its own line within the
+ * "events" block, since that's where a parent would actually be looking
+ * for it.
  */
 export async function renderNewsletterBlocks(
   blocks: RawBlock[],
@@ -105,8 +119,8 @@ export async function renderNewsletterBlocks(
   // Only bother querying events if a block actually needs it.
   const needsEvents = sorted.some((b) => b.type === "events");
   const upcomingEvents = needsEvents ? await getUpcomingEvents(classroomId) : [];
-  const needsChaperones = sorted.some((b) => b.type === "chaperones");
-  const shortfalls = needsChaperones ? await getChaperoneShortfalls(classroomId) : [];
+  const shortfalls: ChaperoneShortfall[] = needsEvents ? await getChaperoneShortfalls(classroomId) : [];
+  const shortfallById = new Map(shortfalls.map((s) => [s.id, s]));
 
   for (const block of sorted) {
     const content = block.content as Record<string, unknown>;
@@ -137,36 +151,29 @@ export async function renderNewsletterBlocks(
       case "image": {
         // No real outbound email in this app (delivery is a mailto: link),
         // so an actual embedded image isn't possible - this degrades to a
-        // plain link, which is the honest, working version of "image" in a
-        // plain-text email body.
+        // plain note, which is the honest, working version of "image" in a
+        // plain-text email body (the URL itself is a long data: URI now
+        // that images are uploaded rather than linked, so it's not worth
+        // printing - just flag that there's a photo, visible in the
+        // attached PDF).
         const url = String(content?.url ?? "").trim();
         const caption = String(content?.caption ?? "").trim();
         if (url) {
-          lines.push(caption ? `[${caption}] ${url}` : url, "");
+          lines.push(caption ? `[Photo: ${caption} - see attached PDF]` : "[Photo - see attached PDF]", "");
         }
         break;
       }
       case "events": {
         if (upcomingEvents.length) {
           lines.push("UPCOMING:");
-          upcomingEvents.forEach((e) =>
-            lines.push(`- ${e.name} — ${formatShortDate(e.date)}`)
-          );
-          lines.push("");
-        }
-        break;
-      }
-      case "chaperones": {
-        // No QR code in plain text (can't embed images in a mailto body
-        // anyway) - just the message and a plain link to tap/click, which
-        // does the same job in an email.
-        if (shortfalls.length) {
-          lines.push("WE NEED MORE CHAPERONES:");
-          shortfalls.forEach((s) => {
-            lines.push(
-              `- ${s.name} (${formatShortDate(s.date)}): ${s.confirmed} of ${s.needed} confirmed`,
-              `  Sign up: ${chaperoneInterestUrl(s.id, baseUrl)}`
-            );
+          upcomingEvents.forEach((e) => {
+            lines.push(`- ${e.name} — ${formatShortDate(e.date)}`);
+            const shortfall = shortfallById.get(e.id);
+            if (shortfall) {
+              lines.push(
+                `  Needs more chaperones (${shortfall.confirmed} of ${shortfall.needed} confirmed) - sign up: ${chaperoneInterestUrl(shortfall.id, baseUrl)}`
+              );
+            }
           });
           lines.push("");
         }
@@ -231,8 +238,8 @@ export async function renderNewsletterBlocks(
  * Returns the classroom's current draft Newsletter (with blocks), creating
  * one if it doesn't exist yet. On first-ever creation, migrates any
  * content sitting in the old free-text Classroom.newsletterContent field
- * into a single paragraph block, so switching to the block system doesn't
- * silently lose whatever she'd already typed there.
+ * into a single full-width paragraph block, so switching to the block
+ * system doesn't silently lose whatever she'd already typed there.
  */
 export async function getOrCreateDraft(classroomId: string) {
   const existing = await prisma.newsletter.findFirst({
@@ -252,7 +259,11 @@ export async function getOrCreateDraft(classroomId: string) {
       classroomId,
       status: "draft",
       blocks: legacyText
-        ? { create: [{ type: "paragraph", content: { text: legacyText }, order: 0 }] }
+        ? {
+            create: [
+              { type: "paragraph", content: { text: legacyText, color: "sky" }, order: 0, column: 1, span: 4 },
+            ],
+          }
         : undefined,
     },
     include: { blocks: { orderBy: { order: "asc" } } },

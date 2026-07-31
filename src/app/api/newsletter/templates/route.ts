@@ -44,7 +44,13 @@ export async function POST(req: NextRequest) {
       classroomId,
       name,
       blocks: {
-        create: draft.blocks.map((b) => ({ type: b.type, content: b.content as object, order: b.order })),
+        create: draft.blocks.map((b) => ({
+          type: b.type,
+          content: b.content as object,
+          order: b.order,
+          column: b.column,
+          span: b.span,
+        })),
       },
     },
     include: { blocks: { orderBy: { order: "asc" } } },

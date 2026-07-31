@@ -38,3 +38,24 @@ export async function GET(req: NextRequest) {
     shortfalls: shortfalls.map((s) => ({ ...s, link: chaperoneInterestUrl(s.id, baseUrl) })),
   });
 }
+
+// PATCH { bannerTitle?, bannerSubtitle? } - updates the editable hero
+// banner text on the current draft. Either field can be set back to null/
+// empty to fall back to the computed default (classroom name + this
+// week's date) - see NewsletterView's default props.
+export async function PATCH(req: NextRequest) {
+  const session = await auth();
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const classroomId = await getCurrentClassroomId();
+  if (!classroomId) return NextResponse.json({ error: "No classroom set up yet" }, { status: 400 });
+
+  const draft = await getOrCreateDraft(classroomId);
+  const body = await req.json();
+  const data: { bannerTitle?: string | null; bannerSubtitle?: string | null } = {};
+  if (body.bannerTitle !== undefined) data.bannerTitle = body.bannerTitle || null;
+  if (body.bannerSubtitle !== undefined) data.bannerSubtitle = body.bannerSubtitle || null;
+
+  const updated = await prisma.newsletter.update({ where: { id: draft.id }, data });
+  return NextResponse.json(updated);
+}

@@ -160,6 +160,11 @@ model Newsletter {
   status        String    @default("draft") // "draft" | "published"
   weekOf        DateTime? // set on publish - the Monday of the week this issue covers
   publishedAt   DateTime?
+  // Editable hero banner text - null falls back to a computed default
+  // ("{Classroom name}'s Newsletter" / "Week of {today}") so nothing looks
+  // broken before she's customized it.
+  bannerTitle    String?
+  bannerSubtitle String?
   // Frozen plain-text rendering, captured at publish time so the archive
   // shows exactly what was sent even if e.g. an Events block's underlying
   // event later gets edited or deleted. The live draft is rendered on the
@@ -176,22 +181,39 @@ model NewsletterBlock {
   id           String     @id @default(cuid())
   newsletterId String
   newsletter   Newsletter @relation(fields: [newsletterId], references: [id], onDelete: Cascade)
-  // "heading" | "paragraph" | "list" | "divider" | "image" | "events"
+  // "heading" | "paragraph" | "list" | "divider" | "image" | "events" |
+  // "spellingWords" | "wordWall" | "readingNow" | "homeLearning"
   type         String
   // Shape depends on type - see src/lib/newsletter.ts for the contract:
-  //   heading:   { text }
-  //   paragraph: { text }
-  //   list:      { items: string[] }
-  //   divider:   {}
-  //   image:     { url, caption? } - renders as a real image in the
-  //              in-app preview, but as a plain link in the actual parent
-  //              email (see note in the newsletter page - there's no real
-  //              outbound email in this app, delivery is a mailto: link,
-  //              which can't carry embedded images).
-  //   events:    {} - auto-pulls this classroom's upcoming events at
-  //              render time, no configuration needed.
+  //   heading:       { text }
+  //   paragraph:     { text }
+  //   list:          { items: string[] }
+  //   divider:       {}
+  //   image:         { url, caption? } - url is a data: URI from the
+  //                  upload endpoint, not a hand-typed link (see
+  //                  /api/newsletter/upload-image) - renders as a real
+  //                  image in-app/print, but as a plain link in the
+  //                  actual parent email (no real outbound email in this
+  //                  app - delivery is a mailto: link, which can't carry
+  //                  embedded images).
+  //   events:        {} - auto-pulls this classroom's upcoming events at
+  //                  render time. Any event that's short on chaperones
+  //                  gets a QR code shown right under its date within
+  //                  this same block - there's no separate "chaperones"
+  //                  block type, by design (see getChaperoneShortfalls).
+  //   spellingWords: { words: string[] }
+  //   wordWall:      { words: string[] }
+  //   readingNow:    { title, author?, questions: string[] }
+  //   homeLearning:  { items: string[] }
   content      Json
   order        Int
+  // Layout position on a 4-column grid: column is where the block starts
+  // (1-4), span is how many columns wide it is (1-4, clamped so
+  // column+span never exceeds 5 at render time). E.g. column=2, span=1
+  // sits alone in the second column; column=3, span=2 spans the third and
+  // fourth columns.
+  column       Int        @default(1)
+  span         Int        @default(2)
 
   @@index([newsletterId, order])
 }
@@ -215,6 +237,8 @@ model NewsletterTemplateBlock {
   type       String
   content    Json
   order      Int
+  column     Int                @default(1)
+  span       Int                @default(2)
 }
 
 // A lighter sub-grouping *within* one classroom (e.g. "Group A" / "Group B",

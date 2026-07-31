@@ -32,6 +32,8 @@ export async function GET(req: NextRequest) {
   const pdfBuffer = await renderNewsletterPdf({
     classroomName: classroom?.name ?? "Our Classroom",
     weekLabel: `Week of ${new Date().toLocaleDateString(undefined, { month: "long", day: "numeric" })}`,
+    bannerTitle: draft.bannerTitle,
+    bannerSubtitle: draft.bannerSubtitle,
     blocks: draft.blocks,
     upcomingEvents,
     shortfalls: shortfalls.map((s) => ({ ...s, link: chaperoneInterestUrl(s.id, baseUrl) })),

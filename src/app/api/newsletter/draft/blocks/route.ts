@@ -3,7 +3,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
 import { getCurrentClassroomId } from "@/lib/classroomScope";
-import { getOrCreateDraft, defaultContentForType, BLOCK_TYPES, NewsletterBlockType } from "@/lib/newsletter";
+import { getOrCreateDraft, defaultContentForType, defaultLayoutForType, BLOCK_TYPES, NewsletterBlockType } from "@/lib/newsletter";
 
 // POST { type } - appends a new block of the given type, with sensible
 // default content, to the end of the current draft.
@@ -22,6 +22,7 @@ export async function POST(req: NextRequest) {
 
   const draft = await getOrCreateDraft(classroomId);
   const maxOrder = draft.blocks.reduce((max, b) => Math.max(max, b.order), -1);
+  const layout = defaultLayoutForType(type as NewsletterBlockType);
 
   const block = await prisma.newsletterBlock.create({
     data: {
@@ -29,6 +30,8 @@ export async function POST(req: NextRequest) {
       type,
       content: defaultContentForType(type as NewsletterBlockType) as Prisma.InputJsonValue,
       order: maxOrder + 1,
+      column: layout.column,
+      span: layout.span,
     },
   });
 

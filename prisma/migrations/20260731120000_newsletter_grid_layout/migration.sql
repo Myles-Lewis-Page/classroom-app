@@ -1,0 +1,8 @@
+-- AlterTable
+ALTER TABLE "NewsletterBlock" ADD COLUMN     "column" INTEGER NOT NULL DEFAULT 1,
+ADD COLUMN     "span" INTEGER NOT NULL DEFAULT 2;
+
+-- AlterTable
+ALTER TABLE "NewsletterTemplateBlock" ADD COLUMN     "column" INTEGER NOT NULL DEFAULT 1,
+ADD COLUMN     "span" INTEGER NOT NULL DEFAULT 2;
+

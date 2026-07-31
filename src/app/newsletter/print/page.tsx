@@ -12,17 +12,20 @@ type Block = {
     | "divider"
     | "image"
     | "events"
-    | "chaperones"
     | "spellingWords"
     | "wordWall"
     | "readingNow"
     | "homeLearning";
   content: Record<string, unknown>;
+  column: number;
+  span: number;
 };
 
 export default function NewsletterPrintPage() {
   const [blocks, setBlocks] = useState<Block[]>([]);
   const [classroomName, setClassroomName] = useState("Our Classroom");
+  const [bannerTitle, setBannerTitle] = useState<string | null>(null);
+  const [bannerSubtitle, setBannerSubtitle] = useState<string | null>(null);
   const [upcomingEvents, setUpcomingEvents] = useState<ViewEvent[]>([]);
   const [shortfalls, setShortfalls] = useState<ViewShortfall[]>([]);
   const [loading, setLoading] = useState(true);
@@ -33,6 +36,8 @@ export default function NewsletterPrintPage() {
       .then((data) => {
         setBlocks(data.newsletter?.blocks ?? []);
         setClassroomName(data.classroomName ?? "Our Classroom");
+        setBannerTitle(data.newsletter?.bannerTitle ?? null);
+        setBannerSubtitle(data.newsletter?.bannerSubtitle ?? null);
         setUpcomingEvents(data.upcomingEvents ?? []);
         setShortfalls(data.shortfalls ?? []);
         setLoading(false);
@@ -42,7 +47,7 @@ export default function NewsletterPrintPage() {
   if (loading) return <div className="p-6 text-slate-400">Loading...</div>;
 
   return (
-    <div className="p-4 sm:p-8 max-w-3xl mx-auto">
+    <div className="p-4 sm:p-8 max-w-4xl mx-auto">
       <NewsletterFonts />
       <div className="flex justify-end mb-4 print:hidden">
         <button onClick={() => window.print()} className="btn-primary px-4 py-2">
@@ -52,6 +57,8 @@ export default function NewsletterPrintPage() {
       <NewsletterView
         classroomName={classroomName}
         weekLabel={`Week of ${new Date().toLocaleDateString(undefined, { month: "long", day: "numeric" })}`}
+        bannerTitle={bannerTitle}
+        bannerSubtitle={bannerSubtitle}
         blocks={blocks}
         upcomingEvents={upcomingEvents}
         shortfalls={shortfalls}

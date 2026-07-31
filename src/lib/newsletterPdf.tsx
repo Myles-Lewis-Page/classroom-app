@@ -3,8 +3,8 @@ import { formatShortDate } from "@/lib/dateOnly";
 import { qrCodeImageUrl } from "@/lib/qrcode";
 import type { BlockColor } from "@/lib/newsletter";
 
-type PdfBlock = { id: string; type: string; content: unknown };
-type PdfEvent = { name: string; date: Date | string };
+type PdfBlock = { id: string; type: string; content: unknown; span?: number };
+type PdfEvent = { id: string; name: string; date: Date | string };
 type PdfShortfall = { id: string; name: string; date: Date | string; needed: number; confirmed: number; link: string };
 
 // Same accent palette as the web/print view (src/components/NewsletterView.tsx)
@@ -26,14 +26,15 @@ const styles = StyleSheet.create({
   banner: { backgroundColor: "#FF6B6B", borderRadius: 8, padding: 16, marginBottom: 16, textAlign: "center" },
   bannerWeek: { color: "#FFF3F0", fontSize: 10, marginBottom: 4 },
   bannerTitle: { color: "#FFFFFF", fontSize: 22, fontFamily: "Helvetica-Bold" },
-  block: { marginBottom: 10, padding: 10, borderRadius: 6, borderWidth: 1.5 },
-  heading: { fontSize: 15, fontFamily: "Helvetica-Bold", marginBottom: 10, paddingBottom: 4, borderBottomWidth: 2 },
+  row: { flexDirection: "row", marginBottom: 10 },
+  block: { padding: 10, borderRadius: 6, borderWidth: 1.5, marginRight: 8 },
+  heading: { fontSize: 15, fontFamily: "Helvetica-Bold", paddingBottom: 4, borderBottomWidth: 2 },
   listItem: { flexDirection: "row", marginBottom: 2 },
-  eventRow: { flexDirection: "row", justifyContent: "space-between", marginBottom: 2 },
-  chapRow: { flexDirection: "row", gap: 10, alignItems: "center", marginBottom: 8 },
+  eventItem: { marginBottom: 6 },
+  eventRow: { flexDirection: "row", justifyContent: "space-between" },
+  chapRow: { flexDirection: "row", gap: 6, alignItems: "center", marginTop: 3, backgroundColor: "#ffffff", borderRadius: 4, padding: 4 },
   image: { width: "100%", maxHeight: 240, objectFit: "contain", borderRadius: 4 },
   caption: { fontSize: 9, textAlign: "center", marginTop: 4, color: "#6b6459" },
-  signoff: { textAlign: "center", fontSize: 10, color: "#9b8f7a", marginTop: 16 },
 });
 
 function colorFor(content: Record<string, unknown>, fallback: BlockColor): BlockColor {
@@ -41,7 +42,35 @@ function colorFor(content: Record<string, unknown>, fallback: BlockColor): Block
   return c && c in COLORS ? c : fallback;
 }
 
-function BlockView({
+/**
+ * Groups blocks into rows for the PDF, using each block's span (1-4) as a
+ * fraction of a 4-unit row width. This mirrors the web/print grid (see
+ * NewsletterView.tsx) without needing true CSS grid, which react-pdf
+ * doesn't support - a simple left-to-right row packer reads close enough
+ * for a one-column-reading-order document like a printed page. Explicit
+ * "column" position isn't respected here (only span/width), since a fixed
+ * page width makes an exact column match less important than just not
+ * overflowing a row.
+ */
+function packRows(blocks: PdfBlock[]): PdfBlock[][] {
+  const rows: PdfBlock[][] = [];
+  let current: PdfBlock[] = [];
+  let used = 0;
+  for (const block of blocks) {
+    const span = Math.min(4, Math.max(1, block.span ?? 2));
+    if (used + span > 4 && current.length > 0) {
+      rows.push(current);
+      current = [];
+      used = 0;
+    }
+    current.push(block);
+    used += span;
+  }
+  if (current.length > 0) rows.push(current);
+  return rows;
+}
+
+function BlockContent({
   block,
   upcomingEvents,
   shortfalls,
@@ -89,7 +118,7 @@ function BlockView({
 
   if (type === "divider") {
     const c = COLORS[colorFor(content, "sunny")];
-    return <View style={{ borderBottomWidth: 2, borderBottomColor: c.border, borderStyle: "dashed", marginVertical: 8 }} />;
+    return <View style={{ borderBottomWidth: 2, borderBottomColor: c.border, borderStyle: "dashed", marginVertical: 4 }} />;
   }
 
   if (type === "image") {
@@ -107,42 +136,38 @@ function BlockView({
 
   if (type === "events") {
     const c = COLORS[colorFor(content, "grape")];
+    const shortfallById = new Map(shortfalls.map((s) => [s.id, s]));
     return (
       <View style={{ ...styles.block, borderColor: c.border, backgroundColor: c.tint }}>
         <Text style={{ color: c.text, fontFamily: "Helvetica-Bold", marginBottom: 6 }}>Important Dates</Text>
         {upcomingEvents.length === 0 ? (
           <Text style={{ color: "#9b8f7a" }}>Nothing on the calendar yet.</Text>
         ) : (
-          upcomingEvents.map((e, i) => (
-            <View style={styles.eventRow} key={i}>
-              <Text>{e.name}</Text>
-              <Text style={{ color: c.text, fontFamily: "Helvetica-Bold" }}>{formatShortDate(e.date)}</Text>
-            </View>
-          ))
+          upcomingEvents.map((e) => {
+            const shortfall = shortfallById.get(e.id);
+            return (
+              <View style={styles.eventItem} key={e.id}>
+                <View style={styles.eventRow}>
+                  <Text>{e.name}</Text>
+                  <Text style={{ color: c.text, fontFamily: "Helvetica-Bold" }}>{formatShortDate(e.date)}</Text>
+                </View>
+                {/* Chaperone need sits right under this event's own date,
+                    not as a separate block - see NewsletterView.tsx for
+                    the same convention in the web/print view. */}
+                {shortfall && (
+                  <View style={styles.chapRow}>
+                    {/* eslint-disable-next-line jsx-a11y/alt-text */}
+                    <Image src={qrCodeImageUrl(shortfall.link, 100)} style={{ width: 32, height: 32 }} />
+                    <Text style={{ fontSize: 8, color: c.text }}>
+                      Needs more chaperones{"\n"}
+                      {shortfall.confirmed} of {shortfall.needed} confirmed - scan to sign up
+                    </Text>
+                  </View>
+                )}
+              </View>
+            );
+          })
         )}
-      </View>
-    );
-  }
-
-  if (type === "chaperones") {
-    if (shortfalls.length === 0) return null;
-    const c = COLORS[colorFor(content, "coral")];
-    return (
-      <View style={{ ...styles.block, borderColor: c.border, backgroundColor: c.tint }}>
-        <Text style={{ color: c.text, fontFamily: "Helvetica-Bold", marginBottom: 8 }}>We Need More Chaperones</Text>
-        {shortfalls.map((s) => (
-          <View style={styles.chapRow} key={s.id}>
-            {/* eslint-disable-next-line jsx-a11y/alt-text */}
-            <Image src={qrCodeImageUrl(s.link, 150)} style={{ width: 64, height: 64 }} />
-            <View>
-              <Text style={{ fontFamily: "Helvetica-Bold" }}>{s.name}</Text>
-              <Text style={{ fontSize: 9, color: "#6b6459" }}>
-                {formatShortDate(s.date)} · {s.confirmed} of {s.needed} confirmed
-              </Text>
-              <Text style={{ fontSize: 9, color: c.text }}>Scan to sign up</Text>
-            </View>
-          </View>
-        ))}
       </View>
     );
   }
@@ -218,27 +243,39 @@ function BlockView({
 function NewsletterPdfDocument({
   classroomName,
   weekLabel,
+  bannerTitle,
+  bannerSubtitle,
   blocks,
   upcomingEvents,
   shortfalls,
 }: {
   classroomName: string;
   weekLabel: string;
+  bannerTitle?: string | null;
+  bannerSubtitle?: string | null;
   blocks: PdfBlock[];
   upcomingEvents: PdfEvent[];
   shortfalls: PdfShortfall[];
 }) {
+  const title = bannerTitle?.trim() || `${classroomName}'s Newsletter`;
+  const subtitle = bannerSubtitle?.trim() || weekLabel;
+  const rows = packRows(blocks);
   return (
     <Document>
       <Page size="LETTER" style={styles.page}>
         <View style={styles.banner}>
-          <Text style={styles.bannerWeek}>{weekLabel}</Text>
-          <Text style={styles.bannerTitle}>{classroomName}&apos;s Newsletter</Text>
+          <Text style={styles.bannerWeek}>{subtitle}</Text>
+          <Text style={styles.bannerTitle}>{title}</Text>
         </View>
-        {blocks.map((block) => (
-          <BlockView key={block.id} block={block} upcomingEvents={upcomingEvents} shortfalls={shortfalls} />
+        {rows.map((row, i) => (
+          <View style={styles.row} key={i}>
+            {row.map((block) => (
+              <View key={block.id} style={{ flex: Math.min(4, Math.max(1, block.span ?? 2)) }}>
+                <BlockContent block={block} upcomingEvents={upcomingEvents} shortfalls={shortfalls} />
+              </View>
+            ))}
+          </View>
         ))}
-        <Text style={styles.signoff}>With love, your teacher</Text>
       </Page>
     </Document>
   );
@@ -247,6 +284,8 @@ function NewsletterPdfDocument({
 export async function renderNewsletterPdf(args: {
   classroomName: string;
   weekLabel: string;
+  bannerTitle?: string | null;
+  bannerSubtitle?: string | null;
   blocks: PdfBlock[];
   upcomingEvents: PdfEvent[];
   shortfalls: PdfShortfall[];

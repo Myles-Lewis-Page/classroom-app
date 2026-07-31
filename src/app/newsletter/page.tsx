@@ -11,7 +11,6 @@ type BlockType =
   | "divider"
   | "image"
   | "events"
-  | "chaperones"
   | "spellingWords"
   | "wordWall"
   | "readingNow"
@@ -22,17 +21,21 @@ type Block = {
   type: BlockType;
   content: Record<string, unknown>;
   order: number;
+  column: number;
+  span: number;
 };
 
 type Newsletter = {
   id: string;
+  bannerTitle: string | null;
+  bannerSubtitle: string | null;
   blocks: Block[];
 };
 
 type Template = {
   id: string;
   name: string;
-  blocks: { id: string; type: BlockType; content: Record<string, unknown>; order: number }[];
+  blocks: { id: string; type: BlockType; content: Record<string, unknown>; order: number; column: number; span: number }[];
 };
 
 type ArchiveIssue = {
@@ -48,8 +51,7 @@ const BLOCK_LABELS: Record<BlockType, string> = {
   list: "Bulleted List",
   divider: "Divider",
   image: "Image",
-  events: "Important Dates (auto)",
-  chaperones: "Chaperones Needed (auto, QR code)",
+  events: "Important Dates (auto, incl. chaperone QR codes)",
   spellingWords: "Spelling Words",
   wordWall: "Word Wall",
   readingNow: "Current Reading + Questions",
@@ -60,6 +62,9 @@ export default function NewsletterPage() {
   const [newsletter, setNewsletter] = useState<Newsletter | null>(null);
   const [preview, setPreview] = useState("");
   const [classroomName, setClassroomName] = useState("Our Classroom");
+  const [bannerTitle, setBannerTitle] = useState("");
+  const [bannerSubtitle, setBannerSubtitle] = useState("");
+  const [savingBanner, setSavingBanner] = useState(false);
   const [upcomingEvents, setUpcomingEvents] = useState<ViewEvent[]>([]);
   const [shortfalls, setShortfalls] = useState<ViewShortfall[]>([]);
   const [loading, setLoading] = useState(true);
@@ -81,6 +86,8 @@ export default function NewsletterPage() {
     const res = await fetch("/api/newsletter/draft");
     const data = await res.json();
     setNewsletter(data.newsletter);
+    setBannerTitle(data.newsletter?.bannerTitle ?? "");
+    setBannerSubtitle(data.newsletter?.bannerSubtitle ?? "");
     setPreview(data.preview ?? "");
     setClassroomName(data.classroomName ?? "Our Classroom");
     setUpcomingEvents(data.upcomingEvents ?? []);
@@ -91,6 +98,30 @@ export default function NewsletterPage() {
   useEffect(() => {
     load();
   }, [load]);
+
+  async function saveBanner(nextTitle: string, nextSubtitle: string) {
+    setSavingBanner(true);
+    await fetch("/api/newsletter/draft", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ bannerTitle: nextTitle, bannerSubtitle: nextSubtitle }),
+    });
+    setSavingBanner(false);
+  }
+
+  async function saveBlockLayout(blockId: string, column: number, span: number) {
+    if (!newsletter) return;
+    setNewsletter({
+      ...newsletter,
+      blocks: newsletter.blocks.map((b) => (b.id === blockId ? { ...b, column, span } : b)),
+    });
+    await fetch(`/api/newsletter/draft/blocks/${blockId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ column, span }),
+    });
+    load();
+  }
 
   async function addBlock(type: BlockType) {
     await fetch("/api/newsletter/draft/blocks", {
@@ -210,7 +241,7 @@ export default function NewsletterPage() {
     return <div className="p-6 text-slate-400">Loading...</div>;
   }
 
-  const viewBlocks = newsletter.blocks.map((b) => ({ id: b.id, type: b.type, content: b.content }));
+  const viewBlocks = newsletter.blocks.map((b) => ({ id: b.id, type: b.type, content: b.content, column: b.column, span: b.span }));
 
   return (
     <div className="p-4 sm:p-6 max-w-6xl mx-auto">
@@ -239,6 +270,28 @@ export default function NewsletterPage() {
           <button onClick={publish} disabled={publishing} className="btn-primary px-4 py-2">
             {publishing ? "Publishing..." : "Publish This Week"}
           </button>
+        </div>
+      </div>
+
+      <div className="border rounded p-3 mb-4 bg-slate-50">
+        <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">
+          Top Banner {savingBanner && <span className="normal-case font-normal">(saving...)</span>}
+        </p>
+        <div className="grid sm:grid-cols-2 gap-2">
+          <input
+            value={bannerTitle}
+            onChange={(e) => setBannerTitle(e.target.value)}
+            onBlur={() => saveBanner(bannerTitle, bannerSubtitle)}
+            placeholder={`${classroomName}'s Newsletter (default)`}
+            className="border rounded px-2 py-1 text-sm"
+          />
+          <input
+            value={bannerSubtitle}
+            onChange={(e) => setBannerSubtitle(e.target.value)}
+            onBlur={() => saveBanner(bannerTitle, bannerSubtitle)}
+            placeholder="Week of ... (default)"
+            className="border rounded px-2 py-1 text-sm"
+          />
         </div>
       </div>
 
@@ -369,6 +422,11 @@ export default function NewsletterPage() {
                   onChange={(content) => updateLocalBlock(block.id, content)}
                   onSave={(content) => saveBlockContent(block.id, content)}
                 />
+                <LayoutPicker
+                  column={block.column}
+                  span={block.span}
+                  onChange={(column, span) => saveBlockLayout(block.id, column, span)}
+                />
               </div>
             ))}
           </div>
@@ -379,6 +437,8 @@ export default function NewsletterPage() {
           <NewsletterView
             classroomName={classroomName}
             weekLabel={`Week of ${new Date().toLocaleDateString(undefined, { month: "long", day: "numeric" })}`}
+            bannerTitle={bannerTitle}
+            bannerSubtitle={bannerSubtitle}
             blocks={viewBlocks}
             upcomingEvents={upcomingEvents}
             shortfalls={shortfalls}
@@ -425,6 +485,166 @@ function ColorPicker({
   );
 }
 
+function LayoutPicker({
+  column,
+  span,
+  onChange,
+}: {
+  column: number;
+  span: number;
+  onChange: (column: number, span: number) => void;
+}) {
+  const maxSpanForColumn = 5 - column;
+  return (
+    <div className="flex items-center gap-3 mt-2 pt-2 border-t text-xs text-slate-500">
+      <label className="flex items-center gap-1">
+        Column
+        <select
+          value={column}
+          onChange={(e) => {
+            const nextColumn = Number(e.target.value);
+            const nextSpan = Math.min(span, 5 - nextColumn);
+            onChange(nextColumn, nextSpan);
+          }}
+          className="border rounded px-1 py-0.5"
+        >
+          {[1, 2, 3, 4].map((c) => (
+            <option key={c} value={c}>
+              {c}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label className="flex items-center gap-1">
+        Width
+        <select
+          value={span}
+          onChange={(e) => onChange(column, Number(e.target.value))}
+          className="border rounded px-1 py-0.5"
+        >
+          {[1, 2, 3, 4].filter((s) => s <= maxSpanForColumn).map((s) => (
+            <option key={s} value={s}>
+              {s} col{s > 1 ? "s" : ""}
+            </option>
+          ))}
+        </select>
+      </label>
+      {/* Tiny visual indicator of where this sits on the 4-column grid */}
+      <span className="flex gap-0.5 ml-auto">
+        {[1, 2, 3, 4].map((c) => (
+          <span
+            key={c}
+            className={`w-3 h-3 rounded-sm ${
+              c >= column && c < column + span ? "bg-sky-400" : "bg-slate-200"
+            }`}
+          />
+        ))}
+      </span>
+    </div>
+  );
+}
+
+function ImageBlockEditor({
+  url,
+  caption,
+  onChange,
+  onSave,
+}: {
+  url: string;
+  caption: string;
+  onChange: (content: Record<string, unknown>) => void;
+  onSave: (content: Record<string, unknown>) => void;
+}) {
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState("");
+  const [dragOver, setDragOver] = useState(false);
+
+  async function uploadFile(file: File) {
+    setError("");
+    if (!file.type.startsWith("image/")) {
+      setError("Please choose an image file.");
+      return;
+    }
+    setUploading(true);
+    const formData = new FormData();
+    formData.append("file", file);
+    const res = await fetch("/api/newsletter/upload-image", { method: "POST", body: formData });
+    setUploading(false);
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      setError(data.error ?? "Upload failed - try a different photo.");
+      return;
+    }
+    const data = await res.json();
+    onSave({ url: data.url, caption });
+  }
+
+  return (
+    <div className="space-y-2">
+      <div
+        onDragOver={(e) => {
+          e.preventDefault();
+          setDragOver(true);
+        }}
+        onDragLeave={() => setDragOver(false)}
+        onDrop={(e) => {
+          e.preventDefault();
+          setDragOver(false);
+          const file = e.dataTransfer.files?.[0];
+          if (file) uploadFile(file);
+        }}
+        className={`border-2 border-dashed rounded p-4 text-center text-sm ${
+          dragOver ? "border-sky-500 bg-sky-50" : "border-slate-300"
+        }`}
+      >
+        {uploading ? (
+          <p className="text-slate-400">Uploading...</p>
+        ) : url ? (
+          <div>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={url} alt={caption || "Newsletter image"} className="max-h-32 rounded border mx-auto mb-2" />
+            <label className="text-sky-600 hover:underline cursor-pointer text-xs">
+              Replace photo
+              <input
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) uploadFile(file);
+                }}
+              />
+            </label>
+          </div>
+        ) : (
+          <label className="cursor-pointer block">
+            <p className="text-slate-500">Drag a photo here, or click to choose one</p>
+            <input
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) uploadFile(file);
+              }}
+            />
+          </label>
+        )}
+      </div>
+      {error && <p className="text-xs text-rose-600">{error}</p>}
+      <input
+        value={caption}
+        onChange={(e) => onChange({ url, caption: e.target.value })}
+        onBlur={() => onSave({ url, caption })}
+        className="border rounded px-2 py-1 w-full text-sm"
+        placeholder="Caption (optional)"
+      />
+      <p className="text-xs text-amber-600">
+        Shows as a photo here and when printed - but as a link in the actual parent email.
+      </p>
+    </div>
+  );
+}
 function BlockEditor({
   block,
   onChange,
@@ -523,29 +743,12 @@ function BlockEditor({
     const url = (content.url as string) ?? "";
     const caption = (content.caption as string) ?? "";
     return (
-      <div className="space-y-1">
-        <input
-          value={url}
-          onChange={(e) => onChange({ url: e.target.value, caption })}
-          onBlur={() => onSave({ url, caption })}
-          className="border rounded px-2 py-1 w-full text-sm"
-          placeholder="Image URL (https://...)"
-        />
-        <input
-          value={caption}
-          onChange={(e) => onChange({ url, caption: e.target.value })}
-          onBlur={() => onSave({ url, caption })}
-          className="border rounded px-2 py-1 w-full text-sm"
-          placeholder="Caption (optional)"
-        />
-        {url && (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={url} alt={caption || "Newsletter image"} className="max-h-32 rounded border mt-1" />
-        )}
-        <p className="text-xs text-amber-600">
-          Shows as a photo here and when printed - but as a link in the actual parent email.
-        </p>
-      </div>
+      <ImageBlockEditor
+        url={url}
+        caption={caption}
+        onChange={(c) => onChange(c)}
+        onSave={(c) => onSave(c)}
+      />
     );
   }
 
@@ -553,19 +756,8 @@ function BlockEditor({
     return (
       <div>
         <p className="text-xs text-slate-500">
-          Automatically lists your next 10 upcoming events - nothing to fill in here.
-        </p>
-        <ColorPicker value={color} onChange={(c) => onSave({ color: c })} />
-      </div>
-    );
-  }
-
-  if (block.type === "chaperones") {
-    return (
-      <div>
-        <p className="text-xs text-slate-500">
-          Automatically shows a QR code for any event still short on chaperones - nothing to fill
-          in. Doesn&apos;t appear at all if every event already has enough.
+          Automatically lists your next 10 upcoming events. Any event that&apos;s still short on
+          chaperones automatically gets a QR code right under its date - nothing to fill in here.
         </p>
         <ColorPicker value={color} onChange={(c) => onSave({ color: c })} />
       </div>

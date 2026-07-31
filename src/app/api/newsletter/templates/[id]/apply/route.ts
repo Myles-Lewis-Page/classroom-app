@@ -36,6 +36,8 @@ export async function POST(
         type: b.type,
         content: b.content as object,
         order: b.order,
+        column: b.column,
+        span: b.span,
       })),
     }),
   ]);

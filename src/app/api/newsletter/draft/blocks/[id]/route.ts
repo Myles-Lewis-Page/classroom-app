@@ -16,7 +16,10 @@ async function ownedDraftBlock(id: string, classroomId: string) {
   return block;
 }
 
-// PATCH { content } - update one block's content (shape depends on its type)
+// PATCH { content?, column?, span? } - update a block's content and/or its
+// position on the 4-column layout grid (column: 1-4 where it starts,
+// span: 1-4 how wide it is). Both are clamped server-side so a bad value
+// can't push a block off the grid.
 export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -31,14 +34,25 @@ export async function PATCH(
   }
 
   const body = await req.json();
-  if (body.content === undefined) {
-    return NextResponse.json({ error: "content is required" }, { status: 400 });
+  const data: { content?: object; column?: number; span?: number } = {};
+
+  if (body.content !== undefined) {
+    data.content = body.content;
+  }
+  if (body.column !== undefined) {
+    data.column = Math.min(4, Math.max(1, Math.round(Number(body.column) || 1)));
+  }
+  if (body.span !== undefined) {
+    data.span = Math.min(4, Math.max(1, Math.round(Number(body.span) || 1)));
+  }
+  if (data.column !== undefined && data.span !== undefined && data.column + data.span > 5) {
+    data.span = 5 - data.column;
+  }
+  if (Object.keys(data).length === 0) {
+    return NextResponse.json({ error: "content, column, or span is required" }, { status: 400 });
   }
 
-  const updated = await prisma.newsletterBlock.update({
-    where: { id },
-    data: { content: body.content },
-  });
+  const updated = await prisma.newsletterBlock.update({ where: { id }, data });
   return NextResponse.json(updated);
 }
 
