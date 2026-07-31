@@ -3,6 +3,7 @@ import { auth, signOut } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getCurrentClassroomId } from "@/lib/classroomScope";
 import PeriodSwitcher from "@/components/PeriodSwitcher";
+import MobileNavLinks from "@/components/MobileNavLinks";
 
 const links = [
   { href: "/dashboard", label: "Dashboard" },
@@ -104,15 +105,9 @@ export default async function Nav() {
         </div>
       </div>
 
-      {/* Page links - wraps to multiple lines on narrow screens instead of
-          scrolling horizontally, so nothing is ever hidden off-screen. */}
-      <div className="max-w-6xl mx-auto px-4 py-2 flex flex-wrap gap-x-4 gap-y-2 text-sm items-center">
-        {links.map((l) => (
-          <Link key={l.href} href={l.href} className="whitespace-nowrap text-slate-600 hover:text-sky-600">
-            {l.label}
-          </Link>
-        ))}
-      </div>
+      {/* Page links - hamburger menu on phones, normal wrapping row on
+          larger screens (tablet/desktop). */}
+      <MobileNavLinks links={links} />
     </nav>
   );
 }

@@ -65,7 +65,7 @@ export default function ChaperoneInterestPage({
 
   if (loadError) {
     return (
-      <div className="min-h-screen flex items-center justify-center p-6 bg-slate-50">
+      <div className="fixed inset-0 z-50 overflow-y-auto flex items-center justify-center p-6 bg-slate-50">
         <p className="text-slate-500">
           This link doesn't seem to work anymore - please check with your child's teacher for a
           current one.
@@ -76,7 +76,7 @@ export default function ChaperoneInterestPage({
 
   if (!event) {
     return (
-      <div className="min-h-screen flex items-center justify-center p-6 bg-slate-50">
+      <div className="fixed inset-0 z-50 overflow-y-auto flex items-center justify-center p-6 bg-slate-50">
         <p className="text-slate-400">Loading...</p>
       </div>
     );
@@ -84,7 +84,7 @@ export default function ChaperoneInterestPage({
 
   if (submitted) {
     return (
-      <div className="min-h-screen flex items-center justify-center p-6 bg-slate-50">
+      <div className="fixed inset-0 z-50 overflow-y-auto flex items-center justify-center p-6 bg-slate-50">
         <div className="max-w-md w-full bg-white border rounded-lg p-6 text-center">
           <h1 className="text-xl font-bold mb-2">Thanks for your interest!</h1>
           <p className="text-slate-600">
@@ -97,7 +97,7 @@ export default function ChaperoneInterestPage({
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-6 bg-slate-50">
+    <div className="fixed inset-0 z-50 overflow-y-auto flex items-center justify-center p-6 bg-slate-50">
       <div className="max-w-md w-full bg-white border rounded-lg p-6">
         <h1 className="text-xl font-bold mb-1">Chaperone Interest</h1>
         <p className="text-slate-600 mb-4">
