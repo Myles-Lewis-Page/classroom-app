@@ -4,32 +4,51 @@ import { formatShortDate } from "@/lib/dateOnly";
 export const BLOCK_TYPES = ["heading", "paragraph", "list", "divider", "image", "events"] as const;
 export type NewsletterBlockType = (typeof BLOCK_TYPES)[number];
 
+// The five accent colors a block can be tagged with, used to color-code
+// each card in the visual builder/print view the way a classroom
+// newsletter template would (a coral "Important Dates" box, a teal
+// "Specials" box, etc). Plain-text email rendering ignores this entirely -
+// color only matters in the visual views.
+export const BLOCK_COLORS = ["coral", "teal", "sunny", "grape", "sky"] as const;
+export type BlockColor = (typeof BLOCK_COLORS)[number];
+
 export type NewsletterBlockContent =
-  | { type: "heading"; text: string }
-  | { type: "paragraph"; text: string }
-  | { type: "list"; items: string[] }
-  | { type: "divider" }
+  | { type: "heading"; text: string; color?: BlockColor }
+  | { type: "paragraph"; text: string; color?: BlockColor }
+  | { type: "list"; items: string[]; color?: BlockColor }
+  | { type: "divider"; color?: BlockColor }
   | { type: "image"; url: string; caption?: string }
-  | { type: "events" };
+  | { type: "events"; color?: BlockColor };
 
 export type RawBlock = { id?: string; type: string; content: unknown; order: number };
+export type UpcomingEvent = { name: string; date: Date };
 
 /** A sensible starting shape for a freshly-added block of a given type. */
 export function defaultContentForType(type: NewsletterBlockType): Record<string, unknown> {
   switch (type) {
     case "heading":
-      return { text: "New Heading" };
+      return { text: "New Heading", color: "coral" };
     case "paragraph":
-      return { text: "" };
+      return { text: "", color: "sky" };
     case "list":
-      return { items: [""] };
+      return { items: [""], color: "teal" };
     case "divider":
-      return {};
+      return { color: "sunny" };
     case "image":
       return { url: "", caption: "" };
     case "events":
-      return {};
+      return { color: "grape" };
   }
+}
+
+/** This classroom's next 10 upcoming events, for the "events" block type. */
+export async function getUpcomingEvents(classroomId: string): Promise<UpcomingEvent[]> {
+  return prisma.event.findMany({
+    where: { classroomId, date: { gte: new Date() } },
+    orderBy: { date: "asc" },
+    take: 10,
+    select: { name: true, date: true },
+  });
 }
 
 /**
@@ -55,14 +74,7 @@ export async function renderNewsletterBlocks(
 
   // Only bother querying events if a block actually needs it.
   const needsEvents = sorted.some((b) => b.type === "events");
-  const upcomingEvents = needsEvents
-    ? await prisma.event.findMany({
-        where: { classroomId, date: { gte: new Date() } },
-        orderBy: { date: "asc" },
-        take: 10,
-        select: { name: true, date: true },
-      })
-    : [];
+  const upcomingEvents = needsEvents ? await getUpcomingEvents(classroomId) : [];
 
   for (const block of sorted) {
     const content = block.content as Record<string, unknown>;

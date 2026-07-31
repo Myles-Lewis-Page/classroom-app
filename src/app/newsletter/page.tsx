@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import NewsletterView, { NewsletterFonts, COLOR_CLASSES, type ViewEvent } from "@/components/NewsletterView";
+import type { BlockColor } from "@/lib/newsletter";
 
 type BlockType = "heading" | "paragraph" | "list" | "divider" | "image" | "events";
 
@@ -35,15 +37,27 @@ const BLOCK_LABELS: Record<BlockType, string> = {
   list: "Bulleted List",
   divider: "Divider",
   image: "Image",
-  events: "Upcoming Events (auto)",
+  events: "Important Dates (auto)",
+};
+
+const BLOCK_ICONS: Record<BlockType, string> = {
+  heading: "✏️",
+  paragraph: "💬",
+  list: "✅",
+  divider: "🌟",
+  image: "📷",
+  events: "📅",
 };
 
 export default function NewsletterPage() {
   const [newsletter, setNewsletter] = useState<Newsletter | null>(null);
   const [preview, setPreview] = useState("");
+  const [classroomName, setClassroomName] = useState("Our Classroom");
+  const [upcomingEvents, setUpcomingEvents] = useState<ViewEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [savingBlockId, setSavingBlockId] = useState<string | null>(null);
   const [dragId, setDragId] = useState<string | null>(null);
+  const [showPlainText, setShowPlainText] = useState(false);
 
   const [templates, setTemplates] = useState<Template[]>([]);
   const [showTemplates, setShowTemplates] = useState(false);
@@ -60,6 +74,8 @@ export default function NewsletterPage() {
     const data = await res.json();
     setNewsletter(data.newsletter);
     setPreview(data.preview ?? "");
+    setClassroomName(data.classroomName ?? "Our Classroom");
+    setUpcomingEvents(data.upcomingEvents ?? []);
     setLoading(false);
   }, []);
 
@@ -185,25 +201,36 @@ export default function NewsletterPage() {
     return <div className="p-6 text-slate-400">Loading...</div>;
   }
 
+  const viewBlocks = newsletter.blocks.map((b) => ({ id: b.id, type: b.type, content: b.content }));
+
   return (
-    <div className="p-4 sm:p-6 max-w-5xl mx-auto">
+    <div className="p-4 sm:p-6 max-w-6xl mx-auto">
+      <NewsletterFonts />
       <div className="flex justify-between items-start flex-wrap gap-2 mb-2">
         <div>
           <h1 className="text-2xl font-bold">Newsletter</h1>
           <p className="text-sm text-slate-500 max-w-2xl">
-            Build this up over the week with blocks - it goes at the top of every parent&apos;s
-            email when you generate the{" "}
+            Design it however you like below - colors, headings, photos, a running list of dates.
+            A plain-text version (no colors/images, since parent emails go out as a plain-text
+            link) gets pulled into the top of every{" "}
             <a href="/reports" className="underline">
               Weekly Report
+            </a>{" "}
+            email automatically. For the full colorful version, use{" "}
+            <a href="/newsletter/print" className="underline" target="_blank" rel="noreferrer">
+              Print / Send Home
             </a>
-            . Since parent emails go out as plain text (no images or bold/colors survive), an{" "}
-            <span className="font-medium">Image</span> block shows up as a link in the actual
-            email rather than an embedded picture.
+            .
           </p>
         </div>
-        <button onClick={publish} disabled={publishing} className="btn-primary px-4 py-2 shrink-0">
-          {publishing ? "Publishing..." : "Publish This Week"}
-        </button>
+        <div className="flex gap-2 shrink-0">
+          <a href="/newsletter/print" target="_blank" rel="noreferrer" className="btn-outline px-4 py-2">
+            🖨️ Print / Send Home
+          </a>
+          <button onClick={publish} disabled={publishing} className="btn-primary px-4 py-2">
+            {publishing ? "Publishing..." : "Publish This Week"}
+          </button>
+        </div>
       </div>
 
       <div className="flex gap-3 text-sm mb-4">
@@ -292,12 +319,12 @@ export default function NewsletterPage() {
         </div>
       )}
 
-      <div className="grid md:grid-cols-2 gap-4">
+      <div className="grid lg:grid-cols-2 gap-6">
         <div>
           <div className="flex flex-wrap gap-2 mb-3">
             {(Object.keys(BLOCK_LABELS) as BlockType[]).map((type) => (
               <button key={type} onClick={() => addBlock(type)} className="btn-outline text-xs px-2 py-1">
-                + {BLOCK_LABELS[type]}
+                {BLOCK_ICONS[type]} {BLOCK_LABELS[type]}
               </button>
             ))}
           </div>
@@ -319,7 +346,7 @@ export default function NewsletterPage() {
               >
                 <div className="flex justify-between items-center mb-2">
                   <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">
-                    ⠿ {BLOCK_LABELS[block.type]}
+                    ⠿ {BLOCK_ICONS[block.type]} {BLOCK_LABELS[block.type]}
                   </span>
                   <span className="flex items-center gap-2">
                     {savingBlockId === block.id && <span className="text-xs text-slate-400">Saving...</span>}
@@ -339,12 +366,51 @@ export default function NewsletterPage() {
         </div>
 
         <div>
-          <h2 className="font-semibold text-sm mb-2">Preview (what parents will actually see)</h2>
-          <pre className="text-xs whitespace-pre-wrap border rounded p-3 bg-slate-50 min-h-[200px]">
-            {preview || "Nothing to preview yet - add a block."}
-          </pre>
+          <h2 className="font-semibold text-sm mb-2">Preview</h2>
+          <NewsletterView
+            classroomName={classroomName}
+            weekLabel={`Week of ${new Date().toLocaleDateString(undefined, { month: "long", day: "numeric" })}`}
+            blocks={viewBlocks}
+            upcomingEvents={upcomingEvents}
+          />
+          <button
+            onClick={() => setShowPlainText((v) => !v)}
+            className="text-xs text-slate-500 hover:underline mt-3"
+          >
+            {showPlainText ? "Hide" : "Show"} what actually goes in the emailed report (plain text)
+          </button>
+          {showPlainText && (
+            <pre className="text-xs whitespace-pre-wrap border rounded p-3 bg-slate-50 mt-2">
+              {preview || "Nothing to preview yet."}
+            </pre>
+          )}
         </div>
       </div>
+    </div>
+  );
+}
+
+function ColorPicker({
+  value,
+  onChange,
+}: {
+  value: BlockColor | undefined;
+  onChange: (color: BlockColor) => void;
+}) {
+  const colors: BlockColor[] = ["coral", "teal", "sunny", "grape", "sky"];
+  return (
+    <div className="flex gap-1.5 mt-2">
+      {colors.map((c) => (
+        <button
+          key={c}
+          type="button"
+          title={c}
+          onClick={() => onChange(c)}
+          className={`w-5 h-5 rounded-full ${COLOR_CLASSES[c].bg} ${
+            value === c ? "ring-2 ring-offset-1 ring-slate-500" : ""
+          }`}
+        />
+      ))}
     </div>
   );
 }
@@ -359,31 +425,38 @@ function BlockEditor({
   onSave: (content: Record<string, unknown>) => void;
 }) {
   const content = block.content;
+  const color = content.color as BlockColor | undefined;
 
   if (block.type === "heading") {
     const text = (content.text as string) ?? "";
     return (
-      <input
-        value={text}
-        onChange={(e) => onChange({ text: e.target.value })}
-        onBlur={() => onSave({ text })}
-        className="border rounded px-2 py-1 w-full font-semibold"
-        placeholder="Heading text"
-      />
+      <div>
+        <input
+          value={text}
+          onChange={(e) => onChange({ text: e.target.value, color })}
+          onBlur={() => onSave({ text, color })}
+          className="border rounded px-2 py-1 w-full font-semibold"
+          placeholder="Heading text"
+        />
+        <ColorPicker value={color} onChange={(c) => onSave({ text, color: c })} />
+      </div>
     );
   }
 
   if (block.type === "paragraph") {
     const text = (content.text as string) ?? "";
     return (
-      <textarea
-        value={text}
-        onChange={(e) => onChange({ text: e.target.value })}
-        onBlur={() => onSave({ text })}
-        rows={3}
-        className="border rounded px-2 py-1 w-full text-sm"
-        placeholder="Write something..."
-      />
+      <div>
+        <textarea
+          value={text}
+          onChange={(e) => onChange({ text: e.target.value, color })}
+          onBlur={() => onSave({ text, color })}
+          rows={3}
+          className="border rounded px-2 py-1 w-full text-sm"
+          placeholder="Write something..."
+        />
+        <ColorPicker value={color} onChange={(c) => onSave({ text, color: c })} />
+      </div>
     );
   }
 
@@ -398,17 +471,17 @@ function BlockEditor({
               onChange={(e) => {
                 const next = [...items];
                 next[idx] = e.target.value;
-                onChange({ items: next });
+                onChange({ items: next, color });
               }}
-              onBlur={() => onSave({ items })}
+              onBlur={() => onSave({ items, color })}
               className="border rounded px-2 py-1 w-full text-sm"
               placeholder="List item"
             />
             <button
               onClick={() => {
                 const next = items.filter((_, i) => i !== idx);
-                onChange({ items: next });
-                onSave({ items: next });
+                onChange({ items: next, color });
+                onSave({ items: next, color });
               }}
               className="text-rose-600 text-xs px-1"
             >
@@ -417,17 +490,23 @@ function BlockEditor({
           </div>
         ))}
         <button
-          onClick={() => onChange({ items: [...items, ""] })}
+          onClick={() => onChange({ items: [...items, ""], color })}
           className="text-sky-600 text-xs hover:underline"
         >
           + Add item
         </button>
+        <ColorPicker value={color} onChange={(c) => onSave({ items, color: c })} />
       </div>
     );
   }
 
   if (block.type === "divider") {
-    return <p className="text-xs text-slate-400 text-center py-2">— divider —</p>;
+    return (
+      <div>
+        <p className="text-xs text-slate-400 text-center py-1">— divider —</p>
+        <ColorPicker value={color} onChange={(c) => onSave({ color: c })} />
+      </div>
+    );
   }
 
   if (block.type === "image") {
@@ -454,7 +533,7 @@ function BlockEditor({
           <img src={url} alt={caption || "Newsletter image"} className="max-h-32 rounded border mt-1" />
         )}
         <p className="text-xs text-amber-600">
-          Shows as a picture here, but as a link in the actual parent email.
+          Shows as a photo here and when printed - but as a link in the actual parent email.
         </p>
       </div>
     );
@@ -462,9 +541,12 @@ function BlockEditor({
 
   if (block.type === "events") {
     return (
-      <p className="text-xs text-slate-500">
-        Automatically lists your next 10 upcoming events - nothing to fill in here.
-      </p>
+      <div>
+        <p className="text-xs text-slate-500">
+          Automatically lists your next 10 upcoming events - nothing to fill in here.
+        </p>
+        <ColorPicker value={color} onChange={(c) => onSave({ color: c })} />
+      </div>
     );
   }
 
