@@ -81,6 +81,7 @@ export default function NewsletterPage() {
   const [expandedIssueId, setExpandedIssueId] = useState<string | null>(null);
 
   const [publishing, setPublishing] = useState(false);
+  const [newBlockColumn, setNewBlockColumn] = useState(1);
 
   const load = useCallback(async () => {
     const res = await fetch("/api/newsletter/draft");
@@ -127,7 +128,7 @@ export default function NewsletterPage() {
     await fetch("/api/newsletter/draft/blocks", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ type }),
+      body: JSON.stringify({ type, column: newBlockColumn }),
     });
     load();
   }
@@ -383,6 +384,22 @@ export default function NewsletterPage() {
 
       <div className="grid lg:grid-cols-2 gap-6">
         <div>
+          <div className="flex items-center gap-2 mb-3 flex-wrap">
+            <label className="text-xs text-slate-500 flex items-center gap-1">
+              Add to column
+              <select
+                value={newBlockColumn}
+                onChange={(e) => setNewBlockColumn(Number(e.target.value))}
+                className="border rounded px-1 py-0.5 text-xs"
+              >
+                {[1, 2, 3, 4].map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
           <div className="flex flex-wrap gap-2 mb-3">
             {(Object.keys(BLOCK_LABELS) as BlockType[]).map((type) => (
               <button key={type} onClick={() => addBlock(type)} className="btn-outline text-xs px-2 py-1">

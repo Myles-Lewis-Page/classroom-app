@@ -1,6 +1,7 @@
 import { Document, Page, Text, View, Image, StyleSheet, renderToBuffer } from "@react-pdf/renderer";
 import { formatShortDate } from "@/lib/dateOnly";
 import { qrCodeImageUrl } from "@/lib/qrcode";
+import { getMonthlyTheme } from "@/lib/monthlyTheme";
 import type { BlockColor } from "@/lib/newsletter";
 
 type PdfBlock = { id: string; type: string; content: unknown; span?: number };
@@ -23,7 +24,7 @@ const COLORS: Record<BlockColor, { border: string; tint: string; text: string }>
 
 const styles = StyleSheet.create({
   page: { padding: 32, fontSize: 11, fontFamily: "Helvetica", color: "#2D2A26" },
-  banner: { backgroundColor: "#FF6B6B", borderRadius: 8, padding: 16, marginBottom: 16, textAlign: "center" },
+  banner: { borderRadius: 8, padding: 16, marginBottom: 16, textAlign: "center" },
   bannerWeek: { color: "#FFF3F0", fontSize: 10, marginBottom: 4 },
   bannerTitle: { color: "#FFFFFF", fontSize: 22, fontFamily: "Helvetica-Bold" },
   row: { flexDirection: "row", marginBottom: 10 },
@@ -259,11 +260,12 @@ function NewsletterPdfDocument({
 }) {
   const title = bannerTitle?.trim() || `${classroomName}'s Newsletter`;
   const subtitle = bannerSubtitle?.trim() || weekLabel;
+  const theme = getMonthlyTheme();
   const rows = packRows(blocks);
   return (
     <Document>
       <Page size="LETTER" style={styles.page}>
-        <View style={styles.banner}>
+        <View style={{ ...styles.banner, backgroundColor: theme.gradient[0] }}>
           <Text style={styles.bannerWeek}>{subtitle}</Text>
           <Text style={styles.bannerTitle}>{title}</Text>
         </View>

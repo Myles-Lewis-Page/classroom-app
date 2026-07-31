@@ -1,6 +1,8 @@
 import type { CSSProperties } from "react";
 import type { BlockColor } from "@/lib/newsletter";
 import { qrCodeImageUrl } from "@/lib/qrcode";
+import { getMonthlyTheme } from "@/lib/monthlyTheme";
+import { SeasonalIcon } from "@/components/SeasonalIcons";
 
 export type ViewBlock = {
   id: string;
@@ -94,6 +96,7 @@ export default function NewsletterView({
 }) {
   const title = bannerTitle?.trim() || `${classroomName}'s Newsletter`;
   const subtitle = bannerSubtitle?.trim() || weekLabel;
+  const theme = getMonthlyTheme();
   const shortfallById = new Map(shortfalls.map((s) => [s.id, s]));
 
   return (
@@ -101,8 +104,17 @@ export default function NewsletterView({
       className="rounded-3xl border-4 border-dashed border-[#F4A300] p-4 sm:p-6"
       style={{ backgroundColor: "#FFFBF2", fontFamily: "'Nunito', sans-serif", color: "#2D2A26" }}
     >
-      {/* Hero banner - the one signature element the rest of the page stays quiet around */}
-      <div className="rounded-2xl mb-5 p-5 text-center bg-gradient-to-r from-[#FF6B6B] via-[#F4A300] to-[#9B5DE5]">
+      {/* Hero banner - the one signature element the rest of the page stays quiet around.
+          Colors and the small corner icons shift with the current month
+          (see src/lib/monthlyTheme.ts) - always secular seasonal motifs
+          (snowflakes, a tree, a pumpkin, etc), never religious symbols,
+          even in months with major religious holidays in them. */}
+      <div
+        className="relative overflow-hidden rounded-2xl mb-5 p-5 text-center"
+        style={{ background: `linear-gradient(to right, ${theme.gradient[0]}, ${theme.gradient[1]}, ${theme.gradient[2]})` }}
+      >
+        <SeasonalIcon icon={theme.icon} size={32} className="absolute top-3 left-3 opacity-70" />
+        <SeasonalIcon icon={theme.icon} size={24} className="absolute bottom-3 right-4 opacity-50" />
         <p className="text-white/90 text-sm font-semibold tracking-wide" style={{ fontFamily: "'Kalam', cursive" }}>
           {subtitle}
         </p>
@@ -114,7 +126,10 @@ export default function NewsletterView({
         </h1>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+      <div
+        className="grid grid-cols-1 sm:grid-cols-4 gap-4"
+        style={{ gridAutoFlow: "row dense", gridAutoRows: "minmax(140px, auto)" }}
+      >
         {blocks.map((block) => (
           <div key={block.id} style={gridStyle(block.column, block.span)} className="min-w-0">
             <BlockCard block={block} upcomingEvents={upcomingEvents} shortfallById={shortfallById} />
@@ -175,7 +190,7 @@ function BlockCard({
     if (!text) return null;
     return (
       <div className={`h-full rounded-2xl border-4 ${c.border} ${c.tint} p-4`}>
-        <p className="whitespace-pre-wrap leading-relaxed">{text}</p>
+        <p className="whitespace-pre-wrap leading-relaxed break-words [overflow-wrap:anywhere]">{text}</p>
       </div>
     );
   }
@@ -191,7 +206,7 @@ function BlockCard({
           {items.map((item, i) => (
             <li key={i} className="flex items-start gap-2">
               <span className={`${c.text} font-bold mt-0.5`}>•</span>
-              <span>{item}</span>
+              <span className="break-words [overflow-wrap:anywhere]">{item}</span>
             </li>
           ))}
         </ul>
@@ -277,7 +292,7 @@ function BlockCard({
         </p>
         <ol className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm list-decimal list-inside">
           {words.map((w, i) => (
-            <li key={i}>{w}</li>
+            <li key={i} className="break-words [overflow-wrap:anywhere]">{w}</li>
           ))}
         </ol>
       </div>
@@ -307,7 +322,7 @@ function BlockCard({
               {questions.map((q, i) => (
                 <li key={i} className="flex items-start gap-2">
                   <span className={`${c.text} font-bold mt-0.5`}>•</span>
-                  <span>{q}</span>
+                  <span className="break-words [overflow-wrap:anywhere]">{q}</span>
                 </li>
               ))}
             </ul>
@@ -331,7 +346,7 @@ function BlockCard({
           {items.map((item, i) => (
             <li key={i} className="flex items-start gap-2">
               <span className={`${c.text} font-bold mt-0.5`}>•</span>
-              <span>{item}</span>
+              <span className="break-words [overflow-wrap:anywhere]">{item}</span>
             </li>
           ))}
         </ul>

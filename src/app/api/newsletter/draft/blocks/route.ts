@@ -24,14 +24,24 @@ export async function POST(req: NextRequest) {
   const maxOrder = draft.blocks.reduce((max, b) => Math.max(max, b.order), -1);
   const layout = defaultLayoutForType(type as NewsletterBlockType);
 
+  // A requested start column (from the "Add to column" picker) overrides
+  // the type's default column - span is then clamped so it can't push the
+  // block off the 4-column grid from that starting point.
+  let column = layout.column;
+  let span = layout.span;
+  if (body.column !== undefined) {
+    column = Math.min(4, Math.max(1, Math.round(Number(body.column) || 1)));
+    span = Math.min(span, 5 - column);
+  }
+
   const block = await prisma.newsletterBlock.create({
     data: {
       newsletterId: draft.id,
       type,
       content: defaultContentForType(type as NewsletterBlockType) as Prisma.InputJsonValue,
       order: maxOrder + 1,
-      column: layout.column,
-      span: layout.span,
+      column,
+      span,
     },
   });
 

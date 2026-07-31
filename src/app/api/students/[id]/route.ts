@@ -45,7 +45,6 @@ export async function GET(
       parentContactLogs: { orderBy: { date: "desc" }, take: 20 },
       supports: { include: { supportType: true, selectedOption: true } },
       skillStatuses: {
-        where: { status: "5" },
         include: { skill: { include: { skillSubject: true } } },
       },
     },
@@ -53,7 +52,27 @@ export async function GET(
 
   if (!student) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-  return NextResponse.json(student);
+  // Full skills list for the parent-facing progress view - every skill in
+  // the classroom's active subjects, not just ones she's rated yet, with
+  // its actual 0-5 status (defaulting to 0 for a skill never touched).
+  // Kept separate from `skillStatuses` above (mastered-relevant history)
+  // rather than replacing it, since other pages may still want just the
+  // touched/mastered subset.
+  const allSkills = await prisma.skill.findMany({
+    where: { skillSubject: { classroomId, isActive: true } },
+    include: { skillSubject: true },
+    orderBy: [{ skillSubject: { order: "asc" } }, { category: "asc" }, { order: "asc" }],
+  });
+  const statusBySkillId = new Map(student.skillStatuses.map((s) => [s.skillId, s.status]));
+  const allSkillsWithStatus = allSkills.map((skill) => ({
+    id: skill.id,
+    skillName: skill.skillName,
+    category: skill.category,
+    skillSubject: { id: skill.skillSubject.id, name: skill.skillSubject.name },
+    status: statusBySkillId.get(skill.id) ?? "0",
+  }));
+
+  return NextResponse.json({ ...student, allSkillsWithStatus });
 }
 
 export async function PATCH(

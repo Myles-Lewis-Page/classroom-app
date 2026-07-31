@@ -143,6 +143,7 @@ model Classroom {
   scheduleBlocks  ScheduleBlock[]
   newsletters         Newsletter[]
   newsletterTemplates NewsletterTemplate[]
+  spellingLists       SpellingList[]
   activeForTeachers Teacher[] @relation("ActiveClassroom")
 }
 
@@ -239,6 +240,69 @@ model NewsletterTemplateBlock {
   order      Int
   column     Int                @default(1)
   span       Int                @default(2)
+}
+
+// ---------- SPELLING ----------
+// One list per week (`weekOf` is that week's Monday). She uploads the
+// words once; everything else - test days, results, the newsletter's
+// auto "next week's words" block, and the word bank analytics - is
+// derived from this and SpellingResult, so there's a single source of
+// truth for "what were this week's words."
+model SpellingList {
+  id          String   @id @default(cuid())
+  classroomId String
+  classroom   Classroom @relation(fields: [classroomId], references: [id], onDelete: Cascade)
+  weekOf      DateTime
+  createdAt   DateTime @default(now())
+
+  words    SpellingWord[]
+  testDays SpellingTestDay[]
+
+  @@index([classroomId, weekOf])
+}
+
+model SpellingWord {
+  id     String       @id @default(cuid())
+  listId String
+  list   SpellingList @relation(fields: [listId], references: [id], onDelete: Cascade)
+  word   String
+  order  Int
+
+  results SpellingResult[]
+}
+
+// A single day she actually administers the test. "first" is the normal
+// weekly test (every active student, every word on the list); "makeup" is
+// the following week's retest, which only ever includes students who
+// missed at least one word on their list's "first" day, and only their
+// specific missed words - see getMakeupRoster() in src/lib/spelling.ts,
+// which computes that dynamically rather than needing its own schema, so
+// a student's makeup list always reflects their actual latest miss state.
+model SpellingTestDay {
+  id        String       @id @default(cuid())
+  listId    String
+  list      SpellingList @relation(fields: [listId], references: [id], onDelete: Cascade)
+  date      DateTime
+  type      String       // "first" | "makeup"
+  createdAt DateTime     @default(now())
+
+  results SpellingResult[]
+
+  @@index([listId, date])
+}
+
+model SpellingResult {
+  id        String          @id @default(cuid())
+  testDayId String
+  testDay   SpellingTestDay @relation(fields: [testDayId], references: [id], onDelete: Cascade)
+  wordId    String
+  word      SpellingWord    @relation(fields: [wordId], references: [id], onDelete: Cascade)
+  studentId String
+  student   Student         @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  correct   Boolean
+
+  @@unique([testDayId, wordId, studentId])
+  @@index([studentId])
 }
 
 // A lighter sub-grouping *within* one classroom (e.g. "Group A" / "Group B",
@@ -357,6 +421,7 @@ model Student {
   eventChaperones     EventChaperone[]
   chaperoneInterests  ChaperoneInterest[]
   skillStatuses       StudentSkillStatus[]
+  spellingResults     SpellingResult[]
   observations        Observation[]
   praiseNotes         PraiseNote[]
   seatingAssignment   SeatingAssignment?

@@ -2,7 +2,6 @@
 
 import { useEffect, useState, use } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
 import AddRelationship from "@/components/AddRelationship";
 import AddNote from "@/components/AddNote";
 import EditBasicInfo from "@/components/EditBasicInfo";
@@ -106,6 +105,13 @@ type StudentDetail = {
       skillName: string;
       skillSubject: { id: string; name: string };
     };
+  }[];
+  allSkillsWithStatus: {
+    id: string;
+    skillName: string;
+    category: string | null;
+    skillSubject: { id: string; name: string };
+    status: string;
   }[];
 };
 
@@ -318,23 +324,43 @@ export default function StudentProfilePage({ params }: { params: Promise<{ id: s
         <AddRelationship studentId={student.id} onAdded={refresh} />
       </section>
 
-      {/* Skills - mastered only, grouped by subject */}
+      {/* Skills - every skill, at its actual 0-5 rating, so a parent can
+          see real progress over time, not just what's fully mastered. */}
       <section className="card">
-        <h2 className="font-bold mb-2">Skills — Mastered</h2>
-        {student.skillStatuses.length === 0 && <p className="text-gray-500 text-sm">None yet</p>}
-        <ul className="list-disc list-inside text-sm">
-          {student.skillStatuses.map((s) => (
-            <li key={s.id}>
-              <Link
-                href={`/skills?subject=${s.skill.skillSubject.id}`}
-                className="font-medium text-sky-600 hover:underline"
-              >
-                {s.skill.skillSubject.name}
-              </Link>
-              {s.skill.category ? ` — ${s.skill.category}` : ""}: {s.skill.skillName}
-            </li>
-          ))}
-        </ul>
+        <h2 className="font-bold mb-2">Skills Progress</h2>
+        {student.allSkillsWithStatus.length === 0 && <p className="text-gray-500 text-sm">No skills set up yet</p>}
+        {Object.entries(
+          student.allSkillsWithStatus.reduce<Record<string, typeof student.allSkillsWithStatus>>((acc, s) => {
+            const key = s.skillSubject.name;
+            (acc[key] ??= []).push(s);
+            return acc;
+          }, {})
+        ).map(([subjectName, skills]) => (
+          <div key={subjectName} className="mb-3">
+            <p className="font-medium text-sky-700 text-sm mb-1">{subjectName}</p>
+            <ul className="text-sm divide-y">
+              {skills.map((s) => (
+                <li key={s.id} className="flex justify-between items-center py-1">
+                  <span>
+                    {s.category ? `${s.category} — ` : ""}
+                    {s.skillName}
+                  </span>
+                  <span className="flex items-center gap-1 shrink-0 ml-2">
+                    {[1, 2, 3, 4, 5].map((n) => (
+                      <span
+                        key={n}
+                        className={`w-2.5 h-2.5 rounded-full ${
+                          n <= Number(s.status) ? "bg-emerald-500" : "bg-slate-200"
+                        }`}
+                      />
+                    ))}
+                    <span className="text-xs text-gray-500 ml-1">{s.status}/5</span>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ))}
       </section>
 
       {/* Behavior notes */}
