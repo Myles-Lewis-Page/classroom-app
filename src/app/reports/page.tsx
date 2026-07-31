@@ -35,6 +35,7 @@ export default function WeeklyReportPage() {
   const [start, setStart] = useState(() => mondayOf(new Date()));
   const [reports, setReports] = useState<StudentReport[]>([]);
   const [chaperoneShortfalls, setChaperoneShortfalls] = useState<ChaperoneShortfall[]>([]);
+  const [newsletterContent, setNewsletterContent] = useState("");
   const [loading, setLoading] = useState(false);
 
   async function generate() {
@@ -48,6 +49,7 @@ export default function WeeklyReportPage() {
     const data = await res.json();
     setReports(data.reports);
     setChaperoneShortfalls(data.chaperoneShortfalls ?? []);
+    setNewsletterContent(data.newsletterContent ?? "");
     setLoading(false);
   }
 
@@ -62,13 +64,17 @@ export default function WeeklyReportPage() {
   }
 
   function buildEmailBody(r: StudentReport): string {
-    const lines = [
+    const lines: string[] = [];
+    if (newsletterContent.trim()) {
+      lines.push(newsletterContent.trim(), "", "――――――――――――――――――――", "");
+    }
+    lines.push(
       `Weekly Report for ${r.name}`,
       "",
       `Attendance: ${r.totalDaysTracked - r.absences} present / ${r.absences} absent`,
       "",
-      `Behavior this week: ${r.behaviorCounts.good} good, ${r.behaviorCounts.bad} needs improvement`,
-    ];
+      `Behavior this week: ${r.behaviorCounts.good} good, ${r.behaviorCounts.bad} needs improvement`
+    );
     if (r.behaviorTags.length) {
       lines.push("", "Behavior notes:");
       r.behaviorTags.forEach((t) => lines.push(`- ${t.type === "good" ? "👍" : "⚠️"} ${t.tag}`));
@@ -132,6 +138,18 @@ export default function WeeklyReportPage() {
           {loading ? "Generating..." : "Generate All Weekly Reports"}
         </button>
       </div>
+
+      {newsletterContent.trim() && (
+        <div className="border rounded p-4 mb-4 bg-slate-50">
+          <div className="flex justify-between items-center mb-1">
+            <h2 className="font-semibold text-sm">Newsletter (goes at the top of every email)</h2>
+            <a href="/newsletter" className="text-sky-600 text-xs hover:underline">
+              Edit →
+            </a>
+          </div>
+          <pre className="text-xs whitespace-pre-wrap">{newsletterContent}</pre>
+        </div>
+      )}
 
       {chaperoneShortfalls.length > 0 && (
         <div className="border border-amber-300 bg-amber-50 rounded p-4 mb-6">

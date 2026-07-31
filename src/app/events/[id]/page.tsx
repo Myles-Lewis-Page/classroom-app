@@ -19,6 +19,14 @@ type Chaperone = {
   confirmed: boolean;
   student: Student;
 };
+type ChaperoneInterest = {
+  id: string;
+  parentName: string;
+  contactInfo: string;
+  note: string | null;
+  createdAt: string;
+  student: Student;
+};
 type EventDetail = {
   id: string;
   name: string;
@@ -31,6 +39,7 @@ type EventDetail = {
   chaperonesNeeded: number | null;
   statuses: EventStatus[];
   chaperones: Chaperone[];
+  chaperoneInterests: ChaperoneInterest[];
   sections: { id: string; name: string }[];
 };
 
@@ -150,6 +159,25 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
   async function removeChaperone(chaperoneId: string) {
     if (!confirm("Remove this chaperone signup?")) return;
     await fetch(`/api/events/${id}/chaperones/${chaperoneId}`, { method: "DELETE" });
+    load();
+  }
+
+  const [linkCopied, setLinkCopied] = useState(false);
+  function copyInterestLink() {
+    const url = `${window.location.origin}/chaperone-interest/${id}`;
+    navigator.clipboard.writeText(url).then(() => {
+      setLinkCopied(true);
+      setTimeout(() => setLinkCopied(false), 2000);
+    });
+  }
+
+  function useInterestForChaperone(interest: ChaperoneInterest) {
+    setChapStudentId(interest.student.id);
+    setChapParentName(interest.parentName);
+  }
+
+  async function dismissInterest(interestId: string) {
+    await fetch(`/api/events/${id}/interest/${interestId}`, { method: "DELETE" });
     load();
   }
 
@@ -311,6 +339,61 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
           ))}
         </ul>
       </div>
+
+      <div className="border rounded p-4 mb-4 bg-sky-50">
+        <h2 className="font-semibold mb-1">Chaperone Interest Link</h2>
+        <p className="text-sm text-slate-600 mb-2">
+          Share this with parents (email, class app, printed flyer/QR code). It doesn&apos;t sign
+          anyone up directly - it just lets you know who&apos;s interested, so you can follow up
+          with the details yourself before confirming anyone.
+        </p>
+        <div className="flex gap-2 items-center">
+          <code className="text-xs bg-white border rounded px-2 py-1 flex-1 overflow-x-auto whitespace-nowrap">
+            {typeof window !== "undefined" ? `${window.location.origin}/chaperone-interest/${id}` : ""}
+          </code>
+          <button onClick={copyInterestLink} className="btn-outline text-sm shrink-0">
+            {linkCopied ? "Copied!" : "Copy Link"}
+          </button>
+        </div>
+      </div>
+
+      {event.chaperoneInterests.length > 0 && (
+        <div className="border rounded p-4 mb-4">
+          <h2 className="font-semibold mb-2">
+            Interested Parents ({event.chaperoneInterests.length})
+          </h2>
+          <ul className="space-y-2">
+            {event.chaperoneInterests.map((interest) => (
+              <li key={interest.id} className="text-sm border-b py-2">
+                <div className="flex justify-between items-start gap-2">
+                  <div>
+                    <span className="font-medium">{interest.parentName}</span> —{" "}
+                    {interest.student.firstName} {interest.student.lastName}&apos;s parent
+                    <br />
+                    <span className="text-slate-500">{interest.contactInfo}</span>
+                    {interest.note && <p className="text-slate-500 italic mt-0.5">&quot;{interest.note}&quot;</p>}
+                  </div>
+                  <div className="flex gap-2 shrink-0">
+                    <button
+                      onClick={() => useInterestForChaperone(interest)}
+                      className="text-sky-600 text-xs hover:underline"
+                      title="Fill in the chaperone form below with this parent's info"
+                    >
+                      Use for Chaperone
+                    </button>
+                    <button
+                      onClick={() => dismissInterest(interest.id)}
+                      className="text-rose-600 text-xs hover:underline"
+                    >
+                      Dismiss
+                    </button>
+                  </div>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       <div className="border rounded p-4 mb-4">
         <div className="flex justify-between items-center mb-2">

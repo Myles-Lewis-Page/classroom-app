@@ -20,6 +20,11 @@ export async function GET(req: NextRequest) {
   start.setHours(0, 0, 0, 0);
   end.setHours(23, 59, 59, 999);
 
+  const classroomRecord = await prisma.classroom.findUnique({
+    where: { id: classroomId },
+    select: { newsletterContent: true },
+  });
+
   const students = await prisma.student.findMany({
     where: { isActive: true, classroomId },
     include: { parents: true },
@@ -101,7 +106,13 @@ export async function GET(req: NextRequest) {
     }))
     .filter((e) => e.confirmed < e.needed);
 
-  return NextResponse.json({ start, end, reports, chaperoneShortfalls });
+  return NextResponse.json({
+    start,
+    end,
+    reports,
+    chaperoneShortfalls,
+    newsletterContent: classroomRecord?.newsletterContent ?? "",
+  });
 }
 
 function startOfWeek(d: Date): Date {

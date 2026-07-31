@@ -17,6 +17,7 @@ const links = [
   { href: "/seating", label: "Seating Chart" },
   { href: "/events", label: "Events" },
   { href: "/skills", label: "Skills" },
+  { href: "/newsletter", label: "Newsletter" },
   { href: "/reports", label: "Weekly Report" },
   { href: "/sub-mode", label: "Sub Mode" },
 ];

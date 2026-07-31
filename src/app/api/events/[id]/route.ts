@@ -19,6 +19,7 @@ export async function GET(
     include: {
       statuses: { include: { student: true } },
       chaperones: { include: { student: true }, orderBy: { createdAt: "asc" } },
+      chaperoneInterests: { include: { student: true }, orderBy: { createdAt: "desc" } },
       sections: true,
     },
   });

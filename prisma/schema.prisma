@@ -119,6 +119,12 @@ model Classroom {
   firstDayOfSchool DateTime?
   lastDayOfSchool  DateTime?
 
+  // Free-text newsletter content the teacher builds up over the week - gets
+  // prepended, once, ahead of each student's individual section when the
+  // Weekly Report generates each parent's email. Not auto-cleared after
+  // sending; the teacher manages that themselves.
+  newsletterContent String?
+
   // Canvas bounds for the Seating Layout editor (how big a grid the teacher
   // can place seats within) - not the seat count itself, that's SeatSlot.
   seatingRows Int @default(8)
@@ -253,6 +259,7 @@ model Student {
   homeworkEntries     HomeworkEntry[]
   eventStatuses       EventStatus[]
   eventChaperones     EventChaperone[]
+  chaperoneInterests  ChaperoneInterest[]
   skillStatuses       StudentSkillStatus[]
   observations        Observation[]
   praiseNotes         PraiseNote[]
@@ -572,6 +579,7 @@ model Event {
 
   statuses EventStatus[]
   chaperones EventChaperone[]
+  chaperoneInterests ChaperoneInterest[]
   // Which Periods (Sections) this event applies to - empty means the whole
   // classroom, same "no tag means everyone" convention used for Assignments.
   sections Section[] @relation("EventSections")
@@ -611,6 +619,25 @@ model EventChaperone {
   createdAt    DateTime @default(now())
 
   @@unique([eventId, studentId])
+}
+
+// A parent expressing INTEREST in chaperoning, submitted through a public
+// link (no login) - deliberately separate from EventChaperone, since this
+// is NOT a direct signup. The teacher reviews these, emails the parent
+// directly with details, and only then manually adds them as a real
+// EventChaperone. No unique constraint here - both parents of the same
+// student might reasonably express interest separately, and the teacher is
+// reviewing/deduping by hand anyway.
+model ChaperoneInterest {
+  id           String   @id @default(cuid())
+  eventId      String
+  event        Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  studentId    String
+  student      Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  parentName   String
+  contactInfo  String   // email or phone, whatever the parent gave
+  note         String?
+  createdAt    DateTime @default(now())
 }
 
 // ---------- UNIFIED SKILLS SYSTEM ----------
