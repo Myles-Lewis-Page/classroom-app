@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
 import { getCurrentClassroomId } from "@/lib/classroomScope";
 import { getOrCreateDraft, getUpcomingEvents } from "@/lib/newsletter";
+import { getUpcomingSpellingList } from "@/lib/spelling";
 import { getChaperoneShortfalls } from "@/lib/chaperones";
 import { chaperoneInterestUrl } from "@/lib/qrcode";
 import { renderNewsletterPdf } from "@/lib/newsletterPdf";
@@ -22,11 +23,12 @@ export async function GET(req: NextRequest) {
 
   const baseUrl = process.env.NEXTAUTH_URL || req.nextUrl.origin;
 
-  const [draft, classroom, upcomingEvents, shortfalls] = await Promise.all([
+  const [draft, classroom, upcomingEvents, shortfalls, upcomingSpellingList] = await Promise.all([
     getOrCreateDraft(classroomId),
     prisma.classroom.findUnique({ where: { id: classroomId }, select: { name: true } }),
     getUpcomingEvents(classroomId),
     getChaperoneShortfalls(classroomId),
+    getUpcomingSpellingList(classroomId),
   ]);
 
   const pdfBuffer = await renderNewsletterPdf({
@@ -37,6 +39,7 @@ export async function GET(req: NextRequest) {
     blocks: draft.blocks,
     upcomingEvents,
     shortfalls: shortfalls.map((s) => ({ ...s, link: chaperoneInterestUrl(s.id, baseUrl) })),
+    upcomingSpellingWords: upcomingSpellingList?.words.map((w) => w.word) ?? [],
   });
 
   const dateStr = new Date().toISOString().slice(0, 10);

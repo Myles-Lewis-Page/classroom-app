@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { formatShortDate } from "@/lib/dateOnly";
 import { getChaperoneShortfalls, type ChaperoneShortfall } from "@/lib/chaperones";
 import { chaperoneInterestUrl } from "@/lib/qrcode";
+import { getUpcomingSpellingList } from "@/lib/spelling";
 
 export const BLOCK_TYPES = [
   "heading",
@@ -32,7 +33,7 @@ export type NewsletterBlockContent =
   | { type: "divider"; color?: BlockColor }
   | { type: "image"; url: string; caption?: string }
   | { type: "events"; color?: BlockColor }
-  | { type: "spellingWords"; words: string[]; color?: BlockColor }
+  | { type: "spellingWords"; color?: BlockColor }
   | { type: "wordWall"; words: string[]; color?: BlockColor }
   | { type: "readingNow"; title: string; author?: string; questions: string[]; color?: BlockColor }
   | { type: "homeLearning"; items: string[]; color?: BlockColor };
@@ -56,7 +57,7 @@ export function defaultContentForType(type: NewsletterBlockType): Record<string,
     case "events":
       return { color: "grape" };
     case "spellingWords":
-      return { words: [""], color: "sky" };
+      return { color: "sky" };
     case "wordWall":
       return { words: [""], color: "teal" };
     case "readingNow":
@@ -121,6 +122,8 @@ export async function renderNewsletterBlocks(
   const upcomingEvents = needsEvents ? await getUpcomingEvents(classroomId) : [];
   const shortfalls: ChaperoneShortfall[] = needsEvents ? await getChaperoneShortfalls(classroomId) : [];
   const shortfallById = new Map(shortfalls.map((s) => [s.id, s]));
+  const needsSpelling = sorted.some((b) => b.type === "spellingWords");
+  const upcomingSpellingList = needsSpelling ? await getUpcomingSpellingList(classroomId) : null;
 
   for (const block of sorted) {
     const content = block.content as Record<string, unknown>;
@@ -180,11 +183,9 @@ export async function renderNewsletterBlocks(
         break;
       }
       case "spellingWords": {
-        const words = (Array.isArray(content?.words) ? (content.words as string[]) : [])
-          .map((w) => String(w).trim())
-          .filter(Boolean);
+        const words = upcomingSpellingList?.words.map((w) => w.word) ?? [];
         if (words.length) {
-          lines.push("SPELLING WORDS:");
+          lines.push(`SPELLING WORDS (${formatShortDate(upcomingSpellingList!.weekOf)}):`);
           words.forEach((w, i) => lines.push(`${i + 1}. ${w}`));
           lines.push("");
         }

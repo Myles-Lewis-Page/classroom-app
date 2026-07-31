@@ -85,6 +85,7 @@ export default function NewsletterView({
   blocks,
   upcomingEvents,
   shortfalls = [],
+  upcomingSpellingWords = [],
 }: {
   classroomName: string;
   weekLabel: string;
@@ -93,6 +94,7 @@ export default function NewsletterView({
   blocks: ViewBlock[];
   upcomingEvents: ViewEvent[];
   shortfalls?: ViewShortfall[];
+  upcomingSpellingWords?: string[];
 }) {
   const title = bannerTitle?.trim() || `${classroomName}'s Newsletter`;
   const subtitle = bannerSubtitle?.trim() || weekLabel;
@@ -132,7 +134,7 @@ export default function NewsletterView({
       >
         {blocks.map((block) => (
           <div key={block.id} style={gridStyle(block.column, block.span)} className="min-w-0">
-            <BlockCard block={block} upcomingEvents={upcomingEvents} shortfallById={shortfallById} />
+            <BlockCard block={block} upcomingEvents={upcomingEvents} shortfallById={shortfallById} upcomingSpellingWords={upcomingSpellingWords} />
           </div>
         ))}
         {blocks.length === 0 && (
@@ -149,10 +151,12 @@ function BlockCard({
   block,
   upcomingEvents,
   shortfallById,
+  upcomingSpellingWords,
 }: {
   block: ViewBlock;
   upcomingEvents: ViewEvent[];
   shortfallById: Map<string, ViewShortfall>;
+  upcomingSpellingWords: string[];
 }) {
   const { type, content } = block;
 
@@ -280,15 +284,33 @@ function BlockCard({
     );
   }
 
-  if (type === "spellingWords" || type === "wordWall") {
-    const color = colorFor(content, type === "spellingWords" ? "sky" : "teal");
+  if (type === "spellingWords") {
+    const color = colorFor(content, "sky");
+    const c = COLOR_CLASSES[color];
+    if (upcomingSpellingWords.length === 0) return null;
+    return (
+      <div className={`h-full rounded-2xl border-4 ${c.border} ${c.tint} p-4`}>
+        <p className={`font-bold ${c.text} mb-2`} style={{ fontFamily: "'Baloo 2', sans-serif" }}>
+          Spelling Words
+        </p>
+        <ol className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm list-decimal list-inside">
+          {upcomingSpellingWords.map((w, i) => (
+            <li key={i} className="break-words [overflow-wrap:anywhere]">{w}</li>
+          ))}
+        </ol>
+      </div>
+    );
+  }
+
+  if (type === "wordWall") {
+    const color = colorFor(content, "teal");
     const c = COLOR_CLASSES[color];
     const words = ((content?.words as string[]) ?? []).map((w) => w.trim()).filter(Boolean);
     if (words.length === 0) return null;
     return (
       <div className={`h-full rounded-2xl border-4 ${c.border} ${c.tint} p-4`}>
         <p className={`font-bold ${c.text} mb-2`} style={{ fontFamily: "'Baloo 2', sans-serif" }}>
-          {type === "spellingWords" ? "Spelling Words" : "Word Wall"}
+          Word Wall
         </p>
         <ol className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm list-decimal list-inside">
           {words.map((w, i) => (

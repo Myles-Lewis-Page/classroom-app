@@ -75,10 +75,12 @@ function BlockContent({
   block,
   upcomingEvents,
   shortfalls,
+  upcomingSpellingWords,
 }: {
   block: PdfBlock;
   upcomingEvents: PdfEvent[];
   shortfalls: PdfShortfall[];
+  upcomingSpellingWords: string[];
 }) {
   const { type } = block;
   const content = (block.content ?? {}) as Record<string, unknown>;
@@ -173,15 +175,30 @@ function BlockContent({
     );
   }
 
-  if (type === "spellingWords" || type === "wordWall") {
-    const words = ((content?.words as string[]) ?? []).map((w) => w.trim()).filter(Boolean);
-    if (words.length === 0) return null;
-    const c = COLORS[colorFor(content, type === "spellingWords" ? "sky" : "teal")];
+  if (type === "spellingWords") {
+    if (upcomingSpellingWords.length === 0) return null;
+    const c = COLORS[colorFor(content, "sky")];
     return (
       <View style={{ ...styles.block, borderColor: c.border, backgroundColor: c.tint }}>
-        <Text style={{ color: c.text, fontFamily: "Helvetica-Bold", marginBottom: 6 }}>
-          {type === "spellingWords" ? "Spelling Words" : "Word Wall"}
-        </Text>
+        <Text style={{ color: c.text, fontFamily: "Helvetica-Bold", marginBottom: 6 }}>Spelling Words</Text>
+        <View style={{ flexDirection: "row", flexWrap: "wrap" }}>
+          {upcomingSpellingWords.map((w, i) => (
+            <Text key={i} style={{ width: "50%", marginBottom: 2 }}>
+              {i + 1}. {w}
+            </Text>
+          ))}
+        </View>
+      </View>
+    );
+  }
+
+  if (type === "wordWall") {
+    const words = ((content?.words as string[]) ?? []).map((w) => w.trim()).filter(Boolean);
+    if (words.length === 0) return null;
+    const c = COLORS[colorFor(content, "teal")];
+    return (
+      <View style={{ ...styles.block, borderColor: c.border, backgroundColor: c.tint }}>
+        <Text style={{ color: c.text, fontFamily: "Helvetica-Bold", marginBottom: 6 }}>Word Wall</Text>
         <View style={{ flexDirection: "row", flexWrap: "wrap" }}>
           {words.map((w, i) => (
             <Text key={i} style={{ width: "50%", marginBottom: 2 }}>
@@ -249,6 +266,7 @@ function NewsletterPdfDocument({
   blocks,
   upcomingEvents,
   shortfalls,
+  upcomingSpellingWords,
 }: {
   classroomName: string;
   weekLabel: string;
@@ -257,6 +275,7 @@ function NewsletterPdfDocument({
   blocks: PdfBlock[];
   upcomingEvents: PdfEvent[];
   shortfalls: PdfShortfall[];
+  upcomingSpellingWords: string[];
 }) {
   const title = bannerTitle?.trim() || `${classroomName}'s Newsletter`;
   const subtitle = bannerSubtitle?.trim() || weekLabel;
@@ -273,7 +292,7 @@ function NewsletterPdfDocument({
           <View style={styles.row} key={i}>
             {row.map((block) => (
               <View key={block.id} style={{ flex: Math.min(4, Math.max(1, block.span ?? 2)) }}>
-                <BlockContent block={block} upcomingEvents={upcomingEvents} shortfalls={shortfalls} />
+                <BlockContent block={block} upcomingEvents={upcomingEvents} shortfalls={shortfalls} upcomingSpellingWords={upcomingSpellingWords} />
               </View>
             ))}
           </View>
@@ -291,6 +310,7 @@ export async function renderNewsletterPdf(args: {
   blocks: PdfBlock[];
   upcomingEvents: PdfEvent[];
   shortfalls: PdfShortfall[];
+  upcomingSpellingWords: string[];
 }): Promise<Buffer> {
   return renderToBuffer(<NewsletterPdfDocument {...args} />);
 }

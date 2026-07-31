@@ -28,6 +28,7 @@ export default function NewsletterPrintPage() {
   const [bannerSubtitle, setBannerSubtitle] = useState<string | null>(null);
   const [upcomingEvents, setUpcomingEvents] = useState<ViewEvent[]>([]);
   const [shortfalls, setShortfalls] = useState<ViewShortfall[]>([]);
+  const [upcomingSpellingWords, setUpcomingSpellingWords] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -40,6 +41,7 @@ export default function NewsletterPrintPage() {
         setBannerSubtitle(data.newsletter?.bannerSubtitle ?? null);
         setUpcomingEvents(data.upcomingEvents ?? []);
         setShortfalls(data.shortfalls ?? []);
+        setUpcomingSpellingWords(data.upcomingSpellingWords ?? []);
         setLoading(false);
       });
   }, []);
@@ -62,6 +64,7 @@ export default function NewsletterPrintPage() {
         blocks={blocks}
         upcomingEvents={upcomingEvents}
         shortfalls={shortfalls}
+        upcomingSpellingWords={upcomingSpellingWords}
       />
     </div>
   );

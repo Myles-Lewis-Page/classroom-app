@@ -122,6 +122,11 @@ export default function StudentProfilePage({ params }: { params: Promise<{ id: s
   const [editMode, setEditMode] = useState(false);
   const [removing, setRemoving] = useState(false);
   const [gradeCategories, setGradeCategories] = useState<{ id: string; name: string; weight: number }[]>([]);
+  const [spelling, setSpelling] = useState<{ known: { word: string }[]; notYet: { word: string }[] } | null>(null);
+
+  useEffect(() => {
+    fetch(`/api/spelling/students/${id}`).then((r) => r.json()).then(setSpelling);
+  }, [id]);
 
   useEffect(() => {
     fetch("/api/grade-categories").then((r) => r.json()).then(setGradeCategories);
@@ -361,6 +366,47 @@ export default function StudentProfilePage({ params }: { params: Promise<{ id: s
             </ul>
           </div>
         ))}
+      </section>
+
+      {/* Spelling - known vs. not-yet-known, based on each word's most
+          recent test result (a makeup correction overrides the original
+          miss). See /spelling for the actual weekly lists/testing. */}
+      <section className="card">
+        <h2 className="font-bold mb-2">Spelling</h2>
+        {!spelling || (spelling.known.length === 0 && spelling.notYet.length === 0) ? (
+          <p className="text-gray-500 text-sm">No spelling tests recorded yet</p>
+        ) : (
+          <div className="grid sm:grid-cols-2 gap-4 text-sm">
+            <div>
+              <p className="font-medium text-emerald-700 mb-1">Known ({spelling.known.length})</p>
+              {spelling.known.length === 0 ? (
+                <p className="text-gray-400">None yet</p>
+              ) : (
+                <ul className="flex flex-wrap gap-1">
+                  {spelling.known.map((w) => (
+                    <li key={w.word} className="bg-emerald-50 text-emerald-700 rounded px-2 py-0.5 text-xs">
+                      {w.word}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+            <div>
+              <p className="font-medium text-amber-700 mb-1">Still working on ({spelling.notYet.length})</p>
+              {spelling.notYet.length === 0 ? (
+                <p className="text-gray-400">None - great job!</p>
+              ) : (
+                <ul className="flex flex-wrap gap-1">
+                  {spelling.notYet.map((w) => (
+                    <li key={w.word} className="bg-amber-50 text-amber-700 rounded px-2 py-0.5 text-xs">
+                      {w.word}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </div>
+        )}
       </section>
 
       {/* Behavior notes */}

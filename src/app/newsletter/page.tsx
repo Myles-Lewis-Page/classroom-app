@@ -52,7 +52,7 @@ const BLOCK_LABELS: Record<BlockType, string> = {
   divider: "Divider",
   image: "Image",
   events: "Important Dates (auto, incl. chaperone QR codes)",
-  spellingWords: "Spelling Words",
+  spellingWords: "Spelling Words (auto, from this week's list)",
   wordWall: "Word Wall",
   readingNow: "Current Reading + Questions",
   homeLearning: "Learning at Home",
@@ -67,6 +67,7 @@ export default function NewsletterPage() {
   const [savingBanner, setSavingBanner] = useState(false);
   const [upcomingEvents, setUpcomingEvents] = useState<ViewEvent[]>([]);
   const [shortfalls, setShortfalls] = useState<ViewShortfall[]>([]);
+  const [upcomingSpellingWords, setUpcomingSpellingWords] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [savingBlockId, setSavingBlockId] = useState<string | null>(null);
   const [dragId, setDragId] = useState<string | null>(null);
@@ -93,6 +94,7 @@ export default function NewsletterPage() {
     setClassroomName(data.classroomName ?? "Our Classroom");
     setUpcomingEvents(data.upcomingEvents ?? []);
     setShortfalls(data.shortfalls ?? []);
+    setUpcomingSpellingWords(data.upcomingSpellingWords ?? []);
     setLoading(false);
   }, []);
 
@@ -459,6 +461,7 @@ export default function NewsletterPage() {
             blocks={viewBlocks}
             upcomingEvents={upcomingEvents}
             shortfalls={shortfalls}
+            upcomingSpellingWords={upcomingSpellingWords}
           />
           <button
             onClick={() => setShowPlainText((v) => !v)}
@@ -781,7 +784,23 @@ function BlockEditor({
     );
   }
 
-  if (block.type === "spellingWords" || block.type === "wordWall") {
+  if (block.type === "spellingWords") {
+    return (
+      <div>
+        <p className="text-xs text-slate-500">
+          Automatically shows this week&apos;s spelling words from{" "}
+          <a href="/spelling" className="text-sky-600 hover:underline">
+            Spelling
+          </a>{" "}
+          - nothing to fill in here. Doesn&apos;t appear if no list is uploaded for the coming
+          week yet.
+        </p>
+        <ColorPicker value={color} onChange={(c) => onSave({ color: c })} />
+      </div>
+    );
+  }
+
+  if (block.type === "wordWall") {
     const words = (content.words as string[]) ?? [""];
     return (
       <div className="space-y-1">
