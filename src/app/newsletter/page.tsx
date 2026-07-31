@@ -40,15 +40,6 @@ const BLOCK_LABELS: Record<BlockType, string> = {
   events: "Important Dates (auto)",
 };
 
-const BLOCK_ICONS: Record<BlockType, string> = {
-  heading: "✏️",
-  paragraph: "💬",
-  list: "✅",
-  divider: "🌟",
-  image: "📷",
-  events: "📅",
-};
-
 export default function NewsletterPage() {
   const [newsletter, setNewsletter] = useState<Newsletter | null>(null);
   const [preview, setPreview] = useState("");
@@ -225,7 +216,7 @@ export default function NewsletterPage() {
         </div>
         <div className="flex gap-2 shrink-0">
           <a href="/newsletter/print" target="_blank" rel="noreferrer" className="btn-outline px-4 py-2">
-            🖨️ Print / Send Home
+            Print / Send Home
           </a>
           <button onClick={publish} disabled={publishing} className="btn-primary px-4 py-2">
             {publishing ? "Publishing..." : "Publish This Week"}
@@ -324,7 +315,7 @@ export default function NewsletterPage() {
           <div className="flex flex-wrap gap-2 mb-3">
             {(Object.keys(BLOCK_LABELS) as BlockType[]).map((type) => (
               <button key={type} onClick={() => addBlock(type)} className="btn-outline text-xs px-2 py-1">
-                {BLOCK_ICONS[type]} {BLOCK_LABELS[type]}
+                {BLOCK_LABELS[type]}
               </button>
             ))}
           </div>
@@ -346,7 +337,7 @@ export default function NewsletterPage() {
               >
                 <div className="flex justify-between items-center mb-2">
                   <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">
-                    ⠿ {BLOCK_ICONS[block.type]} {BLOCK_LABELS[block.type]}
+                    ⠿ {BLOCK_LABELS[block.type]}
                   </span>
                   <span className="flex items-center gap-2">
                     {savingBlockId === block.id && <span className="text-xs text-slate-400">Saving...</span>}

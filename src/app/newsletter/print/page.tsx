@@ -29,7 +29,7 @@ export default function NewsletterPrintPage() {
       <NewsletterFonts />
       <div className="flex justify-end mb-4 print:hidden">
         <button onClick={() => window.print()} className="btn-primary px-4 py-2">
-          🖨️ Print This Newsletter
+          Print This Newsletter
         </button>
       </div>
       <NewsletterView

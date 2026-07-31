@@ -23,15 +23,6 @@ const COLOR_CLASSES: Record<BlockColor, { border: string; bg: string; tint: stri
   sky: { border: "border-[#3FA7D6]", bg: "bg-[#3FA7D6]", tint: "bg-[#3FA7D6]/10", text: "text-[#2C86AD]" },
 };
 
-const BLOCK_ICON: Record<ViewBlock["type"], string> = {
-  heading: "✏️",
-  paragraph: "💬",
-  list: "✅",
-  divider: "🌟",
-  image: "📷",
-  events: "📅",
-};
-
 function colorFor(content: Record<string, unknown>, fallback: BlockColor): BlockColor {
   const c = content?.color as BlockColor | undefined;
   return c && c in COLOR_CLASSES ? c : fallback;
@@ -68,7 +59,7 @@ export default function NewsletterView({
       {/* Hero banner - the one signature element the rest of the page stays quiet around */}
       <div className="rounded-2xl mb-5 p-5 text-center bg-gradient-to-r from-[#FF6B6B] via-[#F4A300] to-[#9B5DE5]">
         <p className="text-white/90 text-sm font-semibold tracking-wide" style={{ fontFamily: "'Kalam', cursive" }}>
-          🍎 {weekLabel} 🍎
+          {weekLabel}
         </p>
         <h1
           className="text-white text-3xl sm:text-4xl font-extrabold drop-shadow-sm"
@@ -93,7 +84,7 @@ export default function NewsletterView({
         className="text-center text-sm text-[#9b8f7a] mt-6"
         style={{ fontFamily: "'Kalam', cursive" }}
       >
-        With love, your teacher 💛
+        With love, your teacher
       </p>
     </div>
   );
@@ -108,7 +99,7 @@ function BlockCard({ block, upcomingEvents }: { block: ViewBlock; upcomingEvents
     return (
       <div className="sm:col-span-2 flex items-center gap-3 py-1">
         <div className={`flex-1 border-t-4 border-dashed ${c.border}`} />
-        <span className="text-xl">{BLOCK_ICON.divider}</span>
+        <span className={`w-2 h-2 rounded-full ${c.bg}`} />
         <div className={`flex-1 border-t-4 border-dashed ${c.border}`} />
       </div>
     );
@@ -151,7 +142,7 @@ function BlockCard({ block, upcomingEvents }: { block: ViewBlock; upcomingEvents
         <ul className="space-y-1.5">
           {items.map((item, i) => (
             <li key={i} className="flex items-start gap-2">
-              <span className={`${c.text} font-bold mt-0.5`}>✓</span>
+              <span className={`${c.text} font-bold mt-0.5`}>•</span>
               <span>{item}</span>
             </li>
           ))}
@@ -183,7 +174,7 @@ function BlockCard({ block, upcomingEvents }: { block: ViewBlock; upcomingEvents
     return (
       <div className={`rounded-2xl border-4 ${c.border} ${c.tint} p-4`}>
         <p className={`font-bold ${c.text} mb-2`} style={{ fontFamily: "'Baloo 2', sans-serif" }}>
-          📅 Important Dates
+          Important Dates
         </p>
         {upcomingEvents.length === 0 ? (
           <p className="text-sm text-[#9b8f7a]">Nothing on the calendar yet.</p>
