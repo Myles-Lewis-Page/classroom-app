@@ -3,6 +3,9 @@ import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
 import { getCurrentClassroomId } from "@/lib/classroomScope";
 import { minSpanForType, NewsletterBlockType } from "@/lib/newsletter";
+import { findCollision } from "@/lib/newsletterGrid";
+
+const MAX_HEIGHT = 6; // reasonable ceiling so a fat-fingered value can't blow up the grid
 
 async function ownedDraftBlock(id: string, classroomId: string) {
   const block = await prisma.newsletterBlock.findUnique({
@@ -17,12 +20,14 @@ async function ownedDraftBlock(id: string, classroomId: string) {
   return block;
 }
 
-// PATCH { content?, column?, span? } - update a block's content and/or its
-// position on the 4-column layout grid (column: 1-4 where it starts,
-// span: how wide it is). Clamped server-side so a bad value can't push a
-// block off the grid or below that block type's minimum width (see
-// minSpanForType - most types need at least 2 columns to read sensibly;
-// word-list-style blocks can go down to 1).
+// PATCH { content?, column?, span?, row?, height? } - update a block's
+// content and/or its position on the grid. Layout fields are clamped
+// server-side (can't go below the type's minimum width, can't push off
+// the grid) and then checked for a collision against every other block in
+// the same draft - if the resulting rectangle would overlap another
+// block, the whole update is rejected (409) and nothing is saved. This is
+// the actual enforcement; the client-side picker just tries to avoid
+// offering options that would trigger it.
 export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -38,7 +43,7 @@ export async function PATCH(
   }
 
   const body = await req.json();
-  const data: { content?: object; column?: number; span?: number } = {};
+  const data: { content?: object; column?: number; span?: number; row?: number; height?: number } = {};
 
   if (body.content !== undefined) {
     data.content = body.content;
@@ -50,19 +55,51 @@ export async function PATCH(
     const minSpan = minSpanForType(block.type as NewsletterBlockType);
     data.span = Math.min(4, Math.max(minSpan, Math.round(Number(body.span) || minSpan)));
   }
-  if (data.column !== undefined && data.span !== undefined && data.column + data.span > 5) {
-    // Prefer shrinking the column start over growing span past the grid
-    // edge; if even the type's minimum span doesn't fit there, pull the
-    // column back instead of overflowing.
-    const minSpan = minSpanForType(block.type as NewsletterBlockType);
-    if (5 - data.column >= minSpan) {
-      data.span = 5 - data.column;
-    } else {
-      data.column = 5 - data.span;
+  if (body.row !== undefined) {
+    data.row = Math.max(1, Math.round(Number(body.row) || 1));
+  }
+  if (body.height !== undefined) {
+    data.height = Math.min(MAX_HEIGHT, Math.max(1, Math.round(Number(body.height) || 1)));
+  }
+
+  // Resolve the final column/span so one can't overflow the grid relative
+  // to the other, whichever one (or both) is actually being changed here.
+  if (data.column !== undefined || data.span !== undefined) {
+    const finalColumn = data.column ?? block.column;
+    const finalSpan = data.span ?? block.span;
+    if (finalColumn + finalSpan > 5) {
+      const minSpan = minSpanForType(block.type as NewsletterBlockType);
+      if (5 - finalColumn >= minSpan) {
+        data.span = 5 - finalColumn;
+      } else {
+        data.column = 5 - finalSpan;
+      }
     }
   }
+
+  const isLayoutChange = data.column !== undefined || data.span !== undefined || data.row !== undefined || data.height !== undefined;
+  if (isLayoutChange) {
+    const candidate = {
+      column: data.column ?? block.column,
+      span: data.span ?? block.span,
+      row: data.row ?? block.row,
+      height: data.height ?? block.height,
+    };
+    const others = await prisma.newsletterBlock.findMany({
+      where: { newsletterId: block.newsletterId, id: { not: id } },
+      select: { id: true, column: true, span: true, row: true, height: true },
+    });
+    const collision = findCollision(candidate, others);
+    if (collision) {
+      return NextResponse.json(
+        { error: "That spot is already taken by another block - pick a different row or column." },
+        { status: 409 }
+      );
+    }
+  }
+
   if (Object.keys(data).length === 0) {
-    return NextResponse.json({ error: "content, column, or span is required" }, { status: 400 });
+    return NextResponse.json({ error: "content, column, span, row, or height is required" }, { status: 400 });
   }
 
   const updated = await prisma.newsletterBlock.update({ where: { id }, data });

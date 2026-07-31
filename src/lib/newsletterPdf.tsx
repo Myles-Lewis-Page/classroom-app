@@ -4,7 +4,7 @@ import { qrCodeImageUrl } from "@/lib/qrcode";
 import { getMonthlyTheme } from "@/lib/monthlyTheme";
 import type { BlockColor } from "@/lib/newsletter";
 
-type PdfBlock = { id: string; type: string; content: unknown; span?: number };
+type PdfBlock = { id: string; type: string; content: unknown; column?: number; span?: number; row?: number };
 type PdfEvent = { id: string; name: string; date: Date | string };
 type PdfShortfall = { id: string; name: string; date: Date | string; needed: number; confirmed: number; link: string };
 
@@ -53,22 +53,28 @@ function colorFor(content: Record<string, unknown>, fallback: BlockColor): Block
  * page width makes an exact column match less important than just not
  * overflowing a row.
  */
+/**
+ * Groups blocks into PDF rows by their actual explicit `row` value
+ * (matching the web/print grid - see src/lib/newsletterGrid.ts) rather
+ * than sequential bin-packing by span. Each group is sorted by column so
+ * left-to-right reading order matches what she arranged. Height (row
+ * span) isn't represented here - react-pdf's flex-per-row model can't
+ * make a block visually span multiple PDF rows the way CSS grid can, so
+ * a tall block just renders fully within its own row group; this is a
+ * deliberate simplification, not a bug, given the alternative is real
+ * page-layout math react-pdf doesn't support natively.
+ */
 function packRows(blocks: PdfBlock[]): PdfBlock[][] {
-  const rows: PdfBlock[][] = [];
-  let current: PdfBlock[] = [];
-  let used = 0;
+  const byRow = new Map<number, PdfBlock[]>();
   for (const block of blocks) {
-    const span = Math.min(4, Math.max(1, block.span ?? 2));
-    if (used + span > 4 && current.length > 0) {
-      rows.push(current);
-      current = [];
-      used = 0;
-    }
-    current.push(block);
-    used += span;
+    const row = block.row ?? 1;
+    if (!byRow.has(row)) byRow.set(row, []);
+    byRow.get(row)!.push(block);
   }
-  if (current.length > 0) rows.push(current);
-  return rows;
+  const sortedRowNumbers = Array.from(byRow.keys()).sort((a, b) => a - b);
+  return sortedRowNumbers.map((row) =>
+    byRow.get(row)!.slice().sort((a, b) => (a.column ?? 1) - (b.column ?? 1))
+  );
 }
 
 function EventsBlock({

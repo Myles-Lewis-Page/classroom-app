@@ -16,10 +16,13 @@ type Block = {
     | "spellingWords"
     | "wordWall"
     | "readingNow"
-    | "homeLearning";
+    | "homeLearning"
+    | "spacer";
   content: Record<string, unknown>;
   column: number;
   span: number;
+  row: number;
+  height: number;
 };
 
 export default function NewsletterPrintPage() {

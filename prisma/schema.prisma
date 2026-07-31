@@ -190,7 +190,8 @@ model NewsletterBlock {
   newsletterId String
   newsletter   Newsletter @relation(fields: [newsletterId], references: [id], onDelete: Cascade)
   // "heading" | "paragraph" | "list" | "divider" | "image" | "events" |
-  // "spellingWords" | "wordWall" | "readingNow" | "homeLearning"
+  // "thisWeekEvents" | "spellingWords" | "wordWall" | "readingNow" |
+  // "homeLearning" | "spacer"
   type         String
   // Shape depends on type - see src/lib/newsletter.ts for the contract:
   //   heading:       { text }
@@ -209,19 +210,31 @@ model NewsletterBlock {
   //                  gets a QR code shown right under its date within
   //                  this same block - there's no separate "chaperones"
   //                  block type, by design (see getChaperoneShortfalls).
-  //   spellingWords: { words: string[] }
+  //   thisWeekEvents: {} - like events, but scoped to the newsletter's
+  //                  own weekEndDate window instead of a rolling
+  //                  next-10-upcoming.
+  //   spellingWords: {} - auto-pulls the upcoming SpellingList.
   //   wordWall:      { words: string[] }
   //   readingNow:    { title, author?, questions: string[] }
   //   homeLearning:  { items: string[] }
+  //   spacer:        {} - renders nothing; exists purely to hold
+  //                  intentional blank space on the grid so it doesn't
+  //                  get silently packed away.
   content      Json
   order        Int
-  // Layout position on a 4-column grid: column is where the block starts
-  // (1-4), span is how many columns wide it is (1-4, clamped so
-  // column+span never exceeds 5 at render time). E.g. column=2, span=1
-  // sits alone in the second column; column=3, span=2 spans the third and
-  // fourth columns.
+  // Explicit position on the grid - column/row are where the block
+  // starts (1-4 for column; row is open-ended, blocks just stack
+  // downward), span/height are how many columns/rows it occupies. This
+  // used to be CSS auto-placement (grid-auto-flow: dense), which
+  // actively fights "leave this cell blank on purpose" by always
+  // backfilling gaps - now every block's rectangle is explicit and
+  // checked server-side for collisions before saving (see
+  // src/lib/newsletterGrid.ts), so two blocks can never overlap and
+  // blank space stays exactly where she put it.
   column       Int        @default(1)
   span         Int        @default(2)
+  row          Int        @default(1)
+  height       Int        @default(1)
 
   @@index([newsletterId, order])
 }
@@ -247,6 +260,8 @@ model NewsletterTemplateBlock {
   order      Int
   column     Int                @default(1)
   span       Int                @default(2)
+  row        Int                @default(1)
+  height     Int                @default(1)
 }
 
 // ---------- SPELLING ----------

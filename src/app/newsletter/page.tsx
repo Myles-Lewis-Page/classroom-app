@@ -16,7 +16,8 @@ type BlockType =
   | "spellingWords"
   | "wordWall"
   | "readingNow"
-  | "homeLearning";
+  | "homeLearning"
+  | "spacer";
 
 type Block = {
   id: string;
@@ -25,6 +26,8 @@ type Block = {
   order: number;
   column: number;
   span: number;
+  row: number;
+  height: number;
 };
 
 type Newsletter = {
@@ -37,7 +40,7 @@ type Newsletter = {
 type Template = {
   id: string;
   name: string;
-  blocks: { id: string; type: BlockType; content: Record<string, unknown>; order: number; column: number; span: number }[];
+  blocks: { id: string; type: BlockType; content: Record<string, unknown>; order: number; column: number; span: number; row: number; height: number }[];
 };
 
 type ArchiveIssue = {
@@ -54,7 +57,7 @@ type ArchiveIssue = {
 // enforcement; this is just so the picker doesn't offer options the
 // server would reject anyway.
 function minSpanForType(type: BlockType): number {
-  return type === "list" || type === "spellingWords" || type === "wordWall" || type === "homeLearning" ? 1 : 2;
+  return type === "list" || type === "spellingWords" || type === "wordWall" || type === "homeLearning" || type === "spacer" ? 1 : 2;
 }
 
 const BLOCK_LABELS: Record<BlockType, string> = {
@@ -69,6 +72,7 @@ const BLOCK_LABELS: Record<BlockType, string> = {
   wordWall: "Word Wall",
   readingNow: "Current Reading + Questions",
   homeLearning: "Learning at Home",
+  spacer: "Blank Space",
 };
 
 export default function NewsletterPage() {
@@ -99,6 +103,7 @@ export default function NewsletterPage() {
 
   const [publishing, setPublishing] = useState(false);
   const [newBlockColumn, setNewBlockColumn] = useState(1);
+  const [newBlockRow, setNewBlockRow] = useState<string>("");
 
   const load = useCallback(async () => {
     const res = await fetch("/api/newsletter/draft");
@@ -141,26 +146,42 @@ export default function NewsletterPage() {
     load();
   }
 
-  async function saveBlockLayout(blockId: string, column: number, span: number) {
+  async function saveBlockLayout(blockId: string, column: number, span: number, row: number, height: number) {
     if (!newsletter) return;
+    const previous = newsletter.blocks;
     setNewsletter({
       ...newsletter,
-      blocks: newsletter.blocks.map((b) => (b.id === blockId ? { ...b, column, span } : b)),
+      blocks: newsletter.blocks.map((b) => (b.id === blockId ? { ...b, column, span, row, height } : b)),
     });
-    await fetch(`/api/newsletter/draft/blocks/${blockId}`, {
+    const res = await fetch(`/api/newsletter/draft/blocks/${blockId}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ column, span }),
+      body: JSON.stringify({ column, span, row, height }),
     });
+    if (!res.ok) {
+      // Roll back the optimistic update - the server rejected the move
+      // because it would overlap another block.
+      setNewsletter({ ...newsletter, blocks: previous });
+      const data = await res.json().catch(() => ({}));
+      alert(data.error ?? "Couldn't move that block there.");
+      return;
+    }
     load();
   }
 
   async function addBlock(type: BlockType) {
-    await fetch("/api/newsletter/draft/blocks", {
+    const body: { type: BlockType; column: number; row?: number } = { type, column: newBlockColumn };
+    if (newBlockRow.trim()) body.row = Number(newBlockRow);
+    const res = await fetch("/api/newsletter/draft/blocks", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ type, column: newBlockColumn }),
+      body: JSON.stringify(body),
     });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      alert(data.error ?? "Couldn't add that block.");
+      return;
+    }
     load();
   }
 
@@ -273,7 +294,7 @@ export default function NewsletterPage() {
     return <div className="p-6 text-slate-400">Loading...</div>;
   }
 
-  const viewBlocks = newsletter.blocks.map((b) => ({ id: b.id, type: b.type, content: b.content, column: b.column, span: b.span }));
+  const viewBlocks = newsletter.blocks.map((b) => ({ id: b.id, type: b.type, content: b.content, column: b.column, span: b.span, row: b.row, height: b.height }));
 
   return (
     <div className="p-4 sm:p-6 max-w-6xl mx-auto">
@@ -448,6 +469,18 @@ export default function NewsletterPage() {
                 ))}
               </select>
             </label>
+            <label className="text-xs text-slate-500 flex items-center gap-1">
+              Row
+              <input
+                type="number"
+                min={1}
+                value={newBlockRow}
+                onChange={(e) => setNewBlockRow(e.target.value)}
+                placeholder="next"
+                className="border rounded px-1 py-0.5 text-xs w-14"
+              />
+            </label>
+            <span className="text-xs text-slate-400">(leave Row blank to stack below everything else)</span>
           </div>
           <div className="flex flex-wrap gap-2 mb-3">
             {(Object.keys(BLOCK_LABELS) as BlockType[]).map((type) => (
@@ -492,7 +525,9 @@ export default function NewsletterPage() {
                   type={block.type}
                   column={block.column}
                   span={block.span}
-                  onChange={(column, span) => saveBlockLayout(block.id, column, span)}
+                  row={block.row}
+                  height={block.height}
+                  onChange={(column, span, row, height) => saveBlockLayout(block.id, column, span, row, height)}
                 />
               </div>
             ))}
@@ -558,17 +593,21 @@ function LayoutPicker({
   type,
   column,
   span,
+  row,
+  height,
   onChange,
 }: {
   type: BlockType;
   column: number;
   span: number;
-  onChange: (column: number, span: number) => void;
+  row: number;
+  height: number;
+  onChange: (column: number, span: number, row: number, height: number) => void;
 }) {
   const minSpan = minSpanForType(type);
   const maxSpanForColumn = 5 - column;
   return (
-    <div className="flex items-center gap-3 mt-2 pt-2 border-t text-xs text-slate-500">
+    <div className="flex items-center gap-3 mt-2 pt-2 border-t text-xs text-slate-500 flex-wrap">
       <label className="flex items-center gap-1">
         Column
         <select
@@ -576,7 +615,7 @@ function LayoutPicker({
           onChange={(e) => {
             const nextColumn = Number(e.target.value);
             const nextSpan = Math.max(minSpan, Math.min(span, 5 - nextColumn));
-            onChange(nextColumn, nextSpan);
+            onChange(nextColumn, nextSpan, row, height);
           }}
           className="border rounded px-1 py-0.5"
         >
@@ -592,12 +631,39 @@ function LayoutPicker({
         Width
         <select
           value={span}
-          onChange={(e) => onChange(column, Number(e.target.value))}
+          onChange={(e) => onChange(column, Number(e.target.value), row, height)}
           className="border rounded px-1 py-0.5"
         >
           {[1, 2, 3, 4].filter((s) => s >= minSpan && s <= maxSpanForColumn).map((s) => (
             <option key={s} value={s}>
               {s} col{s > 1 ? "s" : ""}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label className="flex items-center gap-1">
+        Row
+        <input
+          type="number"
+          min={1}
+          value={row}
+          onChange={(e) => {
+            const next = Math.max(1, Number(e.target.value) || 1);
+            onChange(column, span, next, height);
+          }}
+          className="border rounded px-1 py-0.5 w-12"
+        />
+      </label>
+      <label className="flex items-center gap-1">
+        Height
+        <select
+          value={height}
+          onChange={(e) => onChange(column, span, row, Number(e.target.value))}
+          className="border rounded px-1 py-0.5"
+        >
+          {[1, 2, 3, 4, 5, 6].map((h) => (
+            <option key={h} value={h}>
+              {h} row{h > 1 ? "s" : ""}
             </option>
           ))}
         </select>
@@ -1007,6 +1073,15 @@ function BlockEditor({
         </button>
         <ColorPicker value={color} onChange={(c) => onSave({ items, color: c })} />
       </div>
+    );
+  }
+
+  if (block.type === "spacer") {
+    return (
+      <p className="text-xs text-slate-500">
+        An empty spot on purpose - use the Row/Column/Width/Height controls below to size and
+        place it. Nothing to fill in here.
+      </p>
     );
   }
 

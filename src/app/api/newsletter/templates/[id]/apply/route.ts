@@ -38,6 +38,8 @@ export async function POST(
         order: b.order,
         column: b.column,
         span: b.span,
+        row: b.row,
+        height: b.height,
       })),
     }),
   ]);

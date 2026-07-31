@@ -4,9 +4,14 @@ import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
 import { getCurrentClassroomId } from "@/lib/classroomScope";
 import { getOrCreateDraft, defaultContentForType, defaultLayoutForType, minSpanForType, BLOCK_TYPES, NewsletterBlockType } from "@/lib/newsletter";
+import { nextAvailableRow, findCollision } from "@/lib/newsletterGrid";
 
-// POST { type } - appends a new block of the given type, with sensible
-// default content, to the end of the current draft.
+// POST { type, column?, row? } - appends a new block of the given type,
+// with sensible default content, to the end of the current draft. With no
+// row given, it stacks below everything else (nextAvailableRow) so it
+// never needs a collision check against existing blocks; an explicit row
+// (from the "Add to row" picker) is checked for a collision before
+// saving, same as any layout change.
 export async function POST(req: NextRequest) {
   const session = await auth();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -39,6 +44,24 @@ export async function POST(req: NextRequest) {
     if (column + span > 5) column = 5 - span;
   }
 
+  const height = 1;
+  let row: number;
+  if (body.row !== undefined) {
+    row = Math.max(1, Math.round(Number(body.row) || 1));
+    const collision = findCollision(
+      { column, span, row, height },
+      draft.blocks.map((b) => ({ id: b.id, column: b.column, span: b.span, row: b.row, height: b.height }))
+    );
+    if (collision) {
+      return NextResponse.json(
+        { error: "That spot is already taken by another block - pick a different row or column." },
+        { status: 409 }
+      );
+    }
+  } else {
+    row = nextAvailableRow(draft.blocks.map((b) => ({ row: b.row, height: b.height })));
+  }
+
   const block = await prisma.newsletterBlock.create({
     data: {
       newsletterId: draft.id,
@@ -47,6 +70,8 @@ export async function POST(req: NextRequest) {
       order: maxOrder + 1,
       column,
       span,
+      row,
+      height,
     },
   });
 

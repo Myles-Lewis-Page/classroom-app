@@ -16,6 +16,7 @@ export const BLOCK_TYPES = [
   "wordWall",
   "readingNow",
   "homeLearning",
+  "spacer",
 ] as const;
 export type NewsletterBlockType = (typeof BLOCK_TYPES)[number];
 
@@ -38,7 +39,8 @@ export type NewsletterBlockContent =
   | { type: "spellingWords"; color?: BlockColor }
   | { type: "wordWall"; words: string[]; color?: BlockColor }
   | { type: "readingNow"; title: string; author?: string; questions: string[]; color?: BlockColor }
-  | { type: "homeLearning"; items: string[]; color?: BlockColor };
+  | { type: "homeLearning"; items: string[]; color?: BlockColor }
+  | { type: "spacer" };
 
 export type RawBlock = { id?: string; type: string; content: unknown; order: number; column?: number; span?: number };
 export type UpcomingEvent = { id: string; name: string; date: Date };
@@ -68,6 +70,8 @@ export function defaultContentForType(type: NewsletterBlockType): Record<string,
       return { title: "", author: "", questions: [""], color: "grape" };
     case "homeLearning":
       return { items: [""], color: "sunny" };
+    case "spacer":
+      return {};
   }
 }
 
@@ -106,6 +110,7 @@ export function minSpanForType(type: NewsletterBlockType): number {
     case "spellingWords":
     case "wordWall":
     case "homeLearning":
+    case "spacer":
       return 1;
     default:
       return 2;

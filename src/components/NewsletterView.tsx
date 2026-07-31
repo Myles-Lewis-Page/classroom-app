@@ -17,14 +17,20 @@ export type ViewBlock = {
     | "spellingWords"
     | "wordWall"
     | "readingNow"
-    | "homeLearning";
+    | "homeLearning"
+    | "spacer";
   content: Record<string, unknown>;
-  // Position on the 4-column grid: column is where it starts (1-4), span
-  // is how many columns wide (1-4). Both default to a sensible value
-  // server-side (see defaultLayoutForType in src/lib/newsletter.ts) if
-  // missing, so older data without these fields still renders reasonably.
+  // Explicit position on the grid: column/row are the top-left cell (1-4
+  // for column; row is open-ended), span/height are how many
+  // columns/rows it occupies. Defaults come from defaultLayoutForType in
+  // src/lib/newsletter.ts if missing, so older data still renders
+  // reasonably. Collisions are checked server-side before a placement is
+  // ever saved - see src/lib/newsletterGrid.ts - so anything reaching
+  // this component should already be a non-overlapping layout.
   column?: number;
   span?: number;
+  row?: number;
+  height?: number;
 };
 
 export type ViewEvent = { id: string; name: string; date: string | Date };
@@ -60,10 +66,15 @@ function colorFor(content: Record<string, unknown>, fallback: BlockColor): Block
 }
 
 /** Clamps a block's grid position so it can never render off the 4-column grid. */
-function gridStyle(column = 1, span = 2): CSSProperties {
+function gridStyle(column = 1, span = 2, row = 1, height = 1): CSSProperties {
   const safeColumn = Math.min(4, Math.max(1, column));
   const safeSpan = Math.min(span, 5 - safeColumn);
-  return { gridColumn: `${safeColumn} / span ${safeSpan}` };
+  const safeRow = Math.max(1, row);
+  const safeHeight = Math.max(1, height);
+  return {
+    gridColumn: `${safeColumn} / span ${safeSpan}`,
+    gridRow: `${safeRow} / span ${safeHeight}`,
+  };
 }
 
 export function NewsletterFonts() {
@@ -144,10 +155,10 @@ export default function NewsletterView({
 
       <div
         className="grid grid-cols-1 sm:grid-cols-4 gap-4"
-        style={{ gridAutoFlow: "row dense", gridAutoRows: "minmax(140px, auto)" }}
+        style={{ gridAutoRows: "minmax(140px, auto)" }}
       >
         {blocks.map((block) => (
-          <div key={block.id} style={gridStyle(block.column, block.span)} className="min-w-0">
+          <div key={block.id} style={gridStyle(block.column, block.span, block.row, block.height)} className="min-w-0">
             <BlockCard block={block} upcomingEvents={upcomingEvents} thisWeekEvents={thisWeekEvents} shortfallById={shortfallById} upcomingSpellingWords={upcomingSpellingWords} />
           </div>
         ))}
@@ -423,6 +434,9 @@ function BlockCard({
     );
   }
 
+  // "spacer" intentionally renders nothing - the grid wrapper div around
+  // this component already reserves its column/row footprint, which is
+  // the entire point (see src/lib/newsletterGrid.ts).
   return null;
 }
 
