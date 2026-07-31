@@ -12,6 +12,7 @@ type Block = {
     | "divider"
     | "image"
     | "events"
+    | "thisWeekEvents"
     | "spellingWords"
     | "wordWall"
     | "readingNow"
@@ -27,6 +28,7 @@ export default function NewsletterPrintPage() {
   const [bannerTitle, setBannerTitle] = useState<string | null>(null);
   const [bannerSubtitle, setBannerSubtitle] = useState<string | null>(null);
   const [upcomingEvents, setUpcomingEvents] = useState<ViewEvent[]>([]);
+  const [thisWeekEvents, setThisWeekEvents] = useState<ViewEvent[]>([]);
   const [shortfalls, setShortfalls] = useState<ViewShortfall[]>([]);
   const [upcomingSpellingWords, setUpcomingSpellingWords] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
@@ -40,6 +42,7 @@ export default function NewsletterPrintPage() {
         setBannerTitle(data.newsletter?.bannerTitle ?? null);
         setBannerSubtitle(data.newsletter?.bannerSubtitle ?? null);
         setUpcomingEvents(data.upcomingEvents ?? []);
+        setThisWeekEvents(data.thisWeekEvents ?? []);
         setShortfalls(data.shortfalls ?? []);
         setUpcomingSpellingWords(data.upcomingSpellingWords ?? []);
         setLoading(false);
@@ -63,6 +66,7 @@ export default function NewsletterPrintPage() {
         bannerSubtitle={bannerSubtitle}
         blocks={blocks}
         upcomingEvents={upcomingEvents}
+        thisWeekEvents={thisWeekEvents}
         shortfalls={shortfalls}
         upcomingSpellingWords={upcomingSpellingWords}
       />

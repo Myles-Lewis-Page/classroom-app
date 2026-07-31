@@ -166,6 +166,13 @@ model Newsletter {
   // broken before she's customized it.
   bannerTitle    String?
   bannerSubtitle String?
+  // The real date this newsletter's week ends on (she picks the Friday,
+  // typically) - drives which SpellingList counts as "next week's words"
+  // (see getUpcomingSpellingList) and the "This Week's Events" block,
+  // instead of both silently using the server's real "today." Separate
+  // from bannerSubtitle, which is just free-text display and doesn't have
+  // to be a real date at all.
+  weekEndDate    DateTime?
   // Frozen plain-text rendering, captured at publish time so the archive
   // shows exactly what was sent even if e.g. an Events block's underlying
   // event later gets edited or deleted. The live draft is rendered on the

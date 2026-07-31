@@ -25,11 +25,11 @@ const COLORS: Record<BlockColor, { border: string; tint: string; text: string }>
 const styles = StyleSheet.create({
   page: { padding: 32, fontSize: 11, fontFamily: "Helvetica", color: "#2D2A26" },
   banner: { borderRadius: 8, padding: 16, marginBottom: 16, textAlign: "center" },
-  bannerWeek: { color: "#FFF3F0", fontSize: 10, marginBottom: 4 },
-  bannerTitle: { color: "#FFFFFF", fontSize: 22, fontFamily: "Helvetica-Bold" },
+  bannerWeek: { fontSize: 10, marginBottom: 4 },
+  bannerTitle: { fontSize: 22, fontFamily: "Helvetica-Bold" },
   row: { flexDirection: "row", marginBottom: 10 },
   block: { padding: 10, borderRadius: 6, borderWidth: 1.5, marginRight: 8 },
-  heading: { fontSize: 15, fontFamily: "Helvetica-Bold", paddingBottom: 4, borderBottomWidth: 2 },
+  heading: { fontSize: 15, fontFamily: "Helvetica-Bold", paddingBottom: 4, borderBottomWidth: 2, textAlign: "center" },
   listItem: { flexDirection: "row", marginBottom: 2 },
   eventItem: { marginBottom: 6 },
   eventRow: { flexDirection: "row", justifyContent: "space-between" },
@@ -71,14 +71,62 @@ function packRows(blocks: PdfBlock[]): PdfBlock[][] {
   return rows;
 }
 
+function EventsBlock({
+  label,
+  color,
+  events,
+  shortfallById,
+  emptyText,
+}: {
+  label: string;
+  color: BlockColor;
+  events: PdfEvent[];
+  shortfallById: Map<string, PdfShortfall>;
+  emptyText: string;
+}) {
+  const c = COLORS[color];
+  return (
+    <View style={{ ...styles.block, borderColor: c.border, backgroundColor: c.tint }}>
+      <Text style={{ color: c.text, fontFamily: "Helvetica-Bold", marginBottom: 6, textAlign: "center" }}>{label}</Text>
+      {events.length === 0 ? (
+        <Text style={{ color: "#9b8f7a" }}>{emptyText}</Text>
+      ) : (
+        events.map((e) => {
+          const shortfall = shortfallById.get(e.id);
+          return (
+            <View style={styles.eventItem} key={e.id}>
+              <View style={styles.eventRow}>
+                <Text>{e.name}</Text>
+                <Text style={{ color: c.text, fontFamily: "Helvetica-Bold" }}>{formatShortDate(e.date)}</Text>
+              </View>
+              {shortfall && (
+                <View style={styles.chapRow}>
+                  {/* eslint-disable-next-line jsx-a11y/alt-text */}
+                  <Image src={qrCodeImageUrl(shortfall.link, 100)} style={{ width: 32, height: 32 }} />
+                  <Text style={{ fontSize: 8, color: c.text }}>
+                    Needs more chaperones{"\n"}
+                    {shortfall.confirmed} of {shortfall.needed} confirmed - scan to sign up
+                  </Text>
+                </View>
+              )}
+            </View>
+          );
+        })
+      )}
+    </View>
+  );
+}
+
 function BlockContent({
   block,
   upcomingEvents,
+  thisWeekEvents,
   shortfalls,
   upcomingSpellingWords,
 }: {
   block: PdfBlock;
   upcomingEvents: PdfEvent[];
+  thisWeekEvents: PdfEvent[];
   shortfalls: PdfShortfall[];
   upcomingSpellingWords: string[];
 }) {
@@ -94,10 +142,16 @@ function BlockContent({
 
   if (type === "paragraph") {
     const text = String(content?.text ?? "").trim();
-    if (!text) return null;
+    const heading = String(content?.heading ?? "").trim();
+    if (!text && !heading) return null;
     const c = COLORS[colorFor(content, "sky")];
     return (
       <View style={{ ...styles.block, borderColor: c.border, backgroundColor: c.tint }}>
+        {heading && (
+          <Text style={{ color: c.text, fontFamily: "Helvetica-Bold", marginBottom: 4, textAlign: "center" }}>
+            {heading}
+          </Text>
+        )}
         <Text>{text}</Text>
       </View>
     );
@@ -138,40 +192,16 @@ function BlockContent({
   }
 
   if (type === "events") {
-    const c = COLORS[colorFor(content, "grape")];
     const shortfallById = new Map(shortfalls.map((s) => [s.id, s]));
     return (
-      <View style={{ ...styles.block, borderColor: c.border, backgroundColor: c.tint }}>
-        <Text style={{ color: c.text, fontFamily: "Helvetica-Bold", marginBottom: 6 }}>Important Dates</Text>
-        {upcomingEvents.length === 0 ? (
-          <Text style={{ color: "#9b8f7a" }}>Nothing on the calendar yet.</Text>
-        ) : (
-          upcomingEvents.map((e) => {
-            const shortfall = shortfallById.get(e.id);
-            return (
-              <View style={styles.eventItem} key={e.id}>
-                <View style={styles.eventRow}>
-                  <Text>{e.name}</Text>
-                  <Text style={{ color: c.text, fontFamily: "Helvetica-Bold" }}>{formatShortDate(e.date)}</Text>
-                </View>
-                {/* Chaperone need sits right under this event's own date,
-                    not as a separate block - see NewsletterView.tsx for
-                    the same convention in the web/print view. */}
-                {shortfall && (
-                  <View style={styles.chapRow}>
-                    {/* eslint-disable-next-line jsx-a11y/alt-text */}
-                    <Image src={qrCodeImageUrl(shortfall.link, 100)} style={{ width: 32, height: 32 }} />
-                    <Text style={{ fontSize: 8, color: c.text }}>
-                      Needs more chaperones{"\n"}
-                      {shortfall.confirmed} of {shortfall.needed} confirmed - scan to sign up
-                    </Text>
-                  </View>
-                )}
-              </View>
-            );
-          })
-        )}
-      </View>
+      <EventsBlock label="Important Dates" color={colorFor(content, "grape")} events={upcomingEvents} shortfallById={shortfallById} emptyText="Nothing on the calendar yet." />
+    );
+  }
+
+  if (type === "thisWeekEvents") {
+    const shortfallById = new Map(shortfalls.map((s) => [s.id, s]));
+    return (
+      <EventsBlock label="This Week" color={colorFor(content, "sunny")} events={thisWeekEvents} shortfallById={shortfallById} emptyText="Nothing scheduled this week." />
     );
   }
 
@@ -180,10 +210,10 @@ function BlockContent({
     const c = COLORS[colorFor(content, "sky")];
     return (
       <View style={{ ...styles.block, borderColor: c.border, backgroundColor: c.tint }}>
-        <Text style={{ color: c.text, fontFamily: "Helvetica-Bold", marginBottom: 6 }}>Spelling Words</Text>
+        <Text style={{ color: c.text, fontFamily: "Helvetica-Bold", marginBottom: 6, textAlign: "center" }}>Spelling Words</Text>
         <View style={{ flexDirection: "row", flexWrap: "wrap" }}>
           {upcomingSpellingWords.map((w, i) => (
-            <Text key={i} style={{ width: "50%", marginBottom: 2 }}>
+            <Text key={i} style={{ width: `${100 / Math.max(1, block.span ?? 2)}%`, marginBottom: 2 }}>
               {i + 1}. {w}
             </Text>
           ))}
@@ -198,10 +228,10 @@ function BlockContent({
     const c = COLORS[colorFor(content, "teal")];
     return (
       <View style={{ ...styles.block, borderColor: c.border, backgroundColor: c.tint }}>
-        <Text style={{ color: c.text, fontFamily: "Helvetica-Bold", marginBottom: 6 }}>Word Wall</Text>
+        <Text style={{ color: c.text, fontFamily: "Helvetica-Bold", marginBottom: 6, textAlign: "center" }}>Word Wall</Text>
         <View style={{ flexDirection: "row", flexWrap: "wrap" }}>
           {words.map((w, i) => (
-            <Text key={i} style={{ width: "50%", marginBottom: 2 }}>
+            <Text key={i} style={{ width: `${100 / Math.max(1, block.span ?? 2)}%`, marginBottom: 2 }}>
               {i + 1}. {w}
             </Text>
           ))}
@@ -218,7 +248,7 @@ function BlockContent({
     const c = COLORS[colorFor(content, "grape")];
     return (
       <View style={{ ...styles.block, borderColor: c.border, backgroundColor: c.tint }}>
-        <Text style={{ color: c.text, fontFamily: "Helvetica-Bold", marginBottom: 2 }}>What We&apos;re Reading</Text>
+        <Text style={{ color: c.text, fontFamily: "Helvetica-Bold", marginBottom: 2, textAlign: "center" }}>What We&apos;re Reading</Text>
         <Text style={{ fontFamily: "Helvetica-Bold" }}>
           {title}
           {author ? ` by ${author}` : ""}
@@ -244,7 +274,7 @@ function BlockContent({
     const c = COLORS[colorFor(content, "sunny")];
     return (
       <View style={{ ...styles.block, borderColor: c.border, backgroundColor: c.tint }}>
-        <Text style={{ color: c.text, fontFamily: "Helvetica-Bold", marginBottom: 6 }}>Learning at Home</Text>
+        <Text style={{ color: c.text, fontFamily: "Helvetica-Bold", marginBottom: 6, textAlign: "center" }}>Learning at Home</Text>
         {items.map((item, i) => (
           <View style={styles.listItem} key={i}>
             <Text style={{ color: c.text, marginRight: 6 }}>{"\u2022"}</Text>
@@ -265,6 +295,7 @@ function NewsletterPdfDocument({
   bannerSubtitle,
   blocks,
   upcomingEvents,
+  thisWeekEvents,
   shortfalls,
   upcomingSpellingWords,
 }: {
@@ -274,6 +305,7 @@ function NewsletterPdfDocument({
   bannerSubtitle?: string | null;
   blocks: PdfBlock[];
   upcomingEvents: PdfEvent[];
+  thisWeekEvents: PdfEvent[];
   shortfalls: PdfShortfall[];
   upcomingSpellingWords: string[];
 }) {
@@ -285,14 +317,14 @@ function NewsletterPdfDocument({
     <Document>
       <Page size="LETTER" style={styles.page}>
         <View style={{ ...styles.banner, backgroundColor: theme.gradient[0] }}>
-          <Text style={styles.bannerWeek}>{subtitle}</Text>
-          <Text style={styles.bannerTitle}>{title}</Text>
+          <Text style={{ ...styles.bannerWeek, color: theme.textColor === "light" ? "#FFF3F0" : "#2D2A26" }}>{subtitle}</Text>
+          <Text style={{ ...styles.bannerTitle, color: theme.textColor === "light" ? "#FFFFFF" : "#2D2A26" }}>{title}</Text>
         </View>
         {rows.map((row, i) => (
           <View style={styles.row} key={i}>
             {row.map((block) => (
               <View key={block.id} style={{ flex: Math.min(4, Math.max(1, block.span ?? 2)) }}>
-                <BlockContent block={block} upcomingEvents={upcomingEvents} shortfalls={shortfalls} upcomingSpellingWords={upcomingSpellingWords} />
+                <BlockContent block={block} upcomingEvents={upcomingEvents} thisWeekEvents={thisWeekEvents} shortfalls={shortfalls} upcomingSpellingWords={upcomingSpellingWords} />
               </View>
             ))}
           </View>
@@ -309,6 +341,7 @@ export async function renderNewsletterPdf(args: {
   bannerSubtitle?: string | null;
   blocks: PdfBlock[];
   upcomingEvents: PdfEvent[];
+  thisWeekEvents: PdfEvent[];
   shortfalls: PdfShortfall[];
   upcomingSpellingWords: string[];
 }): Promise<Buffer> {

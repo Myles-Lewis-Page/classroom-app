@@ -13,6 +13,7 @@ export type ViewBlock = {
     | "divider"
     | "image"
     | "events"
+    | "thisWeekEvents"
     | "spellingWords"
     | "wordWall"
     | "readingNow"
@@ -84,6 +85,7 @@ export default function NewsletterView({
   bannerSubtitle,
   blocks,
   upcomingEvents,
+  thisWeekEvents = [],
   shortfalls = [],
   upcomingSpellingWords = [],
 }: {
@@ -93,6 +95,7 @@ export default function NewsletterView({
   bannerSubtitle?: string | null;
   blocks: ViewBlock[];
   upcomingEvents: ViewEvent[];
+  thisWeekEvents?: ViewEvent[];
   shortfalls?: ViewShortfall[];
   upcomingSpellingWords?: string[];
 }) {
@@ -115,14 +118,25 @@ export default function NewsletterView({
         className="relative overflow-hidden rounded-2xl mb-5 p-5 text-center"
         style={{ background: `linear-gradient(to right, ${theme.gradient[0]}, ${theme.gradient[1]}, ${theme.gradient[2]})` }}
       >
-        <SeasonalIcon icon={theme.icon} size={32} className="absolute top-3 left-3 opacity-70" />
-        <SeasonalIcon icon={theme.icon} size={24} className="absolute bottom-3 right-4 opacity-50" />
-        <p className="text-white/90 text-sm font-semibold tracking-wide" style={{ fontFamily: "'Kalam', cursive" }}>
+        <SeasonalIcon icon={theme.icon} size={32} className="absolute top-3 left-3 opacity-70" color={theme.textColor === "light" ? "#FFFFFF" : "#2D2A26"} />
+        <SeasonalIcon icon={theme.icon} size={24} className="absolute bottom-3 right-4 opacity-50" color={theme.textColor === "light" ? "#FFFFFF" : "#2D2A26"} />
+        <p
+          className="text-sm font-semibold tracking-wide"
+          style={{
+            fontFamily: "'Kalam', cursive",
+            color: theme.textColor === "light" ? "#FFFFFF" : "#2D2A26",
+            textShadow: theme.textColor === "light" ? "0 1px 3px rgba(0,0,0,0.55)" : "0 1px 3px rgba(255,255,255,0.75)",
+          }}
+        >
           {subtitle}
         </p>
         <h1
-          className="text-white text-3xl sm:text-4xl font-extrabold drop-shadow-sm"
-          style={{ fontFamily: "'Baloo 2', sans-serif" }}
+          className="text-3xl sm:text-4xl font-extrabold"
+          style={{
+            fontFamily: "'Baloo 2', sans-serif",
+            color: theme.textColor === "light" ? "#FFFFFF" : "#2D2A26",
+            textShadow: theme.textColor === "light" ? "0 2px 5px rgba(0,0,0,0.55)" : "0 2px 5px rgba(255,255,255,0.8)",
+          }}
         >
           {title}
         </h1>
@@ -134,7 +148,7 @@ export default function NewsletterView({
       >
         {blocks.map((block) => (
           <div key={block.id} style={gridStyle(block.column, block.span)} className="min-w-0">
-            <BlockCard block={block} upcomingEvents={upcomingEvents} shortfallById={shortfallById} upcomingSpellingWords={upcomingSpellingWords} />
+            <BlockCard block={block} upcomingEvents={upcomingEvents} thisWeekEvents={thisWeekEvents} shortfallById={shortfallById} upcomingSpellingWords={upcomingSpellingWords} />
           </div>
         ))}
         {blocks.length === 0 && (
@@ -147,14 +161,76 @@ export default function NewsletterView({
   );
 }
 
+function EventsCard({
+  label,
+  color,
+  events,
+  shortfallById,
+  emptyText,
+}: {
+  label: string;
+  color: BlockColor;
+  events: ViewEvent[];
+  shortfallById: Map<string, ViewShortfall>;
+  emptyText: string;
+}) {
+  const c = COLOR_CLASSES[color];
+  return (
+    <div className={`h-full rounded-2xl border-4 ${c.border} ${c.tint} p-4`}>
+      <p className={`font-bold text-center ${c.text} mb-2`} style={{ fontFamily: "'Baloo 2', sans-serif" }}>
+        {label}
+      </p>
+      {events.length === 0 ? (
+        <p className="text-sm text-[#9b8f7a]">{emptyText}</p>
+      ) : (
+        <ul className="space-y-2 text-sm">
+          {events.map((e) => {
+            const shortfall = shortfallById.get(e.id);
+            return (
+              <li key={e.id}>
+                <div className="flex justify-between gap-2">
+                  <span>{e.name}</span>
+                  <span className={`${c.text} font-semibold whitespace-nowrap`}>
+                    {new Date(e.date).toLocaleDateString(undefined, { timeZone: "UTC", month: "short", day: "numeric" })}
+                  </span>
+                </div>
+                {/* Chaperone need sits right under this event's own date,
+                    not as a separate block - so a parent scanning the
+                    dates sees the ask exactly where it's relevant. */}
+                {shortfall && (
+                  <div className="flex items-center gap-2 mt-1 bg-white rounded-lg p-2 border border-[#eee]">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={qrCodeImageUrl(shortfall.link, 100)}
+                      alt={`QR code to sign up to chaperone ${e.name}`}
+                      className="w-10 h-10 shrink-0"
+                    />
+                    <p className="text-xs">
+                      <span className={`${c.text} font-semibold`}>Needs more chaperones</span>
+                      <br />
+                      {shortfall.confirmed} of {shortfall.needed} confirmed - scan to sign up
+                    </p>
+                  </div>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 function BlockCard({
   block,
   upcomingEvents,
+  thisWeekEvents,
   shortfallById,
   upcomingSpellingWords,
 }: {
   block: ViewBlock;
   upcomingEvents: ViewEvent[];
+  thisWeekEvents: ViewEvent[];
   shortfallById: Map<string, ViewShortfall>;
   upcomingSpellingWords: string[];
 }) {
@@ -179,7 +255,7 @@ function BlockCard({
     if (!text) return null;
     return (
       <h2
-        className={`text-2xl font-bold ${c.text} border-b-4 ${c.border} pb-1`}
+        className={`text-2xl font-bold text-center ${c.text} border-b-4 ${c.border} pb-1`}
         style={{ fontFamily: "'Baloo 2', sans-serif" }}
       >
         {text}
@@ -191,9 +267,15 @@ function BlockCard({
     const color = colorFor(content, "sky");
     const c = COLOR_CLASSES[color];
     const text = String(content?.text ?? "").trim();
-    if (!text) return null;
+    const heading = String(content?.heading ?? "").trim();
+    if (!text && !heading) return null;
     return (
       <div className={`h-full rounded-2xl border-4 ${c.border} ${c.tint} p-4`}>
+        {heading && (
+          <p className={`font-bold text-center ${c.text} mb-2`} style={{ fontFamily: "'Baloo 2', sans-serif" }}>
+            {heading}
+          </p>
+        )}
         <p className="whitespace-pre-wrap leading-relaxed break-words [overflow-wrap:anywhere]">{text}</p>
       </div>
     );
@@ -237,50 +319,15 @@ function BlockCard({
 
   if (type === "events") {
     const color = colorFor(content, "grape");
-    const c = COLOR_CLASSES[color];
     return (
-      <div className={`h-full rounded-2xl border-4 ${c.border} ${c.tint} p-4`}>
-        <p className={`font-bold ${c.text} mb-2`} style={{ fontFamily: "'Baloo 2', sans-serif" }}>
-          Important Dates
-        </p>
-        {upcomingEvents.length === 0 ? (
-          <p className="text-sm text-[#9b8f7a]">Nothing on the calendar yet.</p>
-        ) : (
-          <ul className="space-y-2 text-sm">
-            {upcomingEvents.map((e) => {
-              const shortfall = shortfallById.get(e.id);
-              return (
-                <li key={e.id}>
-                  <div className="flex justify-between gap-2">
-                    <span>{e.name}</span>
-                    <span className={`${c.text} font-semibold whitespace-nowrap`}>
-                      {new Date(e.date).toLocaleDateString(undefined, { timeZone: "UTC", month: "short", day: "numeric" })}
-                    </span>
-                  </div>
-                  {/* Chaperone need sits right under this event's own date,
-                      not as a separate block - so a parent scanning the
-                      dates sees the ask exactly where it's relevant. */}
-                  {shortfall && (
-                    <div className="flex items-center gap-2 mt-1 bg-white rounded-lg p-2 border border-[#eee]">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src={qrCodeImageUrl(shortfall.link, 100)}
-                        alt={`QR code to sign up to chaperone ${e.name}`}
-                        className="w-10 h-10 shrink-0"
-                      />
-                      <p className="text-xs">
-                        <span className={`${c.text} font-semibold`}>Needs more chaperones</span>
-                        <br />
-                        {shortfall.confirmed} of {shortfall.needed} confirmed - scan to sign up
-                      </p>
-                    </div>
-                  )}
-                </li>
-              );
-            })}
-          </ul>
-        )}
-      </div>
+      <EventsCard label="Important Dates" color={color} events={upcomingEvents} shortfallById={shortfallById} emptyText="Nothing on the calendar yet." />
+    );
+  }
+
+  if (type === "thisWeekEvents") {
+    const color = colorFor(content, "sunny");
+    return (
+      <EventsCard label="This Week" color={color} events={thisWeekEvents} shortfallById={shortfallById} emptyText="Nothing scheduled this week." />
     );
   }
 
@@ -290,10 +337,10 @@ function BlockCard({
     if (upcomingSpellingWords.length === 0) return null;
     return (
       <div className={`h-full rounded-2xl border-4 ${c.border} ${c.tint} p-4`}>
-        <p className={`font-bold ${c.text} mb-2`} style={{ fontFamily: "'Baloo 2', sans-serif" }}>
+        <p className={`font-bold text-center ${c.text} mb-2`} style={{ fontFamily: "'Baloo 2', sans-serif" }}>
           Spelling Words
         </p>
-        <ol className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm list-decimal list-inside">
+        <ol className="grid gap-x-4 gap-y-1 text-sm list-decimal list-inside" style={{ gridTemplateColumns: `repeat(${Math.max(1, block.span ?? 2)}, minmax(0, 1fr))` }}>
           {upcomingSpellingWords.map((w, i) => (
             <li key={i} className="break-words [overflow-wrap:anywhere]">{w}</li>
           ))}
@@ -309,10 +356,10 @@ function BlockCard({
     if (words.length === 0) return null;
     return (
       <div className={`h-full rounded-2xl border-4 ${c.border} ${c.tint} p-4`}>
-        <p className={`font-bold ${c.text} mb-2`} style={{ fontFamily: "'Baloo 2', sans-serif" }}>
+        <p className={`font-bold text-center ${c.text} mb-2`} style={{ fontFamily: "'Baloo 2', sans-serif" }}>
           Word Wall
         </p>
-        <ol className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm list-decimal list-inside">
+        <ol className="grid gap-x-4 gap-y-1 text-sm list-decimal list-inside" style={{ gridTemplateColumns: `repeat(${Math.max(1, block.span ?? 2)}, minmax(0, 1fr))` }}>
           {words.map((w, i) => (
             <li key={i} className="break-words [overflow-wrap:anywhere]">{w}</li>
           ))}
@@ -330,7 +377,7 @@ function BlockCard({
     if (!title) return null;
     return (
       <div className={`h-full rounded-2xl border-4 ${c.border} ${c.tint} p-4`}>
-        <p className={`font-bold ${c.text} mb-1`} style={{ fontFamily: "'Baloo 2', sans-serif" }}>
+        <p className={`font-bold text-center ${c.text} mb-1`} style={{ fontFamily: "'Baloo 2', sans-serif" }}>
           What We&apos;re Reading
         </p>
         <p className="font-semibold">
@@ -361,7 +408,7 @@ function BlockCard({
     if (items.length === 0) return null;
     return (
       <div className={`h-full rounded-2xl border-4 ${c.border} ${c.tint} p-4`}>
-        <p className={`font-bold ${c.text} mb-2`} style={{ fontFamily: "'Baloo 2', sans-serif" }}>
+        <p className={`font-bold text-center ${c.text} mb-2`} style={{ fontFamily: "'Baloo 2', sans-serif" }}>
           Learning at Home
         </p>
         <ul className="space-y-1.5 text-sm">

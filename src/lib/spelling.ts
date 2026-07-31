@@ -87,8 +87,27 @@ export async function getStudentSpellingSummary(studentId: string) {
   };
 }
 
-/** The nearest upcoming (or current) week's spelling list, for the newsletter's auto "next week's words" block. */
-export async function getUpcomingSpellingList(classroomId: string) {
+/**
+ * The spelling list for a given target date's week (matches if targetDate
+ * falls within [weekOf, weekOf+6]) - used when the newsletter has an
+ * explicit "week ending" date set, so "next week's words" means the
+ * newsletter's actual week, not just whatever's chronologically next.
+ * With no targetDate, falls back to the nearest upcoming list (the
+ * original behavior, still used when a newsletter hasn't set a week yet).
+ */
+export async function getUpcomingSpellingList(classroomId: string, targetDate?: Date) {
+  if (targetDate) {
+    const list = await prisma.spellingList.findFirst({
+      where: { classroomId, weekOf: { lte: targetDate } },
+      orderBy: { weekOf: "desc" },
+      include: { words: { orderBy: { order: "asc" } } },
+    });
+    if (!list) return null;
+    const weekEnd = new Date(list.weekOf);
+    weekEnd.setDate(weekEnd.getDate() + 6);
+    return targetDate <= weekEnd ? list : null;
+  }
+
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   return prisma.spellingList.findFirst({

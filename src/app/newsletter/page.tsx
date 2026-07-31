@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import NewsletterView, { NewsletterFonts, COLOR_CLASSES, type ViewEvent, type ViewShortfall } from "@/components/NewsletterView";
 import type { BlockColor } from "@/lib/newsletter";
+import { toDateInputValue } from "@/lib/dateOnly";
 
 type BlockType =
   | "heading"
@@ -11,6 +12,7 @@ type BlockType =
   | "divider"
   | "image"
   | "events"
+  | "thisWeekEvents"
   | "spellingWords"
   | "wordWall"
   | "readingNow"
@@ -45,6 +47,16 @@ type ArchiveIssue = {
   renderedText: string | null;
 };
 
+// Mirrors minSpanForType in src/lib/newsletter.ts - duplicated locally
+// rather than imported, since that module also imports the Prisma client
+// (server-only) and pulling it into this "use client" page would bundle
+// server code into the browser. Server-side routes still do the real
+// enforcement; this is just so the picker doesn't offer options the
+// server would reject anyway.
+function minSpanForType(type: BlockType): number {
+  return type === "list" || type === "spellingWords" || type === "wordWall" || type === "homeLearning" ? 1 : 2;
+}
+
 const BLOCK_LABELS: Record<BlockType, string> = {
   heading: "Heading",
   paragraph: "Paragraph",
@@ -52,6 +64,7 @@ const BLOCK_LABELS: Record<BlockType, string> = {
   divider: "Divider",
   image: "Image",
   events: "Important Dates (auto, incl. chaperone QR codes)",
+  thisWeekEvents: "This Week (auto, uses Week Ending date below)",
   spellingWords: "Spelling Words (auto, from this week's list)",
   wordWall: "Word Wall",
   readingNow: "Current Reading + Questions",
@@ -66,6 +79,9 @@ export default function NewsletterPage() {
   const [bannerSubtitle, setBannerSubtitle] = useState("");
   const [savingBanner, setSavingBanner] = useState(false);
   const [upcomingEvents, setUpcomingEvents] = useState<ViewEvent[]>([]);
+  const [thisWeekEvents, setThisWeekEvents] = useState<ViewEvent[]>([]);
+  const [weekEndDate, setWeekEndDate] = useState("");
+  const [savingWeekEndDate, setSavingWeekEndDate] = useState(false);
   const [shortfalls, setShortfalls] = useState<ViewShortfall[]>([]);
   const [upcomingSpellingWords, setUpcomingSpellingWords] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
@@ -93,6 +109,8 @@ export default function NewsletterPage() {
     setPreview(data.preview ?? "");
     setClassroomName(data.classroomName ?? "Our Classroom");
     setUpcomingEvents(data.upcomingEvents ?? []);
+    setThisWeekEvents(data.thisWeekEvents ?? []);
+    setWeekEndDate(data.newsletter?.weekEndDate ? toDateInputValue(data.newsletter.weekEndDate) : "");
     setShortfalls(data.shortfalls ?? []);
     setUpcomingSpellingWords(data.upcomingSpellingWords ?? []);
     setLoading(false);
@@ -110,6 +128,17 @@ export default function NewsletterPage() {
       body: JSON.stringify({ bannerTitle: nextTitle, bannerSubtitle: nextSubtitle }),
     });
     setSavingBanner(false);
+  }
+
+  async function saveWeekEndDate(next: string) {
+    setSavingWeekEndDate(true);
+    await fetch("/api/newsletter/draft", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ weekEndDate: next || null }),
+    });
+    setSavingWeekEndDate(false);
+    load();
   }
 
   async function saveBlockLayout(blockId: string, column: number, span: number) {
@@ -298,6 +327,24 @@ export default function NewsletterPage() {
         </div>
       </div>
 
+      <div className="border rounded p-3 mb-4 bg-slate-50">
+        <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">
+          Week Ending {savingWeekEndDate && <span className="normal-case font-normal">(saving...)</span>}
+        </p>
+        <p className="text-xs text-slate-500 mb-2">
+          Pick the last day of the week this issue covers (usually a Friday). This determines
+          which week&apos;s spelling list counts as &quot;next week&apos;s words&quot; and what
+          shows in the This Week block - not just whatever&apos;s next by today&apos;s real date.
+        </p>
+        <input
+          type="date"
+          value={weekEndDate}
+          onChange={(e) => setWeekEndDate(e.target.value)}
+          onBlur={() => saveWeekEndDate(weekEndDate)}
+          className="border rounded px-2 py-1 text-sm"
+        />
+      </div>
+
       <div className="flex gap-3 text-sm mb-4">
         <button
           onClick={() => {
@@ -442,6 +489,7 @@ export default function NewsletterPage() {
                   onSave={(content) => saveBlockContent(block.id, content)}
                 />
                 <LayoutPicker
+                  type={block.type}
                   column={block.column}
                   span={block.span}
                   onChange={(column, span) => saveBlockLayout(block.id, column, span)}
@@ -460,6 +508,7 @@ export default function NewsletterPage() {
             bannerSubtitle={bannerSubtitle}
             blocks={viewBlocks}
             upcomingEvents={upcomingEvents}
+            thisWeekEvents={thisWeekEvents}
             shortfalls={shortfalls}
             upcomingSpellingWords={upcomingSpellingWords}
           />
@@ -506,14 +555,17 @@ function ColorPicker({
 }
 
 function LayoutPicker({
+  type,
   column,
   span,
   onChange,
 }: {
+  type: BlockType;
   column: number;
   span: number;
   onChange: (column: number, span: number) => void;
 }) {
+  const minSpan = minSpanForType(type);
   const maxSpanForColumn = 5 - column;
   return (
     <div className="flex items-center gap-3 mt-2 pt-2 border-t text-xs text-slate-500">
@@ -523,12 +575,13 @@ function LayoutPicker({
           value={column}
           onChange={(e) => {
             const nextColumn = Number(e.target.value);
-            const nextSpan = Math.min(span, 5 - nextColumn);
+            const nextSpan = Math.max(minSpan, Math.min(span, 5 - nextColumn));
             onChange(nextColumn, nextSpan);
           }}
           className="border rounded px-1 py-0.5"
         >
-          {[1, 2, 3, 4].map((c) => (
+          {/* Only offer a starting column where this type's minimum width still fits */}
+          {[1, 2, 3, 4].filter((c) => 5 - c >= minSpan).map((c) => (
             <option key={c} value={c}>
               {c}
             </option>
@@ -542,7 +595,7 @@ function LayoutPicker({
           onChange={(e) => onChange(column, Number(e.target.value))}
           className="border rounded px-1 py-0.5"
         >
-          {[1, 2, 3, 4].filter((s) => s <= maxSpanForColumn).map((s) => (
+          {[1, 2, 3, 4].filter((s) => s >= minSpan && s <= maxSpanForColumn).map((s) => (
             <option key={s} value={s}>
               {s} col{s > 1 ? "s" : ""}
             </option>
@@ -695,17 +748,25 @@ function BlockEditor({
 
   if (block.type === "paragraph") {
     const text = (content.text as string) ?? "";
+    const heading = (content.heading as string) ?? "";
     return (
       <div>
+        <input
+          value={heading}
+          onChange={(e) => onChange({ text, heading: e.target.value, color })}
+          onBlur={() => onSave({ text, heading, color })}
+          className="border rounded px-2 py-1 w-full text-sm font-semibold mb-1"
+          placeholder="Header (optional)"
+        />
         <textarea
           value={text}
-          onChange={(e) => onChange({ text: e.target.value, color })}
-          onBlur={() => onSave({ text, color })}
+          onChange={(e) => onChange({ text: e.target.value, heading, color })}
+          onBlur={() => onSave({ text, heading, color })}
           rows={3}
           className="border rounded px-2 py-1 w-full text-sm"
           placeholder="Write something..."
         />
-        <ColorPicker value={color} onChange={(c) => onSave({ text, color: c })} />
+        <ColorPicker value={color} onChange={(c) => onSave({ text, heading, color: c })} />
       </div>
     );
   }
@@ -778,6 +839,18 @@ function BlockEditor({
         <p className="text-xs text-slate-500">
           Automatically lists your next 10 upcoming events. Any event that&apos;s still short on
           chaperones automatically gets a QR code right under its date - nothing to fill in here.
+        </p>
+        <ColorPicker value={color} onChange={(c) => onSave({ color: c })} />
+      </div>
+    );
+  }
+
+  if (block.type === "thisWeekEvents") {
+    return (
+      <div>
+        <p className="text-xs text-slate-500">
+          Automatically lists events falling within the Week Ending date set above (a 7-day
+          window ending on that date) - nothing to fill in here.
         </p>
         <ColorPicker value={color} onChange={(c) => onSave({ color: c })} />
       </div>

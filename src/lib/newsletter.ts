@@ -11,6 +11,7 @@ export const BLOCK_TYPES = [
   "divider",
   "image",
   "events",
+  "thisWeekEvents",
   "spellingWords",
   "wordWall",
   "readingNow",
@@ -28,11 +29,12 @@ export type BlockColor = (typeof BLOCK_COLORS)[number];
 
 export type NewsletterBlockContent =
   | { type: "heading"; text: string; color?: BlockColor }
-  | { type: "paragraph"; text: string; color?: BlockColor }
+  | { type: "paragraph"; text: string; heading?: string; color?: BlockColor }
   | { type: "list"; items: string[]; color?: BlockColor }
   | { type: "divider"; color?: BlockColor }
   | { type: "image"; url: string; caption?: string }
   | { type: "events"; color?: BlockColor }
+  | { type: "thisWeekEvents"; color?: BlockColor }
   | { type: "spellingWords"; color?: BlockColor }
   | { type: "wordWall"; words: string[]; color?: BlockColor }
   | { type: "readingNow"; title: string; author?: string; questions: string[]; color?: BlockColor }
@@ -56,6 +58,8 @@ export function defaultContentForType(type: NewsletterBlockType): Record<string,
       return { url: "", caption: "" };
     case "events":
       return { color: "grape" };
+    case "thisWeekEvents":
+      return { color: "sunny" };
     case "spellingWords":
       return { color: "sky" };
     case "wordWall":
@@ -78,10 +82,33 @@ export function defaultLayoutForType(type: NewsletterBlockType): { column: numbe
     case "heading":
     case "divider":
     case "events":
+    case "thisWeekEvents":
     case "readingNow":
       return { column: 1, span: 4 };
     default:
       return { column: 1, span: 2 };
+  }
+}
+
+/**
+ * The narrowest a block of this type is allowed to be. Word-list-style
+ * blocks (list, spellingWords, wordWall, homeLearning) read fine as a
+ * single narrow column - one item per line - so they can go down to 1.
+ * Everything else (headings, paragraphs, images, the events/reading
+ * blocks) needs more room to stay readable/laid out sensibly, so those
+ * are floored at 2. Enforced both here (client-side option filtering) and
+ * server-side in the block create/update routes - never trust the client
+ * alone for a constraint like this.
+ */
+export function minSpanForType(type: NewsletterBlockType): number {
+  switch (type) {
+    case "list":
+    case "spellingWords":
+    case "wordWall":
+    case "homeLearning":
+      return 1;
+    default:
+      return 2;
   }
 }
 
@@ -91,6 +118,36 @@ export async function getUpcomingEvents(classroomId: string): Promise<UpcomingEv
     where: { classroomId, date: { gte: new Date() } },
     orderBy: { date: "asc" },
     take: 10,
+    select: { id: true, name: true, date: true },
+  });
+}
+
+/**
+ * Events falling within a specific 7-day window ending on weekEndDate
+ * (inclusive) - "This Week's Events," as opposed to the "events"/
+ * Important Dates block's rolling next-10-upcoming. With no weekEndDate,
+ * defaults to the 7 days starting today, so the block still shows
+ * something sensible before she's picked a week for the newsletter.
+ */
+export async function getEventsInWeek(classroomId: string, weekEndDate?: Date): Promise<UpcomingEvent[]> {
+  let end: Date;
+  let start: Date;
+  if (weekEndDate) {
+    end = new Date(weekEndDate);
+    end.setHours(23, 59, 59, 999);
+    start = new Date(weekEndDate);
+    start.setDate(start.getDate() - 6);
+    start.setHours(0, 0, 0, 0);
+  } else {
+    start = new Date();
+    start.setHours(0, 0, 0, 0);
+    end = new Date(start);
+    end.setDate(end.getDate() + 6);
+    end.setHours(23, 59, 59, 999);
+  }
+  return prisma.event.findMany({
+    where: { classroomId, date: { gte: start, lte: end } },
+    orderBy: { date: "asc" },
     select: { id: true, name: true, date: true },
   });
 }
@@ -112,18 +169,24 @@ export async function getUpcomingEvents(classroomId: string): Promise<UpcomingEv
 export async function renderNewsletterBlocks(
   blocks: RawBlock[],
   classroomId: string,
-  baseUrl: string = process.env.NEXTAUTH_URL || ""
+  baseUrl: string = process.env.NEXTAUTH_URL || "",
+  weekEndDate?: Date | null
 ): Promise<string> {
   const sorted = [...blocks].sort((a, b) => a.order - b.order);
   const lines: string[] = [];
 
   // Only bother querying events if a block actually needs it.
-  const needsEvents = sorted.some((b) => b.type === "events");
-  const upcomingEvents = needsEvents ? await getUpcomingEvents(classroomId) : [];
+  const needsEvents = sorted.some((b) => b.type === "events" || b.type === "thisWeekEvents");
+  const upcomingEvents = sorted.some((b) => b.type === "events") ? await getUpcomingEvents(classroomId) : [];
+  const thisWeekEvents = sorted.some((b) => b.type === "thisWeekEvents")
+    ? await getEventsInWeek(classroomId, weekEndDate ?? undefined)
+    : [];
   const shortfalls: ChaperoneShortfall[] = needsEvents ? await getChaperoneShortfalls(classroomId) : [];
   const shortfallById = new Map(shortfalls.map((s) => [s.id, s]));
   const needsSpelling = sorted.some((b) => b.type === "spellingWords");
-  const upcomingSpellingList = needsSpelling ? await getUpcomingSpellingList(classroomId) : null;
+  const upcomingSpellingList = needsSpelling
+    ? await getUpcomingSpellingList(classroomId, weekEndDate ?? undefined)
+    : null;
 
   for (const block of sorted) {
     const content = block.content as Record<string, unknown>;
@@ -135,7 +198,10 @@ export async function renderNewsletterBlocks(
       }
       case "paragraph": {
         const text = String(content?.text ?? "").trim();
+        const heading = String(content?.heading ?? "").trim();
+        if (heading) lines.push(heading.toUpperCase());
         if (text) lines.push(text, "");
+        else if (heading) lines.push("");
         break;
       }
       case "list": {
@@ -170,6 +236,22 @@ export async function renderNewsletterBlocks(
         if (upcomingEvents.length) {
           lines.push("UPCOMING:");
           upcomingEvents.forEach((e) => {
+            lines.push(`- ${e.name} — ${formatShortDate(e.date)}`);
+            const shortfall = shortfallById.get(e.id);
+            if (shortfall) {
+              lines.push(
+                `  Needs more chaperones (${shortfall.confirmed} of ${shortfall.needed} confirmed) - sign up: ${chaperoneInterestUrl(shortfall.id, baseUrl)}`
+              );
+            }
+          });
+          lines.push("");
+        }
+        break;
+      }
+      case "thisWeekEvents": {
+        if (thisWeekEvents.length) {
+          lines.push("THIS WEEK:");
+          thisWeekEvents.forEach((e) => {
             lines.push(`- ${e.name} — ${formatShortDate(e.date)}`);
             const shortfall = shortfallById.get(e.id);
             if (shortfall) {

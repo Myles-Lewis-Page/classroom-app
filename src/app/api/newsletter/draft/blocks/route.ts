@@ -3,7 +3,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
 import { getCurrentClassroomId } from "@/lib/classroomScope";
-import { getOrCreateDraft, defaultContentForType, defaultLayoutForType, BLOCK_TYPES, NewsletterBlockType } from "@/lib/newsletter";
+import { getOrCreateDraft, defaultContentForType, defaultLayoutForType, minSpanForType, BLOCK_TYPES, NewsletterBlockType } from "@/lib/newsletter";
 
 // POST { type } - appends a new block of the given type, with sensible
 // default content, to the end of the current draft.
@@ -30,8 +30,13 @@ export async function POST(req: NextRequest) {
   let column = layout.column;
   let span = layout.span;
   if (body.column !== undefined) {
+    const minSpan = minSpanForType(type as NewsletterBlockType);
     column = Math.min(4, Math.max(1, Math.round(Number(body.column) || 1)));
-    span = Math.min(span, 5 - column);
+    span = Math.max(minSpan, Math.min(span, 5 - column));
+    // If even the minimum width doesn't fit starting at the requested
+    // column (e.g. asking for column 4 on a type that needs at least 2
+    // columns), pull the start back rather than let it overflow the grid.
+    if (column + span > 5) column = 5 - span;
   }
 
   const block = await prisma.newsletterBlock.create({

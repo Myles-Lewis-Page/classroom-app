@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
 import { getCurrentClassroomId } from "@/lib/classroomScope";
-import { getOrCreateDraft, getUpcomingEvents } from "@/lib/newsletter";
+import { getOrCreateDraft, getUpcomingEvents, getEventsInWeek } from "@/lib/newsletter";
 import { getUpcomingSpellingList } from "@/lib/spelling";
 import { getChaperoneShortfalls } from "@/lib/chaperones";
 import { chaperoneInterestUrl } from "@/lib/qrcode";
@@ -23,12 +23,15 @@ export async function GET(req: NextRequest) {
 
   const baseUrl = process.env.NEXTAUTH_URL || req.nextUrl.origin;
 
-  const [draft, classroom, upcomingEvents, shortfalls, upcomingSpellingList] = await Promise.all([
-    getOrCreateDraft(classroomId),
+  const draft = await getOrCreateDraft(classroomId);
+  const weekEndDate = draft.weekEndDate ?? undefined;
+
+  const [classroom, upcomingEvents, thisWeekEvents, shortfalls, upcomingSpellingList] = await Promise.all([
     prisma.classroom.findUnique({ where: { id: classroomId }, select: { name: true } }),
     getUpcomingEvents(classroomId),
+    getEventsInWeek(classroomId, weekEndDate),
     getChaperoneShortfalls(classroomId),
-    getUpcomingSpellingList(classroomId),
+    getUpcomingSpellingList(classroomId, weekEndDate),
   ]);
 
   const pdfBuffer = await renderNewsletterPdf({
@@ -38,6 +41,7 @@ export async function GET(req: NextRequest) {
     bannerSubtitle: draft.bannerSubtitle,
     blocks: draft.blocks,
     upcomingEvents,
+    thisWeekEvents,
     shortfalls: shortfalls.map((s) => ({ ...s, link: chaperoneInterestUrl(s.id, baseUrl) })),
     upcomingSpellingWords: upcomingSpellingList?.words.map((w) => w.word) ?? [],
   });
