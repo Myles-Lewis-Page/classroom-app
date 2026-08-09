@@ -39,6 +39,7 @@ export async function GET(req: NextRequest) {
     weekLabel: `Week of ${new Date().toLocaleDateString(undefined, { month: "long", day: "numeric" })}`,
     bannerTitle: draft.bannerTitle,
     bannerSubtitle: draft.bannerSubtitle,
+    themeMonth: draft.themeMonth,
     blocks: draft.blocks,
     upcomingEvents,
     thisWeekEvents,

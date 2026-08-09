@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import NewsletterView, { NewsletterFonts, COLOR_CLASSES, type ViewEvent, type ViewShortfall } from "@/components/NewsletterView";
+import { ALL_THEMES } from "@/lib/monthlyTheme";
 import type { BlockColor } from "@/lib/newsletter";
 import { toDateInputValue } from "@/lib/dateOnly";
 
@@ -85,6 +86,8 @@ export default function NewsletterPage() {
   const [upcomingEvents, setUpcomingEvents] = useState<ViewEvent[]>([]);
   const [thisWeekEvents, setThisWeekEvents] = useState<ViewEvent[]>([]);
   const [weekEndDate, setWeekEndDate] = useState("");
+  const [themeMonth, setThemeMonth] = useState<number | null>(null);
+  const [savingTheme, setSavingTheme] = useState(false);
   const [savingWeekEndDate, setSavingWeekEndDate] = useState(false);
   const [shortfalls, setShortfalls] = useState<ViewShortfall[]>([]);
   const [upcomingSpellingWords, setUpcomingSpellingWords] = useState<string[]>([]);
@@ -116,6 +119,7 @@ export default function NewsletterPage() {
     setUpcomingEvents(data.upcomingEvents ?? []);
     setThisWeekEvents(data.thisWeekEvents ?? []);
     setWeekEndDate(data.newsletter?.weekEndDate ? toDateInputValue(data.newsletter.weekEndDate) : "");
+    setThemeMonth(data.newsletter?.themeMonth ?? null);
     setShortfalls(data.shortfalls ?? []);
     setUpcomingSpellingWords(data.upcomingSpellingWords ?? []);
     setLoading(false);
@@ -144,6 +148,17 @@ export default function NewsletterPage() {
     });
     setSavingWeekEndDate(false);
     load();
+  }
+
+  async function saveThemeMonth(next: number | null) {
+    setThemeMonth(next);
+    setSavingTheme(true);
+    await fetch("/api/newsletter/draft", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ themeMonth: next }),
+    });
+    setSavingTheme(false);
   }
 
   async function saveBlockLayout(blockId: string, column: number, span: number, row: number, height: number) {
@@ -366,6 +381,40 @@ export default function NewsletterPage() {
         />
       </div>
 
+      <div className="border rounded p-3 mb-4 bg-slate-50">
+        <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">
+          Banner Theme {savingTheme && <span className="normal-case font-normal">(saving...)</span>}
+        </p>
+        <p className="text-xs text-slate-500 mb-2">
+          Pick which month&apos;s colors to use - defaults to whatever the real current month is,
+          but you can override it if you&apos;re writing ahead (e.g. a January newsletter in
+          December).
+        </p>
+        <div className="flex flex-wrap gap-2">
+          <button
+            onClick={() => saveThemeMonth(null)}
+            className={`text-xs px-2 py-1 rounded border ${themeMonth === null ? "btn-primary" : "bg-white"}`}
+          >
+            Auto (current month)
+          </button>
+          {ALL_THEMES.map((t) => (
+            <button
+              key={t.month}
+              onClick={() => saveThemeMonth(t.month)}
+              className="text-xs px-2 py-1 rounded border flex items-center gap-1.5"
+              style={{
+                backgroundColor: themeMonth === t.month ? t.gradient[0] : "white",
+                color: themeMonth === t.month ? (t.textColor === "light" ? "#fff" : "#2D2A26") : "#334155",
+                borderColor: t.gradient[0],
+              }}
+            >
+              <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: t.gradient[0] }} />
+              {t.name}
+            </button>
+          ))}
+        </div>
+      </div>
+
       <div className="flex gap-3 text-sm mb-4">
         <button
           onClick={() => {
@@ -541,6 +590,7 @@ export default function NewsletterPage() {
             weekLabel={`Week of ${new Date().toLocaleDateString(undefined, { month: "long", day: "numeric" })}`}
             bannerTitle={bannerTitle}
             bannerSubtitle={bannerSubtitle}
+            themeMonth={themeMonth}
             blocks={viewBlocks}
             upcomingEvents={upcomingEvents}
             thisWeekEvents={thisWeekEvents}

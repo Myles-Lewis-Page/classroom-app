@@ -120,6 +120,7 @@ export async function renderStudentReportPdf(args: {
     classroomName: string;
     bannerTitle?: string | null;
     bannerSubtitle?: string | null;
+    themeMonth?: number | null;
     blocks: Parameters<typeof NewsletterPage>[0]["blocks"];
     upcomingEvents: Parameters<typeof NewsletterPage>[0]["upcomingEvents"];
     thisWeekEvents: Parameters<typeof NewsletterPage>[0]["thisWeekEvents"];
@@ -135,6 +136,7 @@ export async function renderStudentReportPdf(args: {
           weekLabel={args.weekLabel}
           bannerTitle={args.newsletter.bannerTitle}
           bannerSubtitle={args.newsletter.bannerSubtitle}
+          themeMonth={args.newsletter.themeMonth}
           blocks={args.newsletter.blocks}
           upcomingEvents={args.newsletter.upcomingEvents}
           thisWeekEvents={args.newsletter.thisWeekEvents}

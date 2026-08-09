@@ -47,11 +47,13 @@ export async function GET(req: NextRequest) {
   });
 }
 
-// PATCH { bannerTitle?, bannerSubtitle?, weekEndDate? } - updates the
-// editable hero banner text and/or the real date this newsletter's week
-// ends on (drives which spelling list and which events count as "this
-// week" - see getUpcomingSpellingList/getEventsInWeek). weekEndDate can be
-// cleared back to null (falls back to "the next 7 days from today").
+// PATCH { bannerTitle?, bannerSubtitle?, weekEndDate?, themeMonth? } -
+// updates the editable hero banner text, the real date this newsletter's
+// week ends on (drives which spelling list and which events count as
+// "this week" - see getUpcomingSpellingList/getEventsInWeek), and/or
+// which of the 12 monthly banner themes to use (1-12, or null to fall
+// back to the server's real current month). weekEndDate can be cleared
+// back to null (falls back to "the next 7 days from today").
 export async function PATCH(req: NextRequest) {
   const session = await auth();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -61,11 +63,20 @@ export async function PATCH(req: NextRequest) {
 
   const draft = await getOrCreateDraft(classroomId);
   const body = await req.json();
-  const data: { bannerTitle?: string | null; bannerSubtitle?: string | null; weekEndDate?: Date | null } = {};
+  const data: {
+    bannerTitle?: string | null;
+    bannerSubtitle?: string | null;
+    weekEndDate?: Date | null;
+    themeMonth?: number | null;
+  } = {};
   if (body.bannerTitle !== undefined) data.bannerTitle = body.bannerTitle || null;
   if (body.bannerSubtitle !== undefined) data.bannerSubtitle = body.bannerSubtitle || null;
   if (body.weekEndDate !== undefined) {
     data.weekEndDate = body.weekEndDate ? new Date(body.weekEndDate) : null;
+  }
+  if (body.themeMonth !== undefined) {
+    const n = Number(body.themeMonth);
+    data.themeMonth = n >= 1 && n <= 12 ? n : null;
   }
 
   const updated = await prisma.newsletter.update({ where: { id: draft.id }, data });

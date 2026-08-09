@@ -304,6 +304,7 @@ export function NewsletterPage({
   weekLabel,
   bannerTitle,
   bannerSubtitle,
+  themeMonth,
   blocks,
   upcomingEvents,
   thisWeekEvents,
@@ -314,6 +315,7 @@ export function NewsletterPage({
   weekLabel: string;
   bannerTitle?: string | null;
   bannerSubtitle?: string | null;
+  themeMonth?: number | null;
   blocks: PdfBlock[];
   upcomingEvents: PdfEvent[];
   thisWeekEvents: PdfEvent[];
@@ -322,7 +324,7 @@ export function NewsletterPage({
 }) {
   const title = bannerTitle?.trim() || `${classroomName}'s Newsletter`;
   const subtitle = bannerSubtitle?.trim() || weekLabel;
-  const theme = getMonthlyTheme();
+  const theme = getMonthlyTheme(new Date(), themeMonth);
   const rows = packRows(blocks);
   return (
     <Page size="LETTER" style={styles.page}>
@@ -348,6 +350,7 @@ function NewsletterPdfDocument(props: {
   weekLabel: string;
   bannerTitle?: string | null;
   bannerSubtitle?: string | null;
+  themeMonth?: number | null;
   blocks: PdfBlock[];
   upcomingEvents: PdfEvent[];
   thisWeekEvents: PdfEvent[];
@@ -366,6 +369,7 @@ export async function renderNewsletterPdf(args: {
   weekLabel: string;
   bannerTitle?: string | null;
   bannerSubtitle?: string | null;
+  themeMonth?: number | null;
   blocks: PdfBlock[];
   upcomingEvents: PdfEvent[];
   thisWeekEvents: PdfEvent[];

@@ -62,6 +62,7 @@ export async function GET(req: NextRequest) {
       classroomName: classroom?.name ?? "Our Classroom",
       bannerTitle: draft.bannerTitle,
       bannerSubtitle: draft.bannerSubtitle,
+      themeMonth: draft.themeMonth,
       blocks: draft.blocks,
       upcomingEvents,
       thisWeekEvents,

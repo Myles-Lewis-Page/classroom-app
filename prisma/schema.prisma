@@ -189,6 +189,13 @@ model Newsletter {
   // from bannerSubtitle, which is just free-text display and doesn't have
   // to be a real date at all.
   weekEndDate    DateTime?
+  // Which of the 12 secular monthly themes (banner colors + icon - see
+  // src/lib/monthlyTheme.ts) to use, picked explicitly (1-12). Null falls
+  // back to the server's real current month - kept separate from
+  // weekEndDate/bannerSubtitle since she may be writing a January
+  // newsletter in December, and the visual theme should match what she's
+  // actually writing about, not today's real date.
+  themeMonth     Int?
   // Frozen plain-text rendering, captured at publish time so the archive
   // shows exactly what was sent even if e.g. an Events block's underlying
   // event later gets edited or deleted. The live draft is rendered on the

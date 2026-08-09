@@ -30,6 +30,7 @@ export default function NewsletterPrintPage() {
   const [classroomName, setClassroomName] = useState("Our Classroom");
   const [bannerTitle, setBannerTitle] = useState<string | null>(null);
   const [bannerSubtitle, setBannerSubtitle] = useState<string | null>(null);
+  const [themeMonth, setThemeMonth] = useState<number | null>(null);
   const [upcomingEvents, setUpcomingEvents] = useState<ViewEvent[]>([]);
   const [thisWeekEvents, setThisWeekEvents] = useState<ViewEvent[]>([]);
   const [shortfalls, setShortfalls] = useState<ViewShortfall[]>([]);
@@ -44,6 +45,7 @@ export default function NewsletterPrintPage() {
         setClassroomName(data.classroomName ?? "Our Classroom");
         setBannerTitle(data.newsletter?.bannerTitle ?? null);
         setBannerSubtitle(data.newsletter?.bannerSubtitle ?? null);
+        setThemeMonth(data.newsletter?.themeMonth ?? null);
         setUpcomingEvents(data.upcomingEvents ?? []);
         setThisWeekEvents(data.thisWeekEvents ?? []);
         setShortfalls(data.shortfalls ?? []);
@@ -67,6 +69,7 @@ export default function NewsletterPrintPage() {
         weekLabel={`Week of ${new Date().toLocaleDateString(undefined, { month: "long", day: "numeric" })}`}
         bannerTitle={bannerTitle}
         bannerSubtitle={bannerSubtitle}
+        themeMonth={themeMonth}
         blocks={blocks}
         upcomingEvents={upcomingEvents}
         thisWeekEvents={thisWeekEvents}

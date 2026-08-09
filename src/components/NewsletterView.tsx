@@ -94,6 +94,7 @@ export default function NewsletterView({
   weekLabel,
   bannerTitle,
   bannerSubtitle,
+  themeMonth,
   blocks,
   upcomingEvents,
   thisWeekEvents = [],
@@ -104,6 +105,7 @@ export default function NewsletterView({
   weekLabel: string;
   bannerTitle?: string | null;
   bannerSubtitle?: string | null;
+  themeMonth?: number | null;
   blocks: ViewBlock[];
   upcomingEvents: ViewEvent[];
   thisWeekEvents?: ViewEvent[];
@@ -112,7 +114,7 @@ export default function NewsletterView({
 }) {
   const title = bannerTitle?.trim() || `${classroomName}'s Newsletter`;
   const subtitle = bannerSubtitle?.trim() || weekLabel;
-  const theme = getMonthlyTheme();
+  const theme = getMonthlyTheme(new Date(), themeMonth);
   const shortfallById = new Map(shortfalls.map((s) => [s.id, s]));
 
   return (

@@ -34,6 +34,12 @@ const THEMES: Record<number, MonthTheme> = {
   12: { name: "December", gradient: ["#3A6B5C", "#C0392B", "#E8B84B"], icon: "tree", textColor: "light" }, // evergreen/winter-holiday - all saturated/dark tones
 };
 
-export function getMonthlyTheme(date: Date = new Date()): MonthTheme {
-  return THEMES[date.getMonth() + 1];
+export function getMonthlyTheme(date: Date = new Date(), overrideMonth?: number | null): MonthTheme {
+  const month = overrideMonth && overrideMonth >= 1 && overrideMonth <= 12 ? overrideMonth : date.getMonth() + 1;
+  return THEMES[month];
 }
+
+/** All 12 themes in month order, for a "pick a theme" dropdown - id is the month number (1-12) PATCH expects. */
+export const ALL_THEMES = Object.entries(THEMES)
+  .map(([month, theme]) => ({ month: Number(month), ...theme }))
+  .sort((a, b) => a.month - b.month);
