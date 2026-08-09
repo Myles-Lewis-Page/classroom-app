@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { signOut } from "next-auth/react";
 
 type School = { id: string; name: string; _count: { principals: number; teachers: number } };
-type Principal = { id: string; name: string; email: string; school: { id: string; name: string } };
+type Principal = { id: string; name: string; email: string; school: { id: string; name: string }; _count: { teachers: number } };
 
 export default function AdminPage() {
   const [schools, setSchools] = useState<School[]>([]);
@@ -107,6 +107,39 @@ export default function AdminPage() {
     setPwSuccess("Password updated.");
   }
 
+  async function deleteSchool(s: School) {
+    const parts = [`${s._count.principals} principal${s._count.principals === 1 ? "" : "s"}`];
+    const confirmMsg =
+      `Delete "${s.name}"? This removes ${parts.join(", ")} at this school.\n\n` +
+      (s._count.teachers > 0
+        ? `Its ${s._count.teachers} teacher${s._count.teachers === 1 ? "" : "s"} will NOT be deleted - they'll just become unassigned from a school/principal, and keep all their own classroom and student data.`
+        : "There are no teachers to worry about here.");
+    if (!confirm(confirmMsg)) return;
+    const res = await fetch(`/api/admin/schools/${s.id}`, { method: "DELETE" });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      alert(data.error ?? "Couldn't delete school.");
+      return;
+    }
+    load();
+  }
+
+  async function deletePrincipal(p: Principal) {
+    const confirmMsg =
+      `Delete ${p.name} (${p.email})?\n\n` +
+      (p._count.teachers > 0
+        ? `Their ${p._count.teachers} teacher${p._count.teachers === 1 ? "" : "s"} will NOT be deleted - they'll just become unassigned from a principal, and keep all their own classroom and student data.`
+        : "They have no teachers assigned.");
+    if (!confirm(confirmMsg)) return;
+    const res = await fetch(`/api/admin/principals/${p.id}`, { method: "DELETE" });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      alert(data.error ?? "Couldn't delete principal.");
+      return;
+    }
+    load();
+  }
+
   return (
     <div className="p-4 sm:p-6 max-w-3xl mx-auto">
       <div className="flex justify-between items-center mb-4">
@@ -127,11 +160,16 @@ export default function AdminPage() {
         <h2 className="font-semibold mb-2">Schools</h2>
         <ul className="space-y-1 mb-3">
           {schools.map((s) => (
-            <li key={s.id} className="text-sm border rounded px-2 py-1 flex justify-between">
+            <li key={s.id} className="text-sm border rounded px-2 py-1 flex justify-between items-center">
               <span>{s.name}</span>
-              <span className="text-slate-400">
-                {s._count.principals} principal{s._count.principals === 1 ? "" : "s"} ·{" "}
-                {s._count.teachers} teacher{s._count.teachers === 1 ? "" : "s"}
+              <span className="flex items-center gap-2">
+                <span className="text-slate-400">
+                  {s._count.principals} principal{s._count.principals === 1 ? "" : "s"} ·{" "}
+                  {s._count.teachers} teacher{s._count.teachers === 1 ? "" : "s"}
+                </span>
+                <button onClick={() => deleteSchool(s)} className="text-rose-600 hover:underline text-xs">
+                  Delete
+                </button>
               </span>
             </li>
           ))}
@@ -155,8 +193,13 @@ export default function AdminPage() {
         <h2 className="font-semibold mb-2">Principals</h2>
         <ul className="space-y-1 mb-3">
           {principals.map((p) => (
-            <li key={p.id} className="text-sm border rounded px-2 py-1">
-              <span className="font-medium">{p.name}</span> · {p.email} · {p.school.name}
+            <li key={p.id} className="text-sm border rounded px-2 py-1 flex justify-between items-center">
+              <span>
+                <span className="font-medium">{p.name}</span> · {p.email} · {p.school.name}
+              </span>
+              <button onClick={() => deletePrincipal(p)} className="text-rose-600 hover:underline text-xs shrink-0 ml-2">
+                Delete
+              </button>
             </li>
           ))}
           {principals.length === 0 && <p className="text-slate-400 text-sm">No principals yet.</p>}

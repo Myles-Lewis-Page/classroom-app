@@ -10,7 +10,7 @@ export async function GET() {
   if (!adminId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const principals = await prisma.principal.findMany({
-    include: { school: { select: { id: true, name: true } } },
+    include: { school: { select: { id: true, name: true } }, _count: { select: { teachers: true } } },
     orderBy: { name: "asc" },
   });
   return NextResponse.json(principals);
