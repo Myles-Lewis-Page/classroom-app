@@ -112,7 +112,7 @@ export default function PrincipalPage() {
     const res = await fetch("/api/principal/teachers", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ firstName: firstName.trim(), lastName: lastName.trim(), email: email.trim() }),
+      body: JSON.stringify({ name: `${firstName.trim()} ${lastName.trim()}`, email: email.trim() }),
     });
     setSaving(false);
     const data = await res.json().catch(() => ({}));
@@ -141,8 +141,7 @@ export default function PrincipalPage() {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        firstName: editFirstName.trim(),
-        lastName: editLastName.trim(),
+        name: `${editFirstName.trim()} ${editLastName.trim()}`,
         email: editEmail.trim(),
       }),
     });
