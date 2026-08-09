@@ -4,6 +4,7 @@ import { auth } from "@/lib/auth";
 import { getCurrentClassroomId } from "@/lib/classroomScope";
 import { getOrCreateDraft, renderNewsletterBlocks } from "@/lib/newsletter";
 import { getChaperoneShortfalls } from "@/lib/chaperones";
+import { getStudentWeeklyReport, startOfWeek } from "@/lib/weeklyReport";
 
 // GET /api/reports/weekly?start=2026-07-20&end=2026-07-24
 // Returns a per-student aggregated report for the given date range.
@@ -34,65 +35,7 @@ export async function GET(req: NextRequest) {
     include: { parents: true },
   });
 
-  const reports = await Promise.all(
-    students.map(async (student) => {
-      const [attendance, behaviorNotes, homework, observations, praiseNotes, missingEvents] =
-        await Promise.all([
-          prisma.attendanceEntry.findMany({
-            where: { studentId: student.id, date: { gte: start, lte: end } },
-          }),
-          prisma.behaviorNote.findMany({
-            where: { studentId: student.id, date: { gte: start, lte: end } },
-          }),
-          prisma.homeworkEntry.findMany({
-            where: { studentId: student.id, assignment: { assignedDate: { gte: start, lte: end } } },
-            include: { assignment: true },
-          }),
-          prisma.observation.findMany({
-            where: { studentId: student.id, date: { gte: start, lte: end } },
-          }),
-          prisma.praiseNote.findMany({
-            where: { studentId: student.id, date: { gte: start, lte: end } },
-          }),
-          prisma.eventStatus.findMany({
-            where: {
-              studentId: student.id,
-              OR: [{ slipStatus: "missing" }, { paymentStatus: "unpaid" }],
-            },
-            include: { event: true },
-          }),
-        ]);
-
-      const absences = attendance.filter((a) => a.status === "absent").length;
-      const behaviorCounts = {
-        good: behaviorNotes.filter((b) => b.type === "good").length,
-        bad: behaviorNotes.filter((b) => b.type === "bad").length,
-      };
-
-      return {
-        studentId: student.id,
-        name: `${student.firstName} ${student.lastName}`,
-        parentEmail: student.parents.find((p) => p.email)?.email ?? null,
-        absences,
-        totalDaysTracked: attendance.length,
-        behaviorCounts,
-        behaviorTags: behaviorNotes.map((b) => ({ type: b.type, tag: b.tag })),
-        homework,
-        observations,
-        praiseNotes,
-        missingEvents: missingEvents.map((e) => {
-          const parts: string[] = [];
-          if (e.slipStatus === "missing") parts.push("slip");
-          if (e.paymentStatus === "unpaid") parts.push("payment");
-          return {
-            name: e.event.name,
-            due: e.event.dueDate,
-            what: parts.join(" & "),
-          };
-        }),
-      };
-    })
-  );
+  const reports = await Promise.all(students.map((student) => getStudentWeeklyReport(student, start, end)));
 
   // Classroom-wide (not per-student) chaperone shortfall for any upcoming
   // event that's tracking a needed count - shown once at the top of the
@@ -106,12 +49,4 @@ export async function GET(req: NextRequest) {
     chaperoneShortfalls,
     newsletterContent,
   });
-}
-
-function startOfWeek(d: Date): Date {
-  const date = new Date(d);
-  const day = date.getDay(); // 0 Sun ... 6 Sat
-  const diff = day === 0 ? -6 : 1 - day; // back up to Monday
-  date.setDate(date.getDate() + diff);
-  return date;
 }

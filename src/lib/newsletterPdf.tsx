@@ -294,7 +294,12 @@ function BlockContent({
   return null;
 }
 
-function NewsletterPdfDocument({
+// The newsletter's content as a single <Page> - exported separately from
+// NewsletterPdfDocument so the per-student Weekly Report PDF can combine
+// this same page with a student-specific report page in one Document
+// (see src/lib/reportPdf.tsx), rather than needing two separate PDF
+// downloads and a manual attach-both-files step.
+export function NewsletterPage({
   classroomName,
   weekLabel,
   bannerTitle,
@@ -320,22 +325,38 @@ function NewsletterPdfDocument({
   const theme = getMonthlyTheme();
   const rows = packRows(blocks);
   return (
-    <Document>
-      <Page size="LETTER" style={styles.page}>
-        <View style={{ ...styles.banner, backgroundColor: theme.gradient[0] }}>
-          <Text style={{ ...styles.bannerWeek, color: theme.textColor === "light" ? "#FFF3F0" : "#2D2A26" }}>{subtitle}</Text>
-          <Text style={{ ...styles.bannerTitle, color: theme.textColor === "light" ? "#FFFFFF" : "#2D2A26" }}>{title}</Text>
+    <Page size="LETTER" style={styles.page}>
+      <View style={{ ...styles.banner, backgroundColor: theme.gradient[0] }}>
+        <Text style={{ ...styles.bannerWeek, color: theme.textColor === "light" ? "#FFF3F0" : "#2D2A26" }}>{subtitle}</Text>
+        <Text style={{ ...styles.bannerTitle, color: theme.textColor === "light" ? "#FFFFFF" : "#2D2A26" }}>{title}</Text>
+      </View>
+      {rows.map((row, i) => (
+        <View style={styles.row} key={i}>
+          {row.map((block) => (
+            <View key={block.id} style={{ flex: Math.min(4, Math.max(1, block.span ?? 2)) }}>
+              <BlockContent block={block} upcomingEvents={upcomingEvents} thisWeekEvents={thisWeekEvents} shortfalls={shortfalls} upcomingSpellingWords={upcomingSpellingWords} />
+            </View>
+          ))}
         </View>
-        {rows.map((row, i) => (
-          <View style={styles.row} key={i}>
-            {row.map((block) => (
-              <View key={block.id} style={{ flex: Math.min(4, Math.max(1, block.span ?? 2)) }}>
-                <BlockContent block={block} upcomingEvents={upcomingEvents} thisWeekEvents={thisWeekEvents} shortfalls={shortfalls} upcomingSpellingWords={upcomingSpellingWords} />
-              </View>
-            ))}
-          </View>
-        ))}
-      </Page>
+      ))}
+    </Page>
+  );
+}
+
+function NewsletterPdfDocument(props: {
+  classroomName: string;
+  weekLabel: string;
+  bannerTitle?: string | null;
+  bannerSubtitle?: string | null;
+  blocks: PdfBlock[];
+  upcomingEvents: PdfEvent[];
+  thisWeekEvents: PdfEvent[];
+  shortfalls: PdfShortfall[];
+  upcomingSpellingWords: string[];
+}) {
+  return (
+    <Document>
+      <NewsletterPage {...props} />
     </Document>
   );
 }

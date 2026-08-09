@@ -36,6 +36,7 @@ export default function WeeklyReportPage() {
   const [reports, setReports] = useState<StudentReport[]>([]);
   const [chaperoneShortfalls, setChaperoneShortfalls] = useState<ChaperoneShortfall[]>([]);
   const [newsletterContent, setNewsletterContent] = useState("");
+  const [reportRange, setReportRange] = useState<{ start: string; end: string } | null>(null);
   const [loading, setLoading] = useState(false);
 
   async function generate() {
@@ -43,6 +44,7 @@ export default function WeeklyReportPage() {
     const startDate = new Date(start);
     const endDate = new Date(startDate);
     endDate.setDate(endDate.getDate() + 4); // Mon-Fri
+    setReportRange({ start: startDate.toISOString(), end: endDate.toISOString() });
     const res = await fetch(
       `/api/reports/weekly?start=${startDate.toISOString()}&end=${endDate.toISOString()}`
     );
@@ -72,7 +74,7 @@ export default function WeeklyReportPage() {
     // PDF (button above) and attaches that file herself in her real email
     // client, alongside whichever mailto: compose windows this opens.
     if (newsletterContent.trim()) {
-      lines.push("(See this week's newsletter - download the PDF above and attach it to this email.)", "");
+      lines.push("(See this week's newsletter - use the Download PDF button for this student, or download the newsletter separately above, and attach it to this email.)", "");
     }
     lines.push(
       `Weekly Report for ${r.name}`,
@@ -155,8 +157,10 @@ export default function WeeklyReportPage() {
           </div>
           <p className="text-sm text-slate-600 mb-2">
             Parent emails open as plain text and can&apos;t carry the newsletter&apos;s colors,
-            fonts, or photos - download it as a PDF and attach that file to each email yourself
-            instead of it being pasted in as text.
+            fonts, or photos. Each student below has its own{" "}
+            <span className="font-medium">Download PDF</span> button that bundles the newsletter
+            and that student&apos;s report into one file - or download just the newsletter here to
+            attach manually.
           </p>
           <a
             href="/api/newsletter/pdf"
@@ -204,12 +208,22 @@ export default function WeeklyReportPage() {
                 </p>
               )}
             </div>
-            <button
-              onClick={() => emailStudent(r)}
-              className="btn-success whitespace-nowrap"
-            >
-              Email Parent
-            </button>
+            <div className="flex flex-col gap-2 shrink-0">
+              <button
+                onClick={() => emailStudent(r)}
+                className="btn-success whitespace-nowrap"
+              >
+                Email Parent
+              </button>
+              {reportRange && (
+                <a
+                  href={`/api/reports/pdf?studentId=${r.studentId}&start=${encodeURIComponent(reportRange.start)}&end=${encodeURIComponent(reportRange.end)}`}
+                  className="btn-outline text-xs px-2 py-1 text-center whitespace-nowrap"
+                >
+                  Download PDF
+                </a>
+              )}
+            </div>
           </div>
         </div>
       ))}
