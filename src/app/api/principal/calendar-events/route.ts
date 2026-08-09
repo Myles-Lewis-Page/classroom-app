@@ -30,7 +30,7 @@ export async function POST(req: NextRequest) {
 
   const body = await req.json();
   const name = (body.name ?? "").trim();
-  const validTypes = ["holiday", "teacher_work_day", "half_day", "other"];
+  const validTypes = ["holiday", "teacher_work_day", "half_day", "other", "first_last_day", "student_holiday"];
   const type = validTypes.includes(body.type) ? body.type : "other";
   if (!name || !body.startDate) {
     return NextResponse.json({ error: "name and startDate are required" }, { status: 400 });
@@ -47,24 +47,9 @@ export async function POST(req: NextRequest) {
   // recomputed if this is a day-off type, same as a Teacher's own local
   // entry does - a school-wide holiday affects every unit at every
   // classroom here, not just one.
-  if (type === "holiday" || type === "teacher_work_day") {
-    const { recomputeUnitDayDates, captureUnitDayState, cascadeAfterChange } = await import("@/lib/pacing");
-    const classrooms = await prisma.classroom.findMany({
-      where: { teacher: { schoolId: principal.schoolId } },
-      select: { id: true },
-    });
-    for (const c of classrooms) {
-      const units = await prisma.pacingUnit.findMany({
-        where: { classroomId: c.id },
-        select: { id: true },
-        orderBy: { startDate: "asc" },
-      });
-      for (const u of units) {
-        const before = await captureUnitDayState(u.id);
-        await recomputeUnitDayDates(u.id);
-        await cascadeAfterChange(u.id, before);
-      }
-    }
+  if (type === "holiday" || type === "teacher_work_day" || type === "student_holiday") {
+    const { recomputeSchoolPacing } = await import("@/lib/pacing");
+    await recomputeSchoolPacing(principal.schoolId);
   }
 
   return NextResponse.json(event, { status: 201 });

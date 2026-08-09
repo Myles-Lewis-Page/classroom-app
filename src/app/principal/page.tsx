@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ChangeEvent } from "react";
 import { signOut } from "next-auth/react";
 import { formatShortDate } from "@/lib/dateOnly";
 
@@ -10,6 +10,7 @@ type Teacher = {
   email: string;
   createdAt: string;
   mustChangePassword: boolean;
+  isActive: boolean;
 };
 type CalEvent = { id: string; name: string; startDate: string; endDate: string; type: string };
 
@@ -34,6 +35,9 @@ export default function PrincipalPage() {
   const [calType, setCalType] = useState("holiday");
   const [calSaving, setCalSaving] = useState(false);
   const [calError, setCalError] = useState("");
+  const [calImporting, setCalImporting] = useState(false);
+  const [calImportError, setCalImportError] = useState("");
+  const [calImportSuccess, setCalImportSuccess] = useState("");
 
   useEffect(() => {
     load();
@@ -68,6 +72,31 @@ export default function PrincipalPage() {
   async function removeCalEvent(id: string, name: string) {
     if (!confirm(`Remove "${name}" from the school calendar? Every classroom at this school will see it disappear.`)) return;
     await fetch(`/api/principal/calendar-events/${id}`, { method: "DELETE" });
+    loadCalendar();
+  }
+
+  async function handleCalendarCsvUpload(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // allow re-selecting the same file later
+    if (!file) return;
+
+    setCalImporting(true);
+    setCalImportError("");
+    setCalImportSuccess("");
+    const csvText = await file.text();
+    const res = await fetch("/api/principal/calendar-events/import", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ csvText }),
+    });
+    setCalImporting(false);
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      const details = Array.isArray(data.details) ? data.details.join("\n") : "";
+      setCalImportError(`${data.error ?? "Couldn't import that file."}${details ? `\n${details}` : ""}`);
+      return;
+    }
+    setCalImportSuccess(`Imported ${data.imported} calendar entr${data.imported === 1 ? "y" : "ies"}.`);
     loadCalendar();
   }
 
@@ -129,6 +158,27 @@ export default function PrincipalPage() {
     load();
   }
 
+  async function deactivateTeacher(t: Teacher) {
+    if (
+      !confirm(
+        `Remove ${t.name}? This blocks their login but does NOT delete anything - their classroom, students, grades, and all other records stay exactly as they are, and you can restore their access any time from here.`
+      )
+    ) {
+      return;
+    }
+    await fetch(`/api/principal/teachers/${t.id}`, { method: "DELETE" });
+    load();
+  }
+
+  async function reactivateTeacher(t: Teacher) {
+    await fetch(`/api/principal/teachers/${t.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ isActive: true }),
+    });
+    load();
+  }
+
   return (
     <div className="p-4 sm:p-6 max-w-3xl mx-auto">
       <div className="flex justify-between items-center mb-4">
@@ -186,7 +236,7 @@ export default function PrincipalPage() {
       <div className="panel">
         <h2 className="font-semibold mb-2">Teachers</h2>
         <ul className="space-y-2">
-          {teachers.map((t) => (
+          {teachers.filter((t) => t.isActive).map((t) => (
             <li key={t.id} className="text-sm border rounded px-2 py-2">
               {editingId === t.id ? (
                 <div className="flex gap-2 flex-wrap items-end">
@@ -229,6 +279,9 @@ export default function PrincipalPage() {
                     <button onClick={() => resetPassword(t)} className="text-amber-600 text-xs hover:underline">
                       Reset Password
                     </button>
+                    <button onClick={() => deactivateTeacher(t)} className="text-rose-600 text-xs hover:underline">
+                      Remove
+                    </button>
                   </span>
                 </div>
               )}
@@ -240,8 +293,30 @@ export default function PrincipalPage() {
               )}
             </li>
           ))}
-          {teachers.length === 0 && <p className="text-slate-400 text-sm">No teachers yet.</p>}
+          {teachers.filter((t) => t.isActive).length === 0 && (
+            <p className="text-slate-400 text-sm">No teachers yet.</p>
+          )}
         </ul>
+
+        {teachers.some((t) => !t.isActive) && (
+          <div className="mt-4 pt-3 border-t">
+            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">
+              Removed (login blocked - their data is untouched)
+            </p>
+            <ul className="space-y-1">
+              {teachers.filter((t) => !t.isActive).map((t) => (
+                <li key={t.id} className="text-sm border rounded px-2 py-1 flex justify-between items-center bg-slate-50">
+                  <span className="text-slate-500">
+                    {t.name} · {t.email}
+                  </span>
+                  <button onClick={() => reactivateTeacher(t)} className="text-emerald-600 text-xs hover:underline shrink-0 ml-2">
+                    Restore
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
       </div>
 
       <div className="panel mt-6">
@@ -258,7 +333,7 @@ export default function PrincipalPage() {
                 <span className="font-medium">{e.name}</span> ·{" "}
                 {formatShortDate(e.startDate)}
                 {e.endDate !== e.startDate && ` - ${formatShortDate(e.endDate)}`} ·{" "}
-                <span className="text-slate-500">{e.type.replace("_", " ")}</span>
+                <span className="text-slate-500">{e.type.replace(/_/g, " ")}</span>
               </span>
               <button onClick={() => removeCalEvent(e.id, e.name)} className="text-rose-600 text-xs hover:underline">
                 Remove
@@ -285,7 +360,9 @@ export default function PrincipalPage() {
           <select value={calType} onChange={(e) => setCalType(e.target.value)} className="border rounded px-2 py-1">
             <option value="holiday">Holiday (no school)</option>
             <option value="teacher_work_day">Teacher Work Day</option>
+            <option value="student_holiday">Student Holiday (staff only)</option>
             <option value="half_day">Half Day</option>
+            <option value="first_last_day">First/Last Day of School</option>
             <option value="other">Other / Reminder</option>
           </select>
           <button onClick={addCalEvent} disabled={calSaving} className="btn-primary text-sm">
@@ -293,6 +370,23 @@ export default function PrincipalPage() {
           </button>
         </div>
         {calError && <p className="text-rose-600 text-sm mt-1">{calError}</p>}
+
+        <div className="mt-4 pt-3 border-t flex items-center gap-3 flex-wrap">
+          <label className="btn-outline text-sm cursor-pointer">
+            {calImporting ? "Importing..." : "Upload Whole Year (CSV)"}
+            <input type="file" accept=".csv" onChange={handleCalendarCsvUpload} className="hidden" disabled={calImporting} />
+          </label>
+          <a href="/api/principal/calendar-events/export" className="btn-outline text-sm">
+            Download CSV
+          </a>
+          <span className="text-xs text-slate-400">
+            Columns: name, startDate, endDate, type (YYYY-MM-DD dates)
+          </span>
+        </div>
+        {calImportError && (
+          <div className="text-rose-600 text-xs mt-2 whitespace-pre-wrap">{calImportError}</div>
+        )}
+        {calImportSuccess && <p className="text-emerald-700 text-xs mt-2">{calImportSuccess}</p>}
       </div>
     </div>
   );

@@ -24,11 +24,43 @@ export async function getHolidayRanges(classroomId: string) {
   const schoolId = classroom?.teacher?.schoolId;
   const events = await prisma.calendarEvent.findMany({
     where: {
-      type: { in: ["holiday", "teacher_work_day"] },
+      // "student_holiday" (e.g. a staff-only exchange/in-service day)
+      // skips instructional days same as a full holiday, since no
+      // students are present either way. "first_last_day" and "half_day"
+      // deliberately don't skip - school's actually in session.
+      type: { in: ["holiday", "teacher_work_day", "student_holiday"] },
       OR: [{ classroomId }, ...(schoolId ? [{ schoolId }] : [])],
     },
   });
   return events.map((e) => ({ startDate: e.startDate, endDate: e.endDate }));
+}
+
+/**
+ * Recomputes every Pacing Unit's day dates at every classroom in a school,
+ * cascading afterward - used whenever a school-wide calendar entry (or a
+ * batch of them, from a CSV import) changes in a way that affects
+ * instructional day skipping. Pulled out as its own function since the
+ * CSV import needs to run this once after a whole batch of rows rather
+ * than once per row (which would be needlessly slow and would cascade
+ * against a half-updated calendar mid-import).
+ */
+export async function recomputeSchoolPacing(schoolId: string) {
+  const classrooms = await prisma.classroom.findMany({
+    where: { teacher: { schoolId } },
+    select: { id: true },
+  });
+  for (const c of classrooms) {
+    const units = await prisma.pacingUnit.findMany({
+      where: { classroomId: c.id },
+      select: { id: true },
+      orderBy: { startDate: "asc" },
+    });
+    for (const u of units) {
+      const before = await captureUnitDayState(u.id);
+      await recomputeUnitDayDates(u.id);
+      await cascadeAfterChange(u.id, before);
+    }
+  }
 }
 
 /**
