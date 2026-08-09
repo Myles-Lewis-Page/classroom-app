@@ -21,7 +21,6 @@ const links = [
   { href: "/spelling", label: "Spelling" },
   { href: "/newsletter", label: "Newsletter" },
   { href: "/reports", label: "Weekly Report" },
-  { href: "/sub-mode", label: "Sub Mode" },
 ];
 
 export default async function Nav() {

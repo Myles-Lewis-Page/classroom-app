@@ -339,8 +339,8 @@ export default function ProfilePage() {
             Periods (e.g. "Period 1" / "Period 2") live <em>inside</em> this one classroom -
             same roster pool, same subjects/grading setup, same seating layout. They only split
             the Roster, Pacing Guide day-by-day speed, and Gradebook by group; everything else
-            (Behavior Log, Skills, Events, Seating, Sub Mode, Homework grading) still scopes by
-            whichever Period is active up top. You can add more at any time - not just now.
+            (Behavior Log, Skills, Events, Seating, Homework grading) still scopes by whichever
+            Period is active up top. You can add more at any time - not just now.
           </p>
           <SectionManager />
         </div>
