@@ -38,6 +38,14 @@ model Teacher {
   // random password for a newly-added Teacher, so the app can nudge them to
   // pick their own on first login; cleared once they do.
   mustChangePassword Boolean    @default(false)
+  // Soft-delete flag: a Principal "removing" a Teacher deactivates them
+  // rather than deleting the row, since Classroom (and everything under
+  // it - students, grades, behavior notes, IEP/504 data, attendance) has
+  // onDelete: Cascade back to Teacher. A real delete here would silently
+  // and irreversibly destroy an entire class's real records; deactivating
+  // blocks their login and hides them from active teacher lists while
+  // preserving all of it, and can be reversed by a Principal at any time.
+  isActive           Boolean    @default(true)
 }
 
 // A school, owned by Anthropic's customer (the Principal) who runs it. The
@@ -112,6 +120,14 @@ model Classroom {
   schoolYear String
   isArchived Boolean   @default(false)
   createdAt  DateTime  @default(now())
+  // "Spelling" is offered as a generic subject on Profile's setup form
+  // like Math/Reading/etc, but it's special-cased: selecting it does NOT
+  // create/reactivate a SkillSubject row (spelling now has its own
+  // dedicated feature - word lists, testing, word bank - rather than a
+  // generic 0-5 Skill rating). This flag is the only thing that toggles;
+  // it purely controls whether the "Spelling" nav link shows up. See
+  // src/app/api/profile/route.ts for the sync logic.
+  spellingEnabled Boolean @default(false)
 
   // The school year's overall bounds - set once, then holidays/teacher work
   // days/half days get layered on top. Any weekday in between that isn't

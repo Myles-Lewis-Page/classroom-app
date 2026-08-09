@@ -12,6 +12,7 @@ type Classroom = {
   schoolName: string | null;
   schoolYear: string;
   isArchived: boolean;
+  spellingEnabled: boolean;
   sections?: { id: string; name: string }[];
 };
 type SkillSubject = { id: string; name: string; isActive: boolean };
@@ -99,7 +100,12 @@ export default function ProfilePage() {
           }
           setAllClassrooms(allClassrooms ?? []);
           setExistingSubjects(skillSubjects ?? []);
-          setSelectedSubjects((skillSubjects ?? []).filter((s) => s.isActive).map((s) => s.name));
+          const activeSkillSubjectNames = (skillSubjects ?? []).filter((s) => s.isActive).map((s) => s.name);
+          setSelectedSubjects(
+            classroom?.spellingEnabled
+              ? [...activeSkillSubjectNames, "Spelling"]
+              : activeSkillSubjectNames
+          );
         }
       );
   }

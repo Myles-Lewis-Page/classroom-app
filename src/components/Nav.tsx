@@ -18,6 +18,9 @@ const links = [
   { href: "/seating", label: "Seating Chart" },
   { href: "/events", label: "Events" },
   { href: "/skills", label: "Skills" },
+  // "Spelling" is filtered in below, per-classroom, rather than always
+  // shown - only appears once she's selected it as a subject she teaches
+  // on Profile (Classroom.spellingEnabled). See src/app/api/profile/route.ts.
   { href: "/spelling", label: "Spelling" },
   { href: "/newsletter", label: "Newsletter" },
   { href: "/reports", label: "Weekly Report" },
@@ -35,7 +38,7 @@ export default async function Nav() {
     classroomId
       ? prisma.classroom.findUnique({
           where: { id: classroomId },
-          select: { name: true, schoolName: true, schoolYear: true },
+          select: { name: true, schoolName: true, schoolYear: true, spellingEnabled: true },
         })
       : null,
     teacherId
@@ -51,6 +54,8 @@ export default async function Nav() {
         })
       : [],
   ]);
+
+  const visibleLinks = classroom?.spellingEnabled ? links : links.filter((l) => l.href !== "/spelling");
 
   return (
     <nav className="app-nav">
@@ -107,7 +112,7 @@ export default async function Nav() {
 
       {/* Page links - hamburger menu on phones, normal wrapping row on
           larger screens (tablet/desktop). */}
-      <MobileNavLinks links={links} />
+      <MobileNavLinks links={visibleLinks} />
     </nav>
   );
 }

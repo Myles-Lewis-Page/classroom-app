@@ -76,6 +76,12 @@ export async function POST(req: NextRequest) {
   const subjects: string[] = Array.isArray(body.subjects)
     ? body.subjects.map((s: string) => s.trim()).filter(Boolean)
     : [];
+  // "Spelling" is offered in the same generic-subject picker but doesn't
+  // become a SkillSubject - it has its own dedicated feature now. Pulled
+  // out here so it never reaches the sync logic below; spellingEnabled is
+  // the only thing it actually toggles (see schema comment on Classroom).
+  const spellingEnabled = subjects.includes("Spelling");
+  const skillSubjectNames = subjects.filter((s) => s !== "Spelling");
 
   if (!firstName || !lastName || !className) {
     return NextResponse.json(
@@ -105,10 +111,10 @@ export async function POST(req: NextRequest) {
   const classroom = existing
     ? await prisma.classroom.update({
         where: { id: existing.id },
-        data: { name: classroomName, schoolName: schoolName || null },
+        data: { name: classroomName, schoolName: schoolName || null, spellingEnabled },
       })
     : await prisma.classroom.create({
-        data: { teacherId, name: classroomName, schoolYear, schoolName: schoolName || null },
+        data: { teacherId, name: classroomName, schoolYear, schoolName: schoolName || null, spellingEnabled },
       });
 
   if (!existing) {
@@ -135,9 +141,9 @@ export async function POST(req: NextRequest) {
     where: { classroomId: classroom.id },
   });
   const existingByName = new Map(existingSubjects.map((s) => [s.name, s]));
-  const selectedNames = new Set(subjects);
+  const selectedNames = new Set(skillSubjectNames);
 
-  const toCreate = subjects.filter((name) => !existingByName.has(name));
+  const toCreate = skillSubjectNames.filter((name) => !existingByName.has(name));
   if (toCreate.length > 0) {
     await prisma.skillSubject.createMany({
       data: toCreate.map((name, i) => ({
