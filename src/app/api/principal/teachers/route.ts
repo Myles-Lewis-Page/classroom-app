@@ -23,26 +23,26 @@ export async function GET() {
 // POST { name, email } - creates a Teacher at this Principal's School with a
 // generated temporary password, returned once for the Principal to relay.
 export async function POST(req: NextRequest) {
-  const principalId = await requirePrincipal();
-  if (!principalId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
-  const principal = await prisma.principal.findUnique({ where: { id: principalId } });
-  if (!principal) return NextResponse.json({ error: "Not found" }, { status: 404 });
-
-  const body = await req.json();
-  const name = (body.name ?? "").trim();
-  const email = (body.email ?? "").trim().toLowerCase();
-  if (!name || !email) {
-    return NextResponse.json({ error: "name and email are required" }, { status: 400 });
-  }
-
-  const existing = await prisma.teacher.findUnique({ where: { email } });
-  if (existing) return NextResponse.json({ error: "A teacher with that email already exists" }, { status: 409 });
-
-  const tempPassword = generateTempPassword();
-  const passwordHash = await bcrypt.hash(tempPassword, 12);
-
   try {
+    const principalId = await requirePrincipal();
+    if (!principalId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+    const principal = await prisma.principal.findUnique({ where: { id: principalId } });
+    if (!principal) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+    const body = await req.json();
+    const name = (body.name ?? "").trim();
+    const email = (body.email ?? "").trim().toLowerCase();
+    if (!name || !email) {
+      return NextResponse.json({ error: "name and email are required" }, { status: 400 });
+    }
+
+    const existing = await prisma.teacher.findUnique({ where: { email } });
+    if (existing) return NextResponse.json({ error: "A teacher with that email already exists" }, { status: 409 });
+
+    const tempPassword = generateTempPassword();
+    const passwordHash = await bcrypt.hash(tempPassword, 12);
+
     const teacher = await prisma.teacher.create({
       data: {
         name,
@@ -58,7 +58,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ teacher, tempPassword }, { status: 201 });
   } catch (err) {
     console.error("Failed to create teacher:", err);
-    const message = err instanceof Error ? err.message : "Unknown database error";
+    const message = err instanceof Error ? err.message : "Unknown server error";
     return NextResponse.json({ error: `Server error creating teacher: ${message}` }, { status: 500 });
   }
 }
