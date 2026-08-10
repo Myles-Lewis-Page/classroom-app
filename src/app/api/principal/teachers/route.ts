@@ -42,17 +42,23 @@ export async function POST(req: NextRequest) {
   const tempPassword = generateTempPassword();
   const passwordHash = await bcrypt.hash(tempPassword, 12);
 
-  const teacher = await prisma.teacher.create({
-    data: {
-      name,
-      email,
-      passwordHash,
-      schoolId: principal.schoolId,
-      principalId: principal.id,
-      mustChangePassword: true,
-    },
-    select: { id: true, name: true, email: true, createdAt: true, mustChangePassword: true },
-  });
+  try {
+    const teacher = await prisma.teacher.create({
+      data: {
+        name,
+        email,
+        passwordHash,
+        schoolId: principal.schoolId,
+        principalId: principal.id,
+        mustChangePassword: true,
+      },
+      select: { id: true, name: true, email: true, createdAt: true, mustChangePassword: true },
+    });
 
-  return NextResponse.json({ teacher, tempPassword }, { status: 201 });
+    return NextResponse.json({ teacher, tempPassword }, { status: 201 });
+  } catch (err) {
+    console.error("Failed to create teacher:", err);
+    const message = err instanceof Error ? err.message : "Unknown database error";
+    return NextResponse.json({ error: `Server error creating teacher: ${message}` }, { status: 500 });
+  }
 }
