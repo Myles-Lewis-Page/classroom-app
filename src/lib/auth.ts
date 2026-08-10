@@ -70,6 +70,9 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
 
           const teacher = await prisma.teacher.findUnique({ where: { email } });
           if (teacher && (await bcrypt.compare(password, teacher.passwordHash))) {
+            // A Principal-removed Teacher (isActive: false) keeps all their
+            // data intact but is blocked from logging in until restored.
+            if (!teacher.isActive) return null;
             return { id: teacher.id, name: teacher.name, email: teacher.email, role: "teacher" };
           }
 

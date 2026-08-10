@@ -14,7 +14,7 @@ export async function GET() {
 
   const teachers = await prisma.teacher.findMany({
     where: { schoolId: principal.schoolId },
-    select: { id: true, name: true, email: true, createdAt: true, mustChangePassword: true },
+    select: { id: true, name: true, email: true, createdAt: true, mustChangePassword: true, isActive: true },
     orderBy: { name: "asc" },
   });
   return NextResponse.json(teachers);
@@ -52,7 +52,7 @@ export async function POST(req: NextRequest) {
         principalId: principal.id,
         mustChangePassword: true,
       },
-      select: { id: true, name: true, email: true, createdAt: true, mustChangePassword: true },
+      select: { id: true, name: true, email: true, createdAt: true, mustChangePassword: true, isActive: true },
     });
 
     return NextResponse.json({ teacher, tempPassword }, { status: 201 });
