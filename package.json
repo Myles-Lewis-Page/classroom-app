@@ -12,6 +12,7 @@
     "lint": "eslint",
     "seed": "tsx prisma/seed.ts",
     "reset-password": "tsx prisma/reset-password.ts",
+    "encrypt-existing-data": "tsx prisma/encrypt-existing-data.ts",
     "postinstall": "prisma generate"
   },
   "prisma": {

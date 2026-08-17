@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
 import { getCurrentClassroomId } from "@/lib/classroomScope";
 import { backfillHomeworkEntriesForStudent } from "@/lib/homeworkBackfill";
+import { sortByName } from "@/lib/encryption";
 
 export async function GET() {
   const session = await auth();
@@ -18,10 +19,12 @@ export async function GET() {
       allergies: true,
       dietaryRestrictions: true,
     },
-    orderBy: [{ lastName: "asc" }, { firstName: "asc" }],
   });
 
-  return NextResponse.json(students);
+  // firstName/lastName are encrypted at rest, so sorting has to happen
+  // here in app code rather than via a DB-level orderBy (which would sort
+  // by ciphertext).
+  return NextResponse.json(sortByName(students));
 }
 
 export async function POST(req: NextRequest) {

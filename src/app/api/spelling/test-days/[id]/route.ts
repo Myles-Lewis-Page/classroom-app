@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
 import { getCurrentClassroomId } from "@/lib/classroomScope";
 import { getMakeupRoster } from "@/lib/spelling";
+import { sortByName } from "@/lib/encryption";
 
 // GET - the marking roster for this test day:
 //   "first"  -> every active student x every word on the list
@@ -28,10 +29,12 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   const existingByKey = new Map(testDay.results.map((r) => [`${r.studentId}:${r.wordId}`, r.correct]));
 
   if (testDay.type === "first") {
-    const students = await prisma.student.findMany({
+    const studentsUnsorted = await prisma.student.findMany({
       where: { classroomId, isActive: true },
-      orderBy: [{ lastName: "asc" }, { firstName: "asc" }],
     });
+    // firstName/lastName are encrypted at rest - sort in app code, not via
+    // a DB-level orderBy.
+    const students = sortByName(studentsUnsorted);
     const roster = students.map((s) => ({
       studentId: s.id,
       studentName: `${s.firstName} ${s.lastName}`,
