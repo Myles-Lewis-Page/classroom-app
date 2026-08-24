@@ -123,11 +123,16 @@ export default function SeatingChartPage() {
     <div className="p-4 sm:p-6 max-w-4xl mx-auto">
       <div className="flex justify-between items-start mb-4">
         <h1 className="text-2xl font-bold">Seating Chart</h1>
-        <Link href="/seating/layout" className="btn-outline text-sm">
-          Design Layout →
-        </Link>
+        <div className="flex gap-2 print:hidden">
+          <Link href="/seating/layout" className="btn-outline text-sm">
+            Design Layout →
+          </Link>
+          <button onClick={() => window.print()} className="btn-primary text-sm px-4 py-2">
+            Print
+          </button>
+        </div>
       </div>
-      <div className="mb-4">
+      <div className="mb-4 print:hidden">
         <PeriodPicker sections={sections} value={periodId} onChange={setPeriodId} label="Period:" />
       </div>
 
@@ -141,7 +146,7 @@ export default function SeatingChartPage() {
         </p>
       ) : (
         <>
-          <div className="mb-4 flex flex-wrap gap-2 items-center">
+          <div className="mb-4 flex flex-wrap gap-2 items-center print:hidden">
             <label className="text-sm">Select a student to place or move:</label>
             <select
               value={selectedStudentId}
@@ -163,7 +168,7 @@ export default function SeatingChartPage() {
             )}
           </div>
 
-          <p className="text-sm text-slate-500 mb-3">
+          <p className="text-sm text-slate-500 mb-3 print:hidden">
             Pick a student above (or click any occupied seat to pick them up), then click a seat
             to place them. Clicking an occupied seat while someone's selected swaps the two.
           </p>
@@ -209,7 +214,7 @@ export default function SeatingChartPage() {
             })}
           </div>
 
-          <p className="text-sm text-slate-500 mt-4">
+          <p className="text-sm text-slate-500 mt-4 print:hidden">
             Seats outlined in red are next to a student marked "does not work well with" the
             student seated there — worth a second look.
           </p>
