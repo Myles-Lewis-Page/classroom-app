@@ -58,7 +58,7 @@ export default async function Nav() {
   const visibleLinks = classroom?.spellingEnabled ? links : links.filter((l) => l.href !== "/spelling");
 
   return (
-    <nav className="app-nav">
+    <nav className="app-nav print:hidden">
       <div className="h-1 bg-gradient-to-r from-rose-200 via-amber-200 to-sky-200" />
 
       {/* Top identity bar - shows on every page, never scrolls, so the app
